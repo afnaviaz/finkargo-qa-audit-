@@ -1,0 +1,17 @@
+# Secretos
+.env
+scripts/.run_counter
+
+# Reportes y Logs locales
+reports/
+*.log
+scripts/log_*.txt
+scripts/results_*.json
+scripts/report_*.html
+
+# Node
+node_modules/
+package-lock.json
+
+# Sistema
+.DS_Store
