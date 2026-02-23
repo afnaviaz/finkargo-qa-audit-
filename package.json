@@ -1,0 +1,12 @@
+{
+  "name": "finkargo-qa-audit",
+  "version": "1.0.0",
+  "description": "QA audit automation with Newman and Confluence reporting",
+  "scripts": {
+    "test": "bash scripts/run_all.sh"
+  },
+  "dependencies": {
+    "newman": "^6.1.0",
+    "newman-reporter-htmlextra": "^1.23.1"
+  }
+}

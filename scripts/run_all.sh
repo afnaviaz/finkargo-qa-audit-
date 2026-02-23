@@ -7,6 +7,8 @@ PAIS_INPUT=$1
 AMBIENTE=$2  
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$SCRIPTS_DIR/../.env"
+[ -f "$ENV_FILE" ] && source "$ENV_FILE"
 COUNTER_FILE="$SCRIPTS_DIR/.run_counter"
 [ ! -f "$COUNTER_FILE" ] && echo "1" > "$COUNTER_FILE"
 EXEC_NUM=$(cat "$COUNTER_FILE")

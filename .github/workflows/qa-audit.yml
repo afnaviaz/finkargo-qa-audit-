@@ -1,0 +1,45 @@
+name: QA Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      pais:
+        description: "País a auditar"
+        required: true
+        default: "CO"
+        type: choice
+        options:
+          - CO
+          - MX
+          - ALL
+      ambiente:
+        description: "Ambiente"
+        required: true
+        default: "Testing"
+        type: choice
+        options:
+          - Testing
+          - Staging
+
+jobs:
+  run-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run QA Audit
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_USER: ${{ secrets.CONF_USER }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+        run: bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
