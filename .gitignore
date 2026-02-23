@@ -2,6 +2,9 @@
 .env
 scripts/.run_counter
 
+# GitHub Actions self-hosted runner
+actions-runner/
+
 # Reportes y Logs locales
 reports/
 *.log
