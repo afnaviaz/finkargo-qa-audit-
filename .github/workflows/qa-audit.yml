@@ -35,3 +35,14 @@ jobs:
           CONF_USER: ${{ secrets.CONF_USER }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
         run: bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+
+      - name: Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report-${{ github.event.inputs.pais }}-${{ github.event.inputs.ambiente }}
+          path: |
+            scripts/report_*.html
+            scripts/results_*.json
+            scripts/log_*.txt
+          retention-days: 30
