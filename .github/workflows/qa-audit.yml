@@ -71,6 +71,7 @@ jobs:
           fi
 
       # --- PASO 3: BÚSQUEDA Y EJECUCIÓN DEL SCRIPT ---
+
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -78,18 +79,22 @@ jobs:
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          # Buscamos el script en todo el repositorio para evitar errores de ruta
-          SCRIPT_PATH=$(find . -name "run_env.sh" | head -n 1)
+          echo "📂 Entrando a la carpeta scripts..."
+          cd scripts
           
-          if [ -n "$SCRIPT_PATH" ]; then
-            echo "✅ Script detectado en: $SCRIPT_PATH"
-            chmod +x "$SCRIPT_PATH"
-            # Ejecutamos usando la ruta encontrada
-            bash "$SCRIPT_PATH" ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+          # Listar archivos para estar 100% seguros del nombre
+          echo "📄 Archivos encontrados en scripts/:"
+          ls -F
+          
+          # Intentar ejecutar run_env.sh o run_all.sh (el que exista)
+          SCRIPT_TO_RUN=$(ls run_env.sh run_all.sh 2>/dev/null | head -n 1)
+          
+          if [ -f "$SCRIPT_TO_RUN" ]; then
+            echo "🚀 Ejecutando: $SCRIPT_TO_RUN"
+            chmod +x "$SCRIPT_TO_RUN"
+            ./"$SCRIPT_TO_RUN" ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
           else
-            echo "❌ ERROR: No se encontró run_env.sh en ninguna carpeta del repositorio."
-            echo "Contenido del nivel raíz:"
-            ls -la
+            echo "❌ ERROR: No se encontró run_env.sh ni run_all.sh dentro de la carpeta scripts/."
             exit 1
           fi
 
