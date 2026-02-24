@@ -1,44 +1,18 @@
-name: QA Audit
-
-on:
-  workflow_dispatch:
-    inputs:
-      pais:
-        description: "País a auditar"
-        required: true
-        default: "CO"
-        type: choice
-        options:
-          - CO
-          - MX
-          - ALL
-      ambiente:
-        description: "Ambiente"
-        required: true
-        default: "Testing"
-        type: choice
-        options:
-          - Testing
-          - Staging
-
-jobs:
-  run-audit:
-    runs-on: self-hosted
-
-    steps:
-      # --- PASO 1: LIMPIEZA Y CLONADO QUIRÚRGICO ---
+steps:
+      # --- PASO 1: CLONADO MANUAL FORZADO ---
       - name: Manual Clean Checkout
         run: |
-          echo "🧹 Limpiando workspace (incluyendo archivos ocultos)..."
-          # Borramos todo para asegurar un entorno virgen
+          echo "🧹 Limpieza profunda..."
           find . -mindepth 1 -delete
           
-          echo "📥 Clonando rama específica para evitar errores de objetos corruptos..."
-          # Usamos --single-branch y --branch para ignorar la referencia 'main 2' que causa el error
+          echo "📥 Clonando repositorio..."
+          # Clonamos y forzamos el nombre del directorio a la carpeta actual (.)
           git clone --depth 1 --single-branch --branch main https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
           
-          echo "✅ Verificando archivos descargados:"
-          ls -R scripts/
+          echo "📍 Ubicación actual:"
+          pwd
+          echo "📂 Contenido del directorio (recursivo):"
+          ls -R
 
       # --- PASO 2: CONFIGURACIÓN DE OLLAMA ---
       - name: Cache Ollama Models
@@ -53,21 +27,17 @@ jobs:
           if ! command -v ollama &> /dev/null; then
             curl -fsSL https://ollama.com/install.sh | sh
           fi
-          
           if ! pgrep -x "ollama" > /dev/null; then
             ollama serve &
           fi
-          
-          echo "⏳ Esperando a Ollama..."
           until curl -s http://localhost:11434/api/tags > /dev/null; do
             sleep 5
           done
-          
           if [[ "${{ steps.cache-ollama.outputs.cache-hit }}" != 'true' ]]; then
             ollama pull llama3
           fi
 
-      # --- PASO 3: EJECUCIÓN CON VALIDACIÓN DE RUTA ---
+      # --- PASO 3: EJECUCIÓN CON BÚSQUEDA DINÁMICA ---
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -75,23 +45,16 @@ jobs:
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          # Verificamos si el archivo existe antes de chmod para evitar el error "No such file"
-          if [ -f "scripts/run_env.sh" ]; then
-            chmod +x scripts/run_env.sh
-            bash scripts/run_env.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+          # Buscamos el archivo sin importar en qué subcarpeta haya quedado
+          SCRIPT_PATH=$(find . -name "run_env.sh" | head -n 1)
+          
+          if [ -n "$SCRIPT_PATH" ]; then
+            echo "✅ Script encontrado en: $SCRIPT_PATH"
+            chmod +x "$SCRIPT_PATH"
+            bash "$SCRIPT_PATH" ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
           else
-            echo "❌ ERROR: No se encontró scripts/run_env.sh. El clonado falló."
+            echo "❌ ERROR: El archivo run_env.sh NO existe en ninguna parte del repositorio."
+            echo "Contenido detectado:"
+            ls -la
             exit 1
           fi
-
-      # --- PASO 4: SUBIDA DE EVIDENCIAS ---
-      - name: Upload Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-report-${{ github.event.inputs.pais }}-${{ github.event.inputs.ambiente }}
-          path: |
-            scripts/report_*.html
-            scripts/results_*.json
-            scripts/log_*.txt
-          retention-days: 30
