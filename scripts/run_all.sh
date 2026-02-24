@@ -62,7 +62,7 @@ newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTM
   --reporter-json-export "$JSON_REPORT" --reporter-htmlextra-export "$HTML_REPORT" | tee "$LOG_FILE"
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (reemplaza Ollama)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE
 # ==========================================
 echo "🤖 Analizando fallos técnicos..."
 
@@ -71,27 +71,32 @@ FAILED_DATA=$(python3 -c "import json, sys; d=json.load(open('$JSON_REPORT')); p
 if [ -z "$FAILED_DATA" ] || [ "$FAILED_DATA" == "[]" ]; then
     AI_RCA="<p style='color:green;'>✅ Todas las pruebas pasaron correctamente.</p>"
 else
-    # Llamada a Claude API para generar ambas tablas en un solo request
-    AI_RCA=$(python3 << PYEOF
-import json, subprocess, os
+    # Guardar fallos en archivo temporal para evitar problemas de interpolación
+    echo "$FAILED_DATA" > /tmp/failed_data.json
 
-failed_data = json.loads('''$FAILED_DATA''')
+    AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 << 'PYEOF'
+import json, subprocess, os, re, sys
+
+api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Leer desde archivo para evitar problemas con caracteres especiales
+with open("/tmp/failed_data.json", "r") as f:
+    failed_data = json.load(f)
 
 # Preparar resumen de fallos
 fallos = []
 for i, f in enumerate(failed_data, 1):
     req = f.get('source', {}).get('name', 'N/A')
     msg = f.get('error', {}).get('message', 'N/A')
-    import re
     code = re.search(r'got (\d{3})', msg)
     code = code.group(1) if code else 'N/A'
     fallos.append(f"{i}|{req}|AssertionError|{msg}|{code}")
 
 fallos_texto = "\n".join(fallos)
 
-prompt = f"""Eres un experto en QA de APIs REST. Analiza estos fallos de pruebas Newman/Postman y responde ÚNICAMENTE con HTML válido, sin explicaciones ni texto adicional.
+prompt = f"""Eres un experto en QA de APIs REST. Analiza estos fallos de pruebas Newman/Postman y responde ÚNICAMENTE con HTML válido, sin texto adicional, sin explicaciones, sin markdown.
 
-Genera exactamente este bloque HTML con dos tablas:
+Genera exactamente este bloque HTML con dos tablas en formato Confluence:
 
 1. Tabla de resumen con columnas: #, Request, Tipo, Mensaje, Código, Origen
    - Si código es 422 → Origen = "🔴 API"
@@ -100,12 +105,11 @@ Genera exactamente este bloque HTML con dos tablas:
 
 2. Tabla de causa raíz con columnas: #, Request, Causa Raíz Técnica, Acción Recomendada
 
-Fallos detectados:
+Fallos:
 {fallos_texto}
 
-Formato de respuesta esperado (solo esto, nada más):
-<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>[FILAS AQUÍ]</tbody></table></ac:rich-text-body></ac:structured-macro>
-<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Claude AI)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>[FILAS AQUÍ]</tbody></table></ac:rich-text-body></ac:structured-macro>"""
+Responde SOLO con este HTML, nada más:
+<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>FILAS_RESUMEN</tbody></table></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Claude AI)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>FILAS_RCA</tbody></table></ac:rich-text-body></ac:structured-macro>"""
 
 body = json.dumps({
     "model": "claude-opus-4-6",
@@ -116,7 +120,7 @@ body = json.dumps({
 result = subprocess.run([
     "curl", "-s",
     "https://api.anthropic.com/v1/messages",
-    "-H", f"x-api-key: {os.environ.get('ANTHROPIC_API_KEY', '')}",
+    "-H", f"x-api-key: {api_key}",
     "-H", "anthropic-version: 2023-06-01",
     "-H", "content-type: application/json",
     "-d", body
@@ -127,10 +131,10 @@ try:
     if "content" in data:
         print(data["content"][0]["text"])
     else:
-        raise Exception(data.get("error", {}).get("message", "Unknown error"))
+        raise Exception(data.get("error", {}).get("message", "Unknown"))
 except Exception as e:
-    # Fallback: generar tablas con Python si Claude falla
-    import re
+    sys.stderr.write(f"Claude error: {e}\n")
+    # Fallback Python
     rows_resumen = ""
     rows_rca = ""
     for i, f in enumerate(failed_data, 1):
@@ -141,13 +145,10 @@ except Exception as e:
         origen = "🔴 API" if code == "422" else ("⚠️ Cadena" if "undefined" in msg else "🔴 Fallo")
         rows_resumen += f"<tr><td>{i}</td><td>{req}</td><td>AssertionError</td><td>{msg}</td><td>{code}</td><td>{origen}</td></tr>"
         rows_rca += f"<tr><td>{i}</td><td>{req}</td><td>Error técnico detectado</td><td>Revisar logs adjuntos</td></tr>"
-
-    print(f"""<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>{rows_resumen}</tbody></table></ac:rich-text-body></ac:structured-macro>
-<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Fallback)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>{rows_rca}</tbody></table></ac:rich-text-body></ac:structured-macro>""")
+    print(f'<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>{rows_resumen}</tbody></table></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Fallback)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>{rows_rca}</tbody></table></ac:rich-text-body></ac:structured-macro>')
 PYEOF
 )
 fi
-
 # ==========================================
 # 5. PUBLICACIÓN FINAL
 # ==========================================
