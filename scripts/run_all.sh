@@ -66,12 +66,11 @@ newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTM
 # ==========================================
 echo "🤖 Analizando fallos técnicos..."
 
-FAILED_DATA=$(python3 -c "import json, sys; d=json.load(open('$JSON_REPORT')); print(json.dumps(d['run']['failures']))" 2>/dev/null)
+FAILED_DATA=$(python3 -c "import json; d=json.load(open('$JSON_REPORT')); print(json.dumps(d['run']['failures']))" 2>/dev/null)
 
 if [ -z "$FAILED_DATA" ] || [ "$FAILED_DATA" == "[]" ]; then
     AI_RCA="<p style='color:green;'>✅ Todas las pruebas pasaron correctamente.</p>"
 else
-    # Guardar fallos en archivo temporal para evitar problemas de interpolación
     echo "$FAILED_DATA" > /tmp/failed_data.json
 
     AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 << 'PYEOF'
@@ -79,41 +78,43 @@ import json, subprocess, os, re, sys
 
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
-# Leer desde archivo para evitar problemas con caracteres especiales
 with open("/tmp/failed_data.json", "r") as f:
     failed_data = json.load(f)
 
-# Preparar resumen de fallos
+# Preparar datos de fallos
 fallos = []
 for i, f in enumerate(failed_data, 1):
     req = f.get('source', {}).get('name', 'N/A')
     msg = f.get('error', {}).get('message', 'N/A')
     code = re.search(r'got (\d{3})', msg)
     code = code.group(1) if code else 'N/A'
-    fallos.append(f"{i}|{req}|AssertionError|{msg}|{code}")
+    fallos.append({"num": i, "req": req, "msg": msg, "code": code})
 
-fallos_texto = "\n".join(fallos)
+# Construir tabla de resumen con Python (sin IA para HTML)
+rows_resumen = ""
+for f in fallos:
+    if f["code"] == "422":
+        origen = "🔴 API"
+    elif "undefined" in f["msg"]:
+        origen = "⚠️ Cadena"
+    else:
+        origen = "🔴 Fallo"
+    rows_resumen += f"<tr><td>{f['num']}</td><td>{f['req']}</td><td>AssertionError</td><td>{f['msg']}</td><td>{f['code']}</td><td>{origen}</td></tr>"
 
-prompt = f"""Eres un experto en QA de APIs REST. Analiza estos fallos de pruebas Newman/Postman y responde ÚNICAMENTE con HTML válido, sin texto adicional, sin explicaciones, sin markdown.
+# Pedir a Claude SOLO la causa raíz y acción — formato JSON estricto
+fallos_texto = "\n".join([f"{f['num']}|{f['req']}|{f['msg']}|{f['code']}" for f in fallos])
 
-Genera exactamente este bloque HTML con dos tablas en formato Confluence:
+prompt = f"""Analiza estos fallos de pruebas de API y responde ÚNICAMENTE con un array JSON válido, sin texto adicional, sin explicaciones, sin markdown, sin bloques de código.
 
-1. Tabla de resumen con columnas: #, Request, Tipo, Mensaje, Código, Origen
-   - Si código es 422 → Origen = "🔴 API"
-   - Si mensaje contiene "undefined" → Origen = "⚠️ Cadena"
-   - Otros → Origen = "🔴 Fallo"
+Formato exacto requerido:
+[{{"num":1,"causa":"texto","accion":"texto"}},{{"num":2,"causa":"texto","accion":"texto"}}]
 
-2. Tabla de causa raíz con columnas: #, Request, Causa Raíz Técnica, Acción Recomendada
-
-Fallos:
-{fallos_texto}
-
-Responde SOLO con este HTML, nada más:
-<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>FILAS_RESUMEN</tbody></table></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Claude AI)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>FILAS_RCA</tbody></table></ac:rich-text-body></ac:structured-macro>"""
+Fallos (formato: #|request|mensaje_error|codigo_http):
+{fallos_texto}"""
 
 body = json.dumps({
     "model": "claude-opus-4-6",
-    "max_tokens": 2048,
+    "max_tokens": 1024,
     "messages": [{"role": "user", "content": prompt}]
 })
 
@@ -126,26 +127,25 @@ result = subprocess.run([
     "-d", body
 ], capture_output=True, text=True)
 
+rows_rca = ""
 try:
     data = json.loads(result.stdout)
     if "content" in data:
-        print(data["content"][0]["text"])
+        raw = data["content"][0]["text"].strip()
+        # Limpiar por si Claude agrega algo antes/después del JSON
+        raw = re.sub(r'^[^[]*', '', raw)
+        raw = re.sub(r'[^\]]*$', '', raw)
+        rca_list = json.loads(raw)
+        for r in rca_list:
+            rows_rca += f"<tr><td>{r['num']}</td><td>{fallos[r['num']-1]['req']}</td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
     else:
-        raise Exception(data.get("error", {}).get("message", "Unknown"))
+        raise Exception("no content")
 except Exception as e:
-    sys.stderr.write(f"Claude error: {e}\n")
-    # Fallback Python
-    rows_resumen = ""
-    rows_rca = ""
-    for i, f in enumerate(failed_data, 1):
-        req = f.get('source', {}).get('name', 'N/A')
-        msg = f.get('error', {}).get('message', 'N/A')
-        code = re.search(r'got (\d{3})', msg)
-        code = code.group(1) if code else 'N/A'
-        origen = "🔴 API" if code == "422" else ("⚠️ Cadena" if "undefined" in msg else "🔴 Fallo")
-        rows_resumen += f"<tr><td>{i}</td><td>{req}</td><td>AssertionError</td><td>{msg}</td><td>{code}</td><td>{origen}</td></tr>"
-        rows_rca += f"<tr><td>{i}</td><td>{req}</td><td>Error técnico detectado</td><td>Revisar logs adjuntos</td></tr>"
-    print(f'<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>{rows_resumen}</tbody></table></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Fallback)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>{rows_rca}</tbody></table></ac:rich-text-body></ac:structured-macro>')
+    sys.stderr.write(f"Claude RCA error: {e}\n")
+    for f in fallos:
+        rows_rca += f"<tr><td>{f['num']}</td><td>{f['req']}</td><td>Error técnico en response</td><td>Revisar logs adjuntos</td></tr>"
+
+print(f'<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>{rows_resumen}</tbody></table></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Claude AI)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>{rows_rca}</tbody></table></ac:rich-text-body></ac:structured-macro>')
 PYEOF
 )
 fi
