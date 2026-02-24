@@ -26,20 +26,20 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # --- SOLUCIÓN NUCLEAR AL ERROR DE GIT ---
+      # =========================================================
+      # AQUÍ VA EL CAMBIO: LIMPIEZA TOTAL ANTES DE CLONAR
+      # =========================================================
       - name: Manual Clean Checkout
         run: |
-          echo "🧹 Limpiando workspace a la fuerza..."
-          # Entrar a la carpeta de trabajo y borrar TODO, incluyendo carpetas ocultas de git
-          rm -rf ./* || true
-          rm -rf .git || true
+          echo "🧹 Limpiando workspace a la fuerza (incluyendo ocultos)..."
+          # Este comando borra TODO lo que hay dentro de la carpeta actual
+          find . -mindepth 1 -delete
           
           echo "📥 Clonando repositorio manualmente..."
-          # Clonamos directamente usando el token interno de GitHub para permisos
           git clone --depth 1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
           
-          # Verificar que estamos en la rama correcta
-          git checkout main || git checkout master || echo "Ya estamos en la rama default"
+          echo "✅ Estructura descargada:"
+          ls -la
 
       # --- CONFIGURACIÓN DE OLLAMA ---
       - name: Cache Ollama Models
