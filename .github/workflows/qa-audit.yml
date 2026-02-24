@@ -26,14 +26,15 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # --- SOLUCIÓN ERROR GIT (OPCIÓN 1) ---
+      # --- SOLUCIÓN AL ERROR: fatal: bad object refs/heads/main 2 ---
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          clean: true
-          fetch-depth: 0
+          ref: main         # Forzamos la rama principal específicamente
+          fetch-depth: 1    # Traemos solo el último commit para evitar objetos corruptos del historial
+          clean: true       # Limpieza profunda del workspace del runner
 
-      # --- CONFIGURACIÓN DE OLLAMA ---
+      # --- CONFIGURACIÓN DE OLLAMA (Llama 3) ---
       - name: Cache Ollama Models
         id: cache-ollama
         uses: actions/cache@v4
@@ -43,30 +44,30 @@ jobs:
 
       - name: Install and Start Ollama
         run: |
-          # Instalar solo si no existe
+          # Instalar Ollama si no existe en el runner
           if ! command -v ollama &> /dev/null; then
             curl -fsSL https://ollama.com/install.sh | sh
           fi
           
-          # Iniciar servicio si no está corriendo
+          # Levantar el servicio si no está activo
           if ! pgrep -x "ollama" > /dev/null; then
             ollama serve &
           fi
           
-          echo "⏳ Esperando a que Ollama esté disponible..."
+          echo "⏳ Esperando respuesta de Ollama API..."
           until curl -s http://localhost:11434/api/tags > /dev/null; do
             sleep 5
           done
           
-          # Descargar modelo si no está en caché
+          # Pull del modelo si no está en cache
           if [[ "${{ steps.cache-ollama.outputs.cache-hit }}" != 'true' ]]; then
             echo "📥 Descargando Llama 3..."
             ollama pull llama3
           else
-            echo "✅ Modelo recuperado del caché."
+            echo "✅ Modelo recuperado del caché local."
           fi
 
-      # --- EJECUCIÓN DE AUDITORÍA ---
+      # --- EJECUCIÓN DE LA AUDITORÍA ---
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -74,12 +75,14 @@ jobs:
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          chmod +x scripts/run_all.sh
-          bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+          # Asegurar permisos de ejecución
+          chmod +x scripts/run_env.sh
+          # Ejecutar el script con los parámetros del usuario
+          bash scripts/run_env.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
 
-      # --- SUBIDA DE ARTEFACTOS ---
+      # --- SUBIDA DE EVIDENCIAS ---
       - name: Upload Reports
-        if: always()
+        if: always() # Se ejecuta aunque fallen las pruebas
         uses: actions/upload-artifact@v4
         with:
           name: qa-report-${{ github.event.inputs.pais }}-${{ github.event.inputs.ambiente }}
