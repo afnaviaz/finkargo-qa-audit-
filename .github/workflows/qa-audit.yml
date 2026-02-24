@@ -1,5 +1,4 @@
 name: QA Audit
-
 on:
   workflow_dispatch:
     inputs:
@@ -20,11 +19,9 @@ on:
         options:
           - Testing
           - Staging
-
 jobs:
   run-audit:
     runs-on: self-hosted
-
     steps:
       # --- PASO 1: CLONADO MANUAL Y REPARACIÓN DE ESTRUCTURA ---
       - name: Manual Clean Checkout
@@ -33,45 +30,13 @@ jobs:
           find . -mindepth 1 -delete
           
           echo "📥 Clonando repositorio (Rama: main)..."
-          # Clonamos solo la rama main para evitar el error de 'bad object main 2'
           git clone --depth 1 --single-branch --branch main https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
           
           echo "📍 Ubicación actual: $(pwd)"
           echo "📂 Verificando archivos descargados:"
           ls -R
 
-      # --- PASO 2: CONFIGURACIÓN DE OLLAMA ---
-      - name: Cache Ollama Models
-        id: cache-ollama
-        uses: actions/cache@v4
-        with:
-          path: ~/.ollama
-          key: ${{ runner.os }}-ollama-llama3
-
-      - name: Install and Start Ollama
-        run: |
-          if ! command -v ollama &> /dev/null; then
-            curl -fsSL https://ollama.com/install.sh | sh
-          fi
-          
-          if ! pgrep -x "ollama" > /dev/null; then
-            ollama serve &
-          fi
-          
-          echo "⏳ Esperando a que Ollama responda..."
-          until curl -s http://localhost:11434/api/tags > /dev/null; do
-            sleep 5
-          done
-          
-          if [[ "${{ steps.cache-ollama.outputs.cache-hit }}" != 'true' ]]; then
-            echo "📥 Descargando modelo Llama 3..."
-            ollama pull llama3
-          else
-            echo "✅ Modelo recuperado del caché."
-          fi
-
-      # --- PASO 3: BÚSQUEDA Y EJECUCIÓN DEL SCRIPT ---
-
+      # --- PASO 2: EJECUCIÓN DEL SCRIPT ---
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -82,11 +47,9 @@ jobs:
           echo "📂 Entrando a la carpeta scripts..."
           cd scripts
           
-          # Listar archivos para estar 100% seguros del nombre
           echo "📄 Archivos encontrados en scripts/:"
           ls -F
           
-          # Intentar ejecutar run_env.sh o run_all.sh (el que exista)
           SCRIPT_TO_RUN=$(ls run_env.sh run_all.sh 2>/dev/null | head -n 1)
           
           if [ -f "$SCRIPT_TO_RUN" ]; then
@@ -98,6 +61,84 @@ jobs:
             exit 1
           fi
 
+      # --- PASO 3: ANÁLISIS DE CAUSA RAÍZ CON CLAUDE ---
+      - name: Análisis de Causa Raíz con Claude
+        if: always()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "🔍 Buscando archivos de resultados..."
+          
+          # Buscar el archivo JSON de resultados más reciente
+          RESULTS_FILE=$(find . -name "results_*.json" | head -n 1)
+          LOG_FILE=$(find . -name "log_*.txt" | head -n 1)
+          
+          if [ -z "$RESULTS_FILE" ] && [ -z "$LOG_FILE" ]; then
+            echo "⚠️ No se encontraron archivos de resultados para analizar."
+            exit 0
+          fi
+          
+          # Construir el contenido a analizar
+          CONTENT=""
+          if [ -f "$RESULTS_FILE" ]; then
+            echo "📄 Usando resultados: $RESULTS_FILE"
+            CONTENT=$(cat "$RESULTS_FILE" | head -c 8000)  # Limitar tamaño
+          fi
+          if [ -f "$LOG_FILE" ]; then
+            echo "📄 Usando log: $LOG_FILE"
+            CONTENT="$CONTENT\n\nLOG:\n$(cat "$LOG_FILE" | tail -200)"  # Últimas 200 líneas
+          fi
+          
+          # Escapar el contenido para JSON
+          ESCAPED_CONTENT=$(echo "$CONTENT" | python3 -c "
+          import sys, json
+          content = sys.stdin.read()
+          print(json.dumps(content))
+          ")
+          
+          echo "🤖 Enviando resultados a Claude para análisis..."
+          
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-opus-4-6\",
+              \"max_tokens\": 2048,
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": \"Eres un experto en QA de APIs REST. Analiza los siguientes resultados de pruebas automatizadas para el país ${{ github.event.inputs.pais }} en ambiente ${{ github.event.inputs.ambiente }}.\n\nProporciona:\n1. ✅ Resumen ejecutivo (pruebas pasadas vs fallidas)\n2. 🔴 Causa raíz de cada fallo encontrado\n3. 📊 Patrones o tendencias de error\n4. 🔧 Recomendaciones concretas de corrección\n5. 🚨 Nivel de riesgo general (Alto/Medio/Bajo)\n\nResultados:\n$ESCAPED_CONTENT\"
+              }]
+            }")
+          
+          # Extraer el análisis de la respuesta
+          ANALYSIS=$(echo "$RESPONSE" | python3 -c "
+          import sys, json
+          try:
+              data = json.load(sys.stdin)
+              print(data['content'][0]['text'])
+          except Exception as e:
+              print(f'Error al parsear respuesta: {e}')
+              print('Respuesta cruda:', sys.stdin.read())
+          ")
+          
+          echo "✅ Análisis completado."
+          
+          # Mostrar en Job Summary de GitHub Actions
+          echo "## 🤖 Análisis de Causa Raíz - Claude AI" >> $GITHUB_STEP_SUMMARY
+          echo "**País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "$ANALYSIS" >> $GITHUB_STEP_SUMMARY
+          
+          # Guardar como archivo para el reporte
+          mkdir -p reports
+          echo "# Análisis de Causa Raíz - Claude AI" > reports/claude-analysis.md
+          echo "**País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}" >> reports/claude-analysis.md
+          echo "" >> reports/claude-analysis.md
+          echo "$ANALYSIS" >> reports/claude-analysis.md
+          
+          echo "📝 Análisis guardado en reports/claude-analysis.md"
+
       # --- PASO 4: SUBIDA DE ARTEFACTOS ---
       - name: Upload Reports
         if: always()
@@ -108,4 +149,5 @@ jobs:
             **/report_*.html
             **/results_*.json
             **/log_*.txt
+            **/claude-analysis.md
           retention-days: 30
