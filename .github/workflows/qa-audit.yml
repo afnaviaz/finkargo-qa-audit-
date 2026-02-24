@@ -61,110 +61,21 @@ jobs:
             exit 1
           fi
 
-      # --- PASO 3: ANÁLISIS DE CAUSA RAÍZ CON CLAUDE ---
-      - name: Análisis de Causa Raíz con Claude
+    # --- PASO 3: PUBLICAR ANÁLISIS EN JOB SUMMARY ---
+      - name: Publicar Análisis en Job Summary
         if: always()
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          echo "🔍 Buscando archivos de resultados..."
-
-          RESULTS_FILE=$(find . -name "results_*.json" | head -n 1)
-          LOG_FILE=$(find . -name "log_*.txt" | head -n 1)
-
-          if [ -z "$RESULTS_FILE" ] && [ -z "$LOG_FILE" ]; then
-            echo "⚠️ No se encontraron archivos de resultados."
-            exit 0
+          ANALYSIS_FILE=$(find . -name "claude-analysis.md" | head -n 1)
+          
+          echo "## 🤖 Análisis de Causa Raíz - Claude AI" >> $GITHUB_STEP_SUMMARY
+          echo "**País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "$ANALYSIS_FILE" ]; then
+            cat "$ANALYSIS_FILE" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No se generó archivo de análisis." >> $GITHUB_STEP_SUMMARY
           fi
-
-          echo "📄 Resultados: $RESULTS_FILE"
-          echo "📄 Log: $LOG_FILE"
-
-          # Script Python que hace todo: lee archivos, llama API, parsea respuesta
-          python3 << 'PYEOF'
-          import json, os, subprocess, sys
-
-          api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-          pais = "${{ github.event.inputs.pais }}"
-          ambiente = "${{ github.event.inputs.ambiente }}"
-
-          # Leer archivos
-          content_parts = []
-
-          results_file = "$RESULTS_FILE"
-          log_file = "$LOG_FILE"
-
-          if results_file and os.path.isfile(results_file):
-              with open(results_file, "r", errors="replace") as f:
-                  content_parts.append("RESULTADOS JSON:\n" + f.read()[:6000])
-
-          if log_file and os.path.isfile(log_file):
-              with open(log_file, "r", errors="replace") as f:
-                  lines = f.readlines()
-                  content_parts.append("LOG (últimas 150 líneas):\n" + "".join(lines[-150:]))
-
-          content = "\n\n".join(content_parts)
-
-          prompt = f"""Eres un experto en QA de APIs REST. Analiza los resultados de pruebas automatizadas para el país {pais} en ambiente {ambiente}.
-
-          Proporciona:
-          1. ✅ Resumen ejecutivo (pruebas pasadas vs fallidas)
-          2. 🔴 Causa raíz de cada fallo encontrado
-          3. 📊 Patrones o tendencias de error
-          4. 🔧 Recomendaciones concretas de corrección
-          5. 🚨 Nivel de riesgo general (Alto/Medio/Bajo)
-
-          Resultados:
-          {content}"""
-
-          body = json.dumps({
-              "model": "claude-opus-4-6",
-              "max_tokens": 2048,
-              "messages": [{"role": "user", "content": prompt}]
-          })
-
-          # Llamar a la API
-          result = subprocess.run([
-              "curl", "-s",
-              "https://api.anthropic.com/v1/messages",
-              "-H", f"x-api-key: {api_key}",
-              "-H", "anthropic-version: 2023-06-01",
-              "-H", "content-type: application/json",
-              "-d", body
-          ], capture_output=True, text=True)
-
-          print(f"HTTP raw response length: {len(result.stdout)}")
-
-          try:
-              data = json.loads(result.stdout)
-          except Exception as e:
-              print(f"❌ Error parseando JSON: {e}")
-              print(f"Respuesta: {result.stdout[:500]}")
-              sys.exit(1)
-
-          if "error" in data:
-              analysis = f"❌ Error de API: {data['error'].get('message', str(data['error']))}"
-          elif "content" in data:
-              analysis = data["content"][0]["text"]
-          else:
-              analysis = f"❌ Respuesta inesperada: {str(data)[:500]}"
-
-          # Escribir Job Summary
-          summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null")
-          with open(summary_file, "a") as f:
-              f.write("## 🤖 Análisis de Causa Raíz - Claude AI\n")
-              f.write(f"**País:** {pais} | **Ambiente:** {ambiente}\n\n")
-              f.write(analysis + "\n")
-
-          # Guardar archivo
-          os.makedirs("reports", exist_ok=True)
-          with open("reports/claude-analysis.md", "w") as f:
-              f.write(f"# Análisis de Causa Raíz - Claude AI\n")
-              f.write(f"**País:** {pais} | **Ambiente:** {ambiente}\n\n")
-              f.write(analysis + "\n")
-
-          print("✅ Análisis completado y guardado.")
-          PYEOF
 
       # --- PASO 4: SUBIDA DE ARTEFACTOS ---
       - name: Upload Reports
