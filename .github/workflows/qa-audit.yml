@@ -26,16 +26,58 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # --- SOLUCIÓN ERROR GIT (OPCIÓN 1) ---
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
 
+      # --- CONFIGURACIÓN DE OLLAMA ---
+      - name: Cache Ollama Models
+        id: cache-ollama
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama
+          key: ${{ runner.os }}-ollama-llama3
+
+      - name: Install and Start Ollama
+        run: |
+          # Instalar solo si no existe
+          if ! command -v ollama &> /dev/null; then
+            curl -fsSL https://ollama.com/install.sh | sh
+          fi
+          
+          # Iniciar servicio si no está corriendo
+          if ! pgrep -x "ollama" > /dev/null; then
+            ollama serve &
+          fi
+          
+          echo "⏳ Esperando a que Ollama esté disponible..."
+          until curl -s http://localhost:11434/api/tags > /dev/null; do
+            sleep 5
+          done
+          
+          # Descargar modelo si no está en caché
+          if [[ "${{ steps.cache-ollama.outputs.cache-hit }}" != 'true' ]]; then
+            echo "📥 Descargando Llama 3..."
+            ollama pull llama3
+          else
+            echo "✅ Modelo recuperado del caché."
+          fi
+
+      # --- EJECUCIÓN DE AUDITORÍA ---
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_USER: ${{ secrets.CONF_USER }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
-        run: bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          chmod +x scripts/run_all.sh
+          bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
 
+      # --- SUBIDA DE ARTEFACTOS ---
       - name: Upload Reports
         if: always()
         uses: actions/upload-artifact@v4
