@@ -26,16 +26,59 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # =========================================================
+      # AQUÍ VA EL CAMBIO: LIMPIEZA TOTAL ANTES DE CLONAR
+      # =========================================================
+      - name: Manual Clean Checkout
+        run: |
+          echo "🧹 Limpiando workspace a la fuerza (incluyendo ocultos)..."
+          # Este comando borra TODO lo que hay dentro de la carpeta actual
+          find . -mindepth 1 -delete
+          
+          echo "📥 Clonando repositorio manualmente..."
+          git clone --depth 1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+          
+          echo "✅ Estructura descargada:"
+          ls -la
 
+      # --- CONFIGURACIÓN DE OLLAMA ---
+      - name: Cache Ollama Models
+        id: cache-ollama
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama
+          key: ${{ runner.os }}-ollama-llama3
+
+      - name: Install and Start Ollama
+        run: |
+          if ! command -v ollama &> /dev/null; then
+            curl -fsSL https://ollama.com/install.sh | sh
+          fi
+          
+          if ! pgrep -x "ollama" > /dev/null; then
+            ollama serve &
+          fi
+          
+          until curl -s http://localhost:11434/api/tags > /dev/null; do
+            sleep 5
+          done
+          
+          if [[ "${{ steps.cache-ollama.outputs.cache-hit }}" != 'true' ]]; then
+            ollama pull llama3
+          fi
+
+      # --- EJECUCIÓN DE AUDITORÍA ---
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_USER: ${{ secrets.CONF_USER }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
-        run: bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          chmod +x scripts/run_env.sh
+          bash scripts/run_env.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
 
+      # --- SUBIDA DE EVIDENCIAS ---
       - name: Upload Reports
         if: always()
         uses: actions/upload-artifact@v4
