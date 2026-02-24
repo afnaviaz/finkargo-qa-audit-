@@ -68,76 +68,104 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           echo "🔍 Buscando archivos de resultados..."
-          
-          # Buscar el archivo JSON de resultados más reciente
+
           RESULTS_FILE=$(find . -name "results_*.json" | head -n 1)
           LOG_FILE=$(find . -name "log_*.txt" | head -n 1)
-          
+
           if [ -z "$RESULTS_FILE" ] && [ -z "$LOG_FILE" ]; then
-            echo "⚠️ No se encontraron archivos de resultados para analizar."
+            echo "⚠️ No se encontraron archivos de resultados."
             exit 0
           fi
-          
-          # Construir el contenido a analizar
+
+          # Construir contenido a analizar
           CONTENT=""
           if [ -f "$RESULTS_FILE" ]; then
-            echo "📄 Usando resultados: $RESULTS_FILE"
-            CONTENT=$(cat "$RESULTS_FILE" | head -c 8000)  # Limitar tamaño
+            echo "📄 Usando: $RESULTS_FILE"
+            CONTENT=$(cat "$RESULTS_FILE" | head -c 6000)
           fi
           if [ -f "$LOG_FILE" ]; then
             echo "📄 Usando log: $LOG_FILE"
-            CONTENT="$CONTENT\n\nLOG:\n$(cat "$LOG_FILE" | tail -200)"  # Últimas 200 líneas
+            CONTENT="$CONTENT\n\nLOG:\n$(tail -150 "$LOG_FILE")"
           fi
-          
-          # Escapar el contenido para JSON
-          ESCAPED_CONTENT=$(echo "$CONTENT" | python3 -c "
+
+          # Escapar contenido para JSON con Python
+          ESCAPED_CONTENT=$(python3 -c "
           import sys, json
-          content = sys.stdin.read()
+          content = '''$CONTENT'''
           print(json.dumps(content))
           ")
-          
-          echo "🤖 Enviando resultados a Claude para análisis..."
-          
-          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+
+          # Construir el body del request
+          REQUEST_BODY=$(python3 -c "
+          import json
+          content = open('$RESULTS_FILE').read()[:6000] if '$RESULTS_FILE' else ''
+          prompt = '''Eres un experto en QA de APIs REST. Analiza los resultados de pruebas automatizadas para el país ${{ github.event.inputs.pais }} en ambiente ${{ github.event.inputs.ambiente }}.
+
+          Proporciona:
+          1. Resumen ejecutivo (pruebas pasadas vs fallidas)
+          2. Causa raíz de cada fallo encontrado
+          3. Patrones o tendencias de error
+          4. Recomendaciones concretas de corrección
+          5. Nivel de riesgo general (Alto/Medio/Bajo)
+
+          Resultados:
+          ''' + content
+
+          body = {
+            'model': 'claude-opus-4-6',
+            'max_tokens': 2048,
+            'messages': [{'role': 'user', 'content': prompt}]
+          }
+          print(json.dumps(body))
+          ")
+
+          echo "🤖 Llamando a Claude API..."
+
+          # Llamada a la API con verbose de error
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            -d "{
-              \"model\": \"claude-opus-4-6\",
-              \"max_tokens\": 2048,
-              \"messages\": [{
-                \"role\": \"user\",
-                \"content\": \"Eres un experto en QA de APIs REST. Analiza los siguientes resultados de pruebas automatizadas para el país ${{ github.event.inputs.pais }} en ambiente ${{ github.event.inputs.ambiente }}.\n\nProporciona:\n1. ✅ Resumen ejecutivo (pruebas pasadas vs fallidas)\n2. 🔴 Causa raíz de cada fallo encontrado\n3. 📊 Patrones o tendencias de error\n4. 🔧 Recomendaciones concretas de corrección\n5. 🚨 Nivel de riesgo general (Alto/Medio/Bajo)\n\nResultados:\n$ESCAPED_CONTENT\"
-              }]
-            }")
-          
-          # Extraer el análisis de la respuesta
-          ANALYSIS=$(echo "$RESPONSE" | python3 -c "
+            -d "$REQUEST_BODY")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+
+          echo "📡 HTTP Status: $HTTP_STATUS"
+          echo "📡 Respuesta cruda: $BODY"
+
+          # Parsear respuesta
+          ANALYSIS=$(python3 -c "
           import sys, json
+          body = '''$BODY'''
           try:
-              data = json.load(sys.stdin)
-              print(data['content'][0]['text'])
+              data = json.loads(body)
+              if 'content' in data:
+                  print(data['content'][0]['text'])
+              elif 'error' in data:
+                  print('❌ Error de API: ' + data['error'].get('message', str(data['error'])))
+              else:
+                  print('❌ Respuesta inesperada: ' + body[:500])
           except Exception as e:
-              print(f'Error al parsear respuesta: {e}')
-              print('Respuesta cruda:', sys.stdin.read())
+              print(f'❌ Error al parsear: {e}')
+              print('Respuesta: ' + body[:500])
           ")
-          
-          echo "✅ Análisis completado."
-          
-          # Mostrar en Job Summary de GitHub Actions
+
           echo "## 🤖 Análisis de Causa Raíz - Claude AI" >> $GITHUB_STEP_SUMMARY
           echo "**País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "$ANALYSIS" >> $GITHUB_STEP_SUMMARY
-          
-          # Guardar como archivo para el reporte
+
           mkdir -p reports
-          echo "# Análisis de Causa Raíz - Claude AI" > reports/claude-analysis.md
-          echo "**País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}" >> reports/claude-analysis.md
-          echo "" >> reports/claude-analysis.md
-          echo "$ANALYSIS" >> reports/claude-analysis.md
-          
-          echo "📝 Análisis guardado en reports/claude-analysis.md"
+          {
+            echo "# Análisis de Causa Raíz - Claude AI"
+            echo "**País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}"
+            echo ""
+            echo "$ANALYSIS"
+          } > reports/claude-analysis.md
+
+          echo "✅ Análisis guardado."
 
       # --- PASO 4: SUBIDA DE ARTEFACTOS ---
       - name: Upload Reports
