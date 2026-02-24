@@ -148,6 +148,14 @@ except Exception as e:
 print(f'<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>{rows_resumen}</tbody></table></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Claude AI)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>{rows_rca}</tbody></table></ac:rich-text-body></ac:structured-macro>')
 PYEOF
 )
+# Guardar análisis para Job Summary de GitHub
+    mkdir -p "$SCRIPTS_DIR/../reports"
+    {
+        echo "### Fallos detectados: ${#fallos[@]}"
+        echo ""
+        echo "$AI_RCA"
+    } > "$SCRIPTS_DIR/../reports/claude-analysis.md"
+
 fi
 
 # ==========================================
