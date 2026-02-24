@@ -26,15 +26,22 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # --- SOLUCIÓN AL ERROR: fatal: bad object refs/heads/main 2 ---
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: main         # Forzamos la rama principal específicamente
-          fetch-depth: 1    # Traemos solo el último commit para evitar objetos corruptos del historial
-          clean: true       # Limpieza profunda del workspace del runner
+      # --- SOLUCIÓN NUCLEAR AL ERROR DE GIT ---
+      - name: Manual Clean Checkout
+        run: |
+          echo "🧹 Limpiando workspace a la fuerza..."
+          # Entrar a la carpeta de trabajo y borrar TODO, incluyendo carpetas ocultas de git
+          rm -rf ./* || true
+          rm -rf .git || true
+          
+          echo "📥 Clonando repositorio manualmente..."
+          # Clonamos directamente usando el token interno de GitHub para permisos
+          git clone --depth 1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+          
+          # Verificar que estamos en la rama correcta
+          git checkout main || git checkout master || echo "Ya estamos en la rama default"
 
-      # --- CONFIGURACIÓN DE OLLAMA (Llama 3) ---
+      # --- CONFIGURACIÓN DE OLLAMA ---
       - name: Cache Ollama Models
         id: cache-ollama
         uses: actions/cache@v4
@@ -44,30 +51,23 @@ jobs:
 
       - name: Install and Start Ollama
         run: |
-          # Instalar Ollama si no existe en el runner
           if ! command -v ollama &> /dev/null; then
             curl -fsSL https://ollama.com/install.sh | sh
           fi
           
-          # Levantar el servicio si no está activo
           if ! pgrep -x "ollama" > /dev/null; then
             ollama serve &
           fi
           
-          echo "⏳ Esperando respuesta de Ollama API..."
           until curl -s http://localhost:11434/api/tags > /dev/null; do
             sleep 5
           done
           
-          # Pull del modelo si no está en cache
           if [[ "${{ steps.cache-ollama.outputs.cache-hit }}" != 'true' ]]; then
-            echo "📥 Descargando Llama 3..."
             ollama pull llama3
-          else
-            echo "✅ Modelo recuperado del caché local."
           fi
 
-      # --- EJECUCIÓN DE LA AUDITORÍA ---
+      # --- EJECUCIÓN DE AUDITORÍA ---
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -75,14 +75,12 @@ jobs:
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          # Asegurar permisos de ejecución
           chmod +x scripts/run_env.sh
-          # Ejecutar el script con los parámetros del usuario
           bash scripts/run_env.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
 
       # --- SUBIDA DE EVIDENCIAS ---
       - name: Upload Reports
-        if: always() # Se ejecuta aunque fallen las pruebas
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-report-${{ github.event.inputs.pais }}-${{ github.event.inputs.ambiente }}
