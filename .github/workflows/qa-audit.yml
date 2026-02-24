@@ -4,62 +4,45 @@ on:
   workflow_dispatch:
     inputs:
       pais:
-        description: "País"
+        description: "País a auditar"
         required: true
         default: "CO"
         type: choice
-        options: [CO, MX, ALL]
+        options:
+          - CO
+          - MX
+          - ALL
       ambiente:
         description: "Ambiente"
         required: true
         default: "Testing"
         type: choice
-        options: [Testing, Staging]
+        options:
+          - Testing
+          - Staging
 
 jobs:
   run-audit:
     runs-on: self-hosted
 
     steps:
-      # --- PASO 1: LIMPIEZA ABSOLUTA ---
-      - name: 🧹 Limpieza Total Manual
-        run: |
-          echo "Borrando rastro de ejecuciones anteriores..."
-          # Borra todo, incluyendo archivos ocultos .git
-          rm -rf ./* || true
-          rm -rf .git || true
-          
-      # --- PASO 2: CLONADO MANUAL QUIRÚRGICO ---
-      - name: 📥 Clonado Manual Limpio
-        run: |
-          # Clonamos solo la rama main, con profundidad 1 (sin historial corrupto)
-          git clone --single-branch --branch main --depth 1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
-          
-      # --- PASO 3: OLLAMA ---
-      - name: 🤖 Iniciar Ollama
-        run: |
-          if ! pgrep -x "ollama" > /dev/null; then
-            ollama serve &
-            sleep 10
-          fi
-          ollama pull llama3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # --- PASO 4: EJECUCIÓN ---
-      - name: 🚀 Run QA Audit
+      - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_USER: ${{ secrets.CONF_USER }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          # Ahora que el clonado manual funcionó, el archivo existirá
-          chmod +x scripts/run_env.sh
-          bash scripts/run_env.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+        run: bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
 
-      # --- PASO 5: REPORTES ---
-      - name: 📊 Upload Artifacts
+      - name: Upload Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reports-${{ github.run_id }}
-          path: scripts/report_*.html
+          name: qa-report-${{ github.event.inputs.pais }}-${{ github.event.inputs.ambiente }}
+          path: |
+            scripts/report_*.html
+            scripts/results_*.json
+            scripts/log_*.txt
+          retention-days: 30
