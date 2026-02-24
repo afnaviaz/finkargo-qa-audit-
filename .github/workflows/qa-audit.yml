@@ -1,64 +1,49 @@
-name: Finkargo API QA Audit (Agentic)
+name: QA Audit
 
 on:
-  workflow_dispatch: # Permite ejecutarlo manualmente desde el botón "Run workflow"
-  schedule:
-    - cron: '0 13 * * 1-5' # Ejecución automática (L-V a las 8:00 AM COL)
+  workflow_dispatch:
+    inputs:
+      pais:
+        description: "País a auditar"
+        required: true
+        default: "CO"
+        type: choice
+        options:
+          - CO
+          - MX
+          - ALL
+      ambiente:
+        description: "Ambiente"
+        required: true
+        default: "Testing"
+        type: choice
+        options:
+          - Testing
+          - Staging
 
 jobs:
-  audit-job:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20 # Evita que se quede pegado si Ollama se pone lento
+  run-audit:
+    runs-on: self-hosted
 
     steps:
-      - name: ⬇️ Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🏗️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: 📦 Install Newman
-        run: npm install -g newman newman-reporter-htmlextra
-
-      - name: 🗄️ Cache Ollama Models
-        id: cache-ollama
-        uses: actions/cache@v4
-        with:
-          path: ~/.ollama
-          key: ${{ runner.os }}-ollama-llama3
-
-      - name: 🤖 Install and Start Ollama
-        run: |
-          # Instalar Ollama
-          curl -fsSL https://ollama.com/install.sh | sh
-          
-          # Iniciar el servidor de Ollama en segundo plano
-          ollama serve &
-          
-          # Esperar a que el servicio esté arriba
-          echo "⏳ Esperando a que Ollama inicie..."
-          until curl -s http://localhost:11434/api/tags > /dev/null; do
-            sleep 5
-          done
-          
-          # Descargar el modelo solo si no está en el caché
-          if [[ "${{ steps.cache-ollama.outputs.cache-hit }}" != 'true' ]]; then
-            echo "📥 Descargando Llama 3 (esto solo pasará una vez)..."
-            ollama pull llama3
-          else
-            echo "✅ Modelo recuperado del caché."
-          fi
-
-      - name: 🚀 Run QA Audit Script
+      - name: Run QA Audit
         env:
-          # Estas variables deben estar en Settings > Secrets de tu GitHub
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_USER: ${{ secrets.CONF_USER }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          # Damos permisos y ejecutamos
-          chmod +x scripts/run_env.sh
-          bash scripts/run_env.sh ALL Testing
+        run: bash scripts/run_all.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+
+      - name: Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report-${{ github.event.inputs.pais }}-${{ github.event.inputs.ambiente }}
+          path: |
+            scripts/report_*.html
+            scripts/results_*.json
+            scripts/log_*.txt
+          retention-days: 30
+
