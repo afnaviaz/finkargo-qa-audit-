@@ -26,22 +26,21 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # =========================================================
-      # AQUÍ VA EL CAMBIO: LIMPIEZA TOTAL ANTES DE CLONAR
-      # =========================================================
+      # --- PASO 1: LIMPIEZA Y CLONADO QUIRÚRGICO ---
       - name: Manual Clean Checkout
         run: |
-          echo "🧹 Limpiando workspace a la fuerza (incluyendo ocultos)..."
-          # Este comando borra TODO lo que hay dentro de la carpeta actual
+          echo "🧹 Limpiando workspace (incluyendo archivos ocultos)..."
+          # Borramos todo para asegurar un entorno virgen
           find . -mindepth 1 -delete
           
-          echo "📥 Clonando repositorio manualmente..."
-          git clone --depth 1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+          echo "📥 Clonando rama específica para evitar errores de objetos corruptos..."
+          # Usamos --single-branch y --branch para ignorar la referencia 'main 2' que causa el error
+          git clone --depth 1 --single-branch --branch main https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
           
-          echo "✅ Estructura descargada:"
-          ls -la
+          echo "✅ Verificando archivos descargados:"
+          ls -R scripts/
 
-      # --- CONFIGURACIÓN DE OLLAMA ---
+      # --- PASO 2: CONFIGURACIÓN DE OLLAMA ---
       - name: Cache Ollama Models
         id: cache-ollama
         uses: actions/cache@v4
@@ -59,6 +58,7 @@ jobs:
             ollama serve &
           fi
           
+          echo "⏳ Esperando a Ollama..."
           until curl -s http://localhost:11434/api/tags > /dev/null; do
             sleep 5
           done
@@ -67,7 +67,7 @@ jobs:
             ollama pull llama3
           fi
 
-      # --- EJECUCIÓN DE AUDITORÍA ---
+      # --- PASO 3: EJECUCIÓN CON VALIDACIÓN DE RUTA ---
       - name: Run QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -75,10 +75,16 @@ jobs:
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          chmod +x scripts/run_env.sh
-          bash scripts/run_env.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+          # Verificamos si el archivo existe antes de chmod para evitar el error "No such file"
+          if [ -f "scripts/run_env.sh" ]; then
+            chmod +x scripts/run_env.sh
+            bash scripts/run_env.sh ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
+          else
+            echo "❌ ERROR: No se encontró scripts/run_env.sh. El clonado falló."
+            exit 1
+          fi
 
-      # --- SUBIDA DE EVIDENCIAS ---
+      # --- PASO 4: SUBIDA DE EVIDENCIAS ---
       - name: Upload Reports
         if: always()
         uses: actions/upload-artifact@v4
