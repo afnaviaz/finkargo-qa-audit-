@@ -7,8 +7,6 @@ PAIS_INPUT=$1
 AMBIENTE=$2  
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENV_FILE="$SCRIPTS_DIR/../.env"
-[ -f "$ENV_FILE" ] && source "$ENV_FILE"
 COUNTER_FILE="$SCRIPTS_DIR/.run_counter"
 [ ! -f "$COUNTER_FILE" ] && echo "1" > "$COUNTER_FILE"
 EXEC_NUM=$(cat "$COUNTER_FILE")
@@ -29,7 +27,7 @@ if [ ! -z "$3" ]; then EXEC_NUM=$3; else echo $((EXEC_NUM + 1)) > "$COUNTER_FILE
 # ==========================================
 # 2. CONFIGURACIÓN POSTMAN API
 # ==========================================
-POSTMAN_API_KEY="${POSTMAN_API_KEY:?Error: variable de entorno POSTMAN_API_KEY no definida}"
+POSTMAN_API_KEY="${POSTMAN_API_KEY}"
 COLLECTION_UID="45103176-fc8836e1-6797-444a-a378-d43987d95165"
 
 if [ "$PAIS_INPUT" == "CO" ]; then
@@ -38,8 +36,8 @@ else
     [[ "$AMBIENTE" == "Staging" ]] && ENV_UID="19103266-8187ac0e-07bd-497d-a228-fefdeec90492" || ENV_UID="19456853-52efb174-794f-4837-a1bf-fc913c9b0f10"
 fi
 
-CONF_USER="${CONF_USER:?Error: variable de entorno CONF_USER no definida}"
-CONF_TOKEN="${CONF_TOKEN:?Error: variable de entorno CONF_TOKEN no definida}"
+CONF_USER="andres.navia@finkargo.com"
+CONF_TOKEN="${CONF_TOKEN}"
 CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA" 
 [[ "$AMBIENTE" == "Testing" ]] && PARENT_PAGE_ID="2216984577" || PARENT_PAGE_ID="2217115649"
@@ -64,66 +62,91 @@ newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTM
   --reporter-json-export "$JSON_REPORT" --reporter-htmlextra-export "$HTML_REPORT" | tee "$LOG_FILE"
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO (EXTRACCIÓN BLINDADA)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (reemplaza Ollama)
 # ==========================================
 echo "🤖 Analizando fallos técnicos..."
 
-# Extraer fallos del JSON
 FAILED_DATA=$(python3 -c "import json, sys; d=json.load(open('$JSON_REPORT')); print(json.dumps(d['run']['failures']))" 2>/dev/null)
 
 if [ -z "$FAILED_DATA" ] || [ "$FAILED_DATA" == "[]" ]; then
     AI_RCA="<p style='color:green;'>✅ Todas las pruebas pasaron correctamente.</p>"
 else
-    # 1. Preparar datos limpios para la IA
-    FAILED_CLEAN=$(python3 -c "import json, sys, re; data = json.loads(sys.stdin.read()); lines = [];
-for i, f in enumerate(data, 1):
-    req=f.get('source',{}).get('name','N/A'); msg=f.get('error',{}).get('message','N/A'); code=re.search(r'got (\d{3})', msg); code=code.group(1) if code else 'N/A';
-    lines.append(f'{i}|{req}|AssertionError|{msg}|{code}')
-print('\n'.join(lines))" <<< "$FAILED_DATA" 2>/dev/null)
+    # Llamada a Claude API para generar ambas tablas en un solo request
+    AI_RCA=$(python3 << PYEOF
+import json, subprocess, os
 
-    # 2. Función de limpieza quirúrgica
-    extract_rows() {
-        python3 -c "import sys, re; text = sys.stdin.read(); matches = re.findall(r'<tr>(.*?)</tr>', text, re.DOTALL | re.IGNORECASE); print(''.join([f'<tr>{m}</tr>' for m in matches]))"
-    }
+failed_data = json.loads('''$FAILED_DATA''')
 
-    # 3. Llamadas a Ollama
-    ROWS_RESUMEN=$(curl -s http://localhost:11434/api/generate -d "{
-      \"model\": \"llama3\",
-      \"prompt\": \"Genera filas HTML <tr> para esta tabla: #|Request|Tipo|Mensaje|Código|Origen. Si code=422 pon '🔴 API', si msg=undefined pon '⚠️ Cadena'. DATOS: $FAILED_CLEAN\",
-      \"system\": \"Responde ÚNICAMENTE con filas <tr> y <td>. No saludes. No expliques nada.\",
-      \"stream\": false
-    }" | python3 -c "import sys,json; print(json.load(sys.stdin).get('response',''))" | extract_rows)
+# Preparar resumen de fallos
+fallos = []
+for i, f in enumerate(failed_data, 1):
+    req = f.get('source', {}).get('name', 'N/A')
+    msg = f.get('error', {}).get('message', 'N/A')
+    import re
+    code = re.search(r'got (\d{3})', msg)
+    code = code.group(1) if code else 'N/A'
+    fallos.append(f"{i}|{req}|AssertionError|{msg}|{code}")
 
-    ROWS_RCA=$(curl -s http://localhost:11434/api/generate -d "{
-      \"model\": \"llama3\",
-      \"prompt\": \"Genera filas HTML <tr> con: #, Request, Causa Raíz Técnica, Acción. Errores: $FAILED_CLEAN\",
-      \"system\": \"Responde ÚNICAMENTE con filas <tr> y <td>. No saludes.\",
-      \"stream\": false
-    }" | python3 -c "import sys,json; print(json.load(sys.stdin).get('response',''))" | extract_rows)
+fallos_texto = "\n".join(fallos)
 
-    # 4. 🔥 FALLBACK DE SEGURIDAD (Si la IA falla, Python pinta la tabla)
-    if [ -z "$ROWS_RESUMEN" ]; then
-        echo "⚠️ Ollama no generó HTML válido. Usando motor de respaldo..."
-        ROWS_RESUMEN=$(python3 -c "import json, sys, re; data = json.loads(sys.argv[1]); rows = '';
-for i, f in enumerate(data, 1):
-    req=f.get('source',{}).get('name','N/A'); msg=f.get('error',{}).get('message','N/A'); code=re.search(r'got (\d{3})', msg); code=code.group(1) if code else 'N/A';
-    rows += f'<tr><td>{i}</td><td>{req}</td><td>AssertionError</td><td>{msg}</td><td>{code}</td><td>🔴 Fallo</td></tr>'
-print(rows)" "$FAILED_DATA")
-    fi
+prompt = f"""Eres un experto en QA de APIs REST. Analiza estos fallos de pruebas Newman/Postman y responde ÚNICAMENTE con HTML válido, sin explicaciones ni texto adicional.
 
-    if [ -z "$ROWS_RCA" ]; then
-        ROWS_RCA=$(python3 -c "import json, sys; data = json.loads(sys.argv[1]); rows = '';
-for i, f in enumerate(data, 1):
-    req=f.get('source',{}).get('name','N/A');
-    rows += f'<tr><td>{i}</td><td>{req}</td><td>Error técnico detectado en el response</td><td>Revisar logs adjuntos</td></tr>'
-print(rows)" "$FAILED_DATA")
-    fi
+Genera exactamente este bloque HTML con dos tablas:
 
-    # 5. Construcción final
-    AI_RCA="<ac:structured-macro ac:name='panel'><ac:parameter ac:name='title'>🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>$ROWS_RESUMEN</tbody></table></ac:rich-text-body></ac:structured-macro>
-    <ac:structured-macro ac:name='panel'><ac:parameter ac:name='title'>🔍 Análisis Técnico (IA)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>$ROWS_RCA</tbody></table></ac:rich-text-body></ac:structured-macro>"
+1. Tabla de resumen con columnas: #, Request, Tipo, Mensaje, Código, Origen
+   - Si código es 422 → Origen = "🔴 API"
+   - Si mensaje contiene "undefined" → Origen = "⚠️ Cadena"
+   - Otros → Origen = "🔴 Fallo"
+
+2. Tabla de causa raíz con columnas: #, Request, Causa Raíz Técnica, Acción Recomendada
+
+Fallos detectados:
+{fallos_texto}
+
+Formato de respuesta esperado (solo esto, nada más):
+<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>[FILAS AQUÍ]</tbody></table></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Claude AI)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>[FILAS AQUÍ]</tbody></table></ac:rich-text-body></ac:structured-macro>"""
+
+body = json.dumps({
+    "model": "claude-opus-4-6",
+    "max_tokens": 2048,
+    "messages": [{"role": "user", "content": prompt}]
+})
+
+result = subprocess.run([
+    "curl", "-s",
+    "https://api.anthropic.com/v1/messages",
+    "-H", f"x-api-key: {os.environ.get('ANTHROPIC_API_KEY', '')}",
+    "-H", "anthropic-version: 2023-06-01",
+    "-H", "content-type: application/json",
+    "-d", body
+], capture_output=True, text=True)
+
+try:
+    data = json.loads(result.stdout)
+    if "content" in data:
+        print(data["content"][0]["text"])
+    else:
+        raise Exception(data.get("error", {}).get("message", "Unknown error"))
+except Exception as e:
+    # Fallback: generar tablas con Python si Claude falla
+    import re
+    rows_resumen = ""
+    rows_rca = ""
+    for i, f in enumerate(failed_data, 1):
+        req = f.get('source', {}).get('name', 'N/A')
+        msg = f.get('error', {}).get('message', 'N/A')
+        code = re.search(r'got (\d{3})', msg)
+        code = code.group(1) if code else 'N/A'
+        origen = "🔴 API" if code == "422" else ("⚠️ Cadena" if "undefined" in msg else "🔴 Fallo")
+        rows_resumen += f"<tr><td>{i}</td><td>{req}</td><td>AssertionError</td><td>{msg}</td><td>{code}</td><td>{origen}</td></tr>"
+        rows_rca += f"<tr><td>{i}</td><td>{req}</td><td>Error técnico detectado</td><td>Revisar logs adjuntos</td></tr>"
+
+    print(f"""<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>{rows_resumen}</tbody></table></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Fallback)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>{rows_rca}</tbody></table></ac:rich-text-body></ac:structured-macro>""")
+PYEOF
+)
 fi
-
 
 # ==========================================
 # 5. PUBLICACIÓN FINAL
