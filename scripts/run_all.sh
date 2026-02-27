@@ -7,13 +7,14 @@ PAIS_INPUT=$1
 AMBIENTE=$2  
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
-COUNTER_FILE="$SCRIPTS_DIR/.run_counter"
-[ ! -f "$COUNTER_FILE" ] && echo "1" > "$COUNTER_FILE"
-EXEC_NUM=$(cat "$COUNTER_FILE")
+
+# ✅ FIX: Usar el número de ejecución nativo de GitHub Actions
+# GITHUB_RUN_NUMBER incrementa automáticamente en cada run del workflow
+# El :-1 es fallback para ejecuciones locales
+EXEC_NUM="${GITHUB_RUN_NUMBER:-1}"
 
 if [[ "$PAIS_INPUT" == "ALL" ]]; then
     echo "🌍 INICIANDO AUDITORÍA GLOBAL (CO & MX) [$AMBIENTE] - Exec #$EXEC_NUM"
-    echo $((EXEC_NUM + 1)) > "$COUNTER_FILE"
     for p in "CO" "MX"; do
         bash "$0" "$p" "$AMBIENTE" "$EXEC_NUM"
         echo "⏳ Pausa anti-bloqueo (15s)..."
@@ -22,7 +23,7 @@ if [[ "$PAIS_INPUT" == "ALL" ]]; then
     exit 0
 fi
 
-if [ ! -z "$3" ]; then EXEC_NUM=$3; else echo $((EXEC_NUM + 1)) > "$COUNTER_FILE"; fi
+if [ ! -z "$3" ]; then EXEC_NUM=$3; fi
 
 # ==========================================
 # 2. CONFIGURACIÓN POSTMAN API
@@ -52,10 +53,9 @@ TITLE="[Exec #$EXEC_NUM] Test Report [$AMBIENTE][$PAIS] - $NOW"
 [ "$PAIS" == "MX" ] && FOLDER_NAME="Mexico (MX)" || FOLDER_NAME="Colombia (CO)"
 
 # ==========================================
-# 3. EJECUCIÓN NEWMAN (AHORA CON SALIDA EN CONSOLA)
+# 3. EJECUCIÓN NEWMAN
 # ==========================================
 echo "🚀 Ejecutando pruebas en $PAIS ($AMBIENTE)..."
-# Usamos 'tee' para que se vea en consola Y se guarde en el log
 newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
   -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
   --folder "$FOLDER_NAME" --insecure -r cli,json,htmlextra \
@@ -90,7 +90,7 @@ for i, f in enumerate(failed_data, 1):
     code = code.group(1) if code else 'N/A'
     fallos.append({"num": i, "req": req, "msg": msg, "code": code})
 
-# Construir tabla de resumen con Python (sin IA para HTML)
+# Construir tabla de resumen
 rows_resumen = ""
 for f in fallos:
     if f["code"] == "422":
@@ -101,7 +101,7 @@ for f in fallos:
         origen = "🔴 Fallo"
     rows_resumen += f"<tr><td>{f['num']}</td><td>{f['req']}</td><td>AssertionError</td><td>{f['msg']}</td><td>{f['code']}</td><td>{origen}</td></tr>"
 
-# Pedir a Claude SOLO la causa raíz y acción — formato JSON estricto
+# Pedir a Claude SOLO la causa raíz y acción
 fallos_texto = "\n".join([f"{f['num']}|{f['req']}|{f['msg']}|{f['code']}" for f in fallos])
 
 prompt = f"""Analiza estos fallos de pruebas de API y responde ÚNICAMENTE con un array JSON válido, sin texto adicional, sin explicaciones, sin markdown, sin bloques de código.
@@ -132,7 +132,6 @@ try:
     data = json.loads(result.stdout)
     if "content" in data:
         raw = data["content"][0]["text"].strip()
-        # Limpiar por si Claude agrega algo antes/después del JSON
         raw = re.sub(r'^[^[]*', '', raw)
         raw = re.sub(r'[^\]]*$', '', raw)
         rca_list = json.loads(raw)
@@ -159,7 +158,7 @@ PYEOF
 fi
 
 # ==========================================
-# 5. PUBLICACIÓN FINAL
+# 5. PUBLICACIÓN FINAL EN CONFLUENCE
 # ==========================================
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
 HTML_BODY="<h2>📊 Reporte QA [$PAIS] - $AMBIENTE</h2>$AI_RCA<ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"

@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finkargo QA — Pipeline de Automatización</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:      #0D1F3C;
+    --navy-deep: #071428;
+    --navy-mid:  #162D50;
+    --green:     #7e79a1;
+    --accent:    #bfc200;
+    --white:     #FFFFFF;
+    --bg:        #F5F7FA;
+    --border:    #DDE4EE;
+    --text:      #0D1F3C;
+    --muted:     #607590;
+    --qa-color:  #0066CC;
+    --pm-color:  #FF6C37;
+    --gh-color:  #24292F;
+    --nw-color:  #0091AE;
+    --cl-color:  #6B3FD4;
+    --pub-color: #0052CC;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Nunito Sans', sans-serif;
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    background: var(--navy);
+    padding: 52px 44px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    right: -100px; top: -100px;
+    width: 420px; height: 420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,194,122,0.12) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .hero-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+    padding-bottom: 44px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 36px;
+  }
+  .logo-box {
+    width: 40px; height: 40px;
+    background: var(--green);
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    color: var(--white);
+  }
+  .logo-name {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    color: var(--white);
+  }
+  .logo-sep { color: rgba(255,255,255,0.2); margin: 0 6px; font-size: 18px; }
+  .logo-dept { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.38); letter-spacing: 0.4px; }
+
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.65);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-bottom: 18px;
+  }
+  .hero-tag .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 2s infinite;
+  }
+  .hero h1 {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: clamp(26px, 4.5vw, 42px);
+    color: var(--white);
+    line-height: 1.12;
+    margin-bottom: 16px;
+  }
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero h1 span { color: rgba(255,255,255,0.4); font-style: italic; }
+
+  .hero-desc {
+    color: rgba(255,255,255,0.55);
+    font-size: 14px;
+    max-width: 600px;
+    line-height: 1.85;
+    margin-bottom: 28px;
+  }
+  .hero-hls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 36px;
+  }
+  .hero-hl {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,194,122,0.10);
+    border: 1px solid rgba(0,194,122,0.22);
+    color: #5EFFC0;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 13px;
+    border-radius: 20px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 20px;
+  }
+  .legend-lbl {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.24);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    align-self: center;
+    margin-right: 4px;
+  }
+  .lc {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.55);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.09);
+    padding: 5px 13px;
+    border-radius: 20px;
+  }
+  .lc .d { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── STATS STRIP ── */
+  .stats-strip {
+    background: var(--navy-deep);
+    padding: 0 44px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .stats-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .stat-item {
+    flex: 1;
+    padding: 20px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+  }
+  .stat-item + .stat-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 20%; bottom: 20%;
+    width: 1px;
+    background: rgba(255,255,255,0.07);
+  }
+  .stat-num {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 26px;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.38);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    line-height: 1.45;
+  }
+
+  /* ── CONTENT WRAPPER ── */
+  .content {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 52px 24px 0;
+  }
+
+  /* ── SECTION HEADER ── */
+  .section-hd { margin-bottom: 24px; }
+  .section-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .section-tag::before {
+    content: '';
+    display: block;
+    width: 18px; height: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .section-h2 {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: clamp(19px, 2.8vw, 26px);
+    color: var(--navy);
+    line-height: 1.2;
+  }
+  .section-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 7px;
+    line-height: 1.75;
+    max-width: 600px;
+  }
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0 0 52px;
+  }
+
+  /* ── ABOUT (ANTES / AHORA) ── */
+  .about-wrap {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 52px;
+  }
+  .about-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 4px rgba(13,31,60,0.06);
+  }
+  .about-card-title {
+    font-family: 'Nunito', sans-serif;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .about-card.old { border-left: 3px solid #D63B3B; }
+  .about-card.new { border-left: 3px solid var(--accent); }
+  .about-card.old .about-card-title { color: #B02020; }
+  .about-card.new .about-card-title { color: #007A4D; }
+  .about-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .about-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .about-list li .bul {
+    width: 16px; height: 16px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 10px;
+    font-weight: 900;
+  }
+  .about-card.old .bul { background: #FEF2F2; border: 1px solid #F0C0C0; color: #B02020; }
+  .about-card.new .bul { background: #E8F9F2; border: 1px solid #A0DFC0; color: #007A4D; }
+
+  /* ── VENTAJAS GRID ── */
+  .feat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 52px;
+  }
+  .feat-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--fc, var(--border));
+    border-radius: 14px;
+    padding: 20px 18px;
+    box-shadow: 0 1px 4px rgba(13,31,60,0.06);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .feat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(13,31,60,0.1); }
+  .feat-icon-box {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px;
+    margin-bottom: 13px;
+    background: var(--bg);
+  }
+  .feat-title {
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--navy);
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+  .feat-desc { font-size: 12px; color: var(--muted); line-height: 1.75; }
+
+  /* ── LOGROS ── */
+  .logros-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 52px;
+  }
+  .logro-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 16px;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(13,31,60,0.06);
+    transition: transform 0.2s;
+  }
+  .logro-card:hover { transform: translateY(-2px); }
+  .logro-card.green { border-color: #B8E4CD; background: #F2FCF7; }
+  .logro-num {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 30px;
+    line-height: 1;
+    color: var(--navy);
+  }
+  .logro-card.green .logro-num { color: #00873D; }
+  .logro-unit {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin: 5px 0 9px;
+  }
+  .logro-desc { font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+  /* ── TECH STACK ── */
+  .stack-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 52px;
+  }
+  .stack-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    box-shadow: 0 1px 3px rgba(13,31,60,0.05);
+  }
+  .stack-chip .si { font-size: 20px; }
+  .stack-chip .sn { font-size: 12px; font-weight: 800; color: var(--text); font-family: 'Nunito', sans-serif; }
+  .stack-chip .sr { font-size: 10px; color: var(--muted); }
+
+  /* ── TIMELINE ── */
+  .phase-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    animation: fadeUp 0.45s ease both;
+  }
+  .phase-left {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-right: 28px;
+    padding-top: 6px;
+    position: relative;
+  }
+  .phase-left::after {
+    content: '';
+    position: absolute;
+    right: -1px; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .phase-dot {
+    position: absolute;
+    right: -8px; top: 20px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 3px solid var(--bg);
+    z-index: 2;
+  }
+  .actor-icon {
+    width: 46px; height: 46px;
+    border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .actor-name {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-align: right;
+    line-height: 1.5;
+  }
+  .phase-right { padding: 0 0 40px 28px; }
+
+  .connector { display: grid; grid-template-columns: 160px 1fr; }
+  .conn-l { position: relative; }
+  .conn-l::after {
+    content: '';
+    position: absolute;
+    right: -1px; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .conn-r {
+    padding-left: 28px;
+    display: flex;
+    align-items: center;
+    height: 42px;
+  }
+  .conn-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 5px 14px;
+    border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  /* ── CARDS ── */
+  .cards { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; }
+  .card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(13,31,60,0.06);
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .card:hover { box-shadow: 0 6px 20px rgba(13,31,60,0.1); transform: translateX(3px); }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .card-icon {
+    width: 36px; height: 36px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+  .card-title { font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; color: var(--text); }
+  .card-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .card-body { padding: 12px 18px; display: flex; flex-direction: column; gap: 7px; }
+  .row { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.5; }
+  .row .k {
+    font-weight: 800;
+    min-width: 108px;
+    flex-shrink: 0;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    padding-top: 1px;
+  }
+  .row .v { color: var(--text); }
+  .pills { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 18px 13px; }
+  .pill { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 6px; border: 1px solid; }
+  .p-blue   { background: #EEF4FF; border-color: #C0D4FF; color: #0044AA; }
+  .p-navy   { background: #EEF1F6; border-color: #C8D4E4; color: var(--navy); }
+  .p-orange { background: #FFF3EE; border-color: #FFD0BC; color: #CC4A1F; }
+  .p-amber  { background: #FFF8E8; border-color: #FFE0A0; color: #8A5A00; }
+  .p-slate  { background: #F0F4F8; border-color: #C8D4E0; color: #405070; }
+  .p-purple { background: #F3EEFF; border-color: #D4C0FF; color: #4A2099; }
+  .p-teal   { background: #E8F6FA; border-color: #A0D8E8; color: #005F78; }
+  .p-green  { background: #E8F9F2; border-color: #A0DFC0; color: #00652D; }
+
+  /* ── BRANCH ── */
+  .branch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .bc {
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    background: var(--white);
+    padding: 14px 15px;
+    box-shadow: 0 1px 3px rgba(13,31,60,0.05);
+  }
+  .bc.ok  { border-left-color: #00C27A; background: #F2FCF7; border-color: #C0E8D4; }
+  .bc.err { border-left-color: #D63B3B; background: #FEF5F5; border-color: #F0C0C0; }
+  .bc-title {
+    font-family: 'Nunito', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 7px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .bc.ok  .bc-title { color: #007A4D; }
+  .bc.err .bc-title { color: #B02020; }
+  .bc p { font-size: 11px; color: var(--muted); line-height: 1.75; }
+
+  /* ── ARTIFACTS ── */
+  .art-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .art {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    border-top: 3px solid var(--border);
+    padding: 13px 11px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(13,31,60,0.05);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .art:hover { transform: translateY(-2px); box-shadow: 0 5px 14px rgba(13,31,60,0.1); }
+  .art .ai { font-size: 20px; margin-bottom: 5px; }
+  .art .an { font-size: 11px; font-weight: 800; color: var(--text); font-family: 'Nunito', sans-serif; }
+  .art .ad { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .art.t-conf  { border-top-color: #0052CC; }
+  .art.t-gh    { border-top-color: #24292F; }
+  .art.t-ai    { border-top-color: #6B3FD4; }
+
+  /* ── PHASE COLOR SCHEMES ── */
+  .phase-row.qa      .phase-dot { background: var(--qa-color); }
+  .phase-row.qa      .actor-icon { background: #EEF4FF; }
+  .phase-row.qa      .actor-name { color: var(--qa-color); }
+  .phase-row.qa      .card { border-left-color: var(--qa-color); }
+  .phase-row.qa      .card-icon { background: #E4EFFF; }
+
+  .phase-row.postman .phase-dot { background: var(--pm-color); }
+  .phase-row.postman .actor-icon { background: #FFF2EC; }
+  .phase-row.postman .actor-name { color: #CC4A1F; }
+  .phase-row.postman .card { border-left-color: var(--pm-color); }
+  .phase-row.postman .card-icon { background: #FFE8DC; }
+
+  .phase-row.github  .phase-dot { background: var(--gh-color); }
+  .phase-row.github  .actor-icon { background: #F0F2F4; }
+  .phase-row.github  .actor-name { color: var(--gh-color); }
+  .phase-row.github  .card { border-left-color: var(--gh-color); }
+  .phase-row.github  .card-icon { background: #E8EAED; }
+
+  .phase-row.newman  .phase-dot { background: var(--nw-color); }
+  .phase-row.newman  .actor-icon { background: #E8F6FA; }
+  .phase-row.newman  .actor-name { color: var(--nw-color); }
+  .phase-row.newman  .card { border-left-color: var(--nw-color); }
+  .phase-row.newman  .card-icon { background: #D8EFF5; }
+
+  .phase-row.claude  .phase-dot { background: var(--cl-color); }
+  .phase-row.claude  .actor-icon { background: #F3EEFF; }
+  .phase-row.claude  .actor-name { color: var(--cl-color); }
+  .phase-row.claude  .card { border-left-color: var(--cl-color); }
+  .phase-row.claude  .card-icon { background: #E8DCFF; }
+
+  .phase-row.pub     .phase-dot { background: var(--pub-color); }
+  .phase-row.pub     .actor-icon { background: #EEF4FF; }
+  .phase-row.pub     .actor-name { color: var(--pub-color); }
+  .phase-row.pub     .card { border-left-color: var(--pub-color); }
+  .phase-row.pub     .card-icon { background: #DDEAFF; }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes blink  { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .d1{animation-delay:.05s} .d2{animation-delay:.12s} .d3{animation-delay:.19s}
+  .d4{animation-delay:.26s} .d5{animation-delay:.33s} .d6{animation-delay:.40s}
+
+  @media(max-width:640px){
+    .phase-row,.connector{grid-template-columns:72px 1fr}
+    .phase-left,.conn-l{padding-right:16px}
+    .phase-right,.conn-r{padding-left:16px}
+    .branch,.art-grid{grid-template-columns:1fr 1fr}
+    .hero{padding:32px 20px 0}
+    .stats-strip{padding:0 20px}
+    .about-wrap{grid-template-columns:1fr}
+    .feat-grid{grid-template-columns:1fr 1fr}
+    .logros-grid{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ HERO ══════════════════ -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="logo">
+      <div class="logo-box">F</div>
+      <div class="logo-name">finkargo</div>
+      <span class="logo-sep">·</span>
+      <span class="logo-dept">QA Engineering</span>
+    </div>
+    <div class="hero-tag"><div class="dot"></div>Pipeline QA Automatizado</div>
+    <h1>Automatización QA<br><em>Postman → Newman → Claude → Confluence</em></h1>
+    <p class="hero-desc">
+      Un pipeline end-to-end que conecta Postman, GitHub Actions, Newman, Claude AI y Confluence.
+      El QA diseña las pruebas una vez; el sistema las ejecuta, analiza los fallos con inteligencia
+      artificial y publica el informe automáticamente — en cada ambiente, para cada país.
+    </p>
+    <div class="hero-hls">
+      <div class="hero-hl">✓ 100% automatizado post-diseño</div>
+      <div class="hero-hl">✓ Análisis de causa raíz con IA</div>
+      <div class="hero-hl">✓ Multi-país × Multi-ambiente</div>
+      <div class="hero-hl">✓ Reportes publicados en Confluence</div>
+    </div>
+    <div class="legend">
+      <span class="legend-lbl">Actores</span>
+      <div class="lc"><div class="d" style="background:#0066CC"></div>QA Engineer</div>
+      <div class="lc"><div class="d" style="background:#FF6C37"></div>Postman Cloud</div>
+      <div class="lc"><div class="d" style="background:#bbb"></div>GitHub Actions</div>
+      <div class="lc"><div class="d" style="background:#0091AE"></div>Newman CLI</div>
+      <div class="lc"><div class="d" style="background:#6B3FD4"></div>Claude AI</div>
+      <div class="lc"><div class="d" style="background:#0052CC"></div>Confluence</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ STATS STRIP ══════════════════ -->
+<div class="stats-strip">
+  <div class="stats-inner">
+    <div class="stat-item">
+      <div class="stat-num">6</div>
+      <div class="stat-label">Fases<br>Automatizadas</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">4</div>
+      <div class="stat-label">Combinaciones<br>País × Ambiente</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">3</div>
+      <div class="stat-label">Formatos de<br>Reporte</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">0</div>
+      <div class="stat-label">Toques Manuales<br>por Ejecución</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">6</div>
+      <div class="stat-label">Artefactos<br>por Run</div>
+    </div>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- ══════════════════ SOBRE EL PROYECTO ══════════════════ -->
+  <div class="section-hd">
+    <div class="section-tag">Contexto</div>
+    <div class="section-h2">¿Qué problema resuelve?</div>
+    <div class="section-sub">El ciclo QA tradicional requería ejecución manual, análisis individual de errores y documentación por separado. Este pipeline los une en un solo flujo continuo.</div>
+  </div>
+
+  <div class="about-wrap">
+    <div class="about-card old">
+      <div class="about-card-title">Antes — Proceso manual</div>
+      <ul class="about-list">
+        <li><span class="bul">✕</span>Ejecutar Postman manualmente en cada ambiente y país</li>
+        <li><span class="bul">✕</span>Copiar y analizar errores a mano para el informe</li>
+        <li><span class="bul">✕</span>Redactar y publicar el reporte en Confluence a mano</li>
+        <li><span class="bul">✕</span>Riesgo de omitir fallos o ambientes por fatiga</li>
+        <li><span class="bul">✕</span>Horas invertidas en tareas repetitivas de bajo valor</li>
+      </ul>
+    </div>
+    <div class="about-card new">
+      <div class="about-card-title">Ahora — Pipeline automatizado</div>
+      <ul class="about-list">
+        <li><span class="bul">✓</span>El QA dispara el workflow con un click desde GitHub</li>
+        <li><span class="bul">✓</span>Newman descarga la última versión y ejecuta las pruebas</li>
+        <li><span class="bul">✓</span>Claude AI diagnostica cada fallo con causa raíz y acción</li>
+        <li><span class="bul">✓</span>Confluence recibe la página con tablas y reporte adjunto</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ══════════════════ VENTAJAS CLAVE ══════════════════ -->
+  <div class="section-hd">
+    <div class="section-tag">Ventajas Clave</div>
+    <div class="section-h2">Por qué este pipeline marca la diferencia</div>
+  </div>
+
+  <div class="feat-grid">
+    <div class="feat-card" style="--fc:#0066CC;">
+      <div class="feat-icon-box">🚀</div>
+      <div class="feat-title">Cero fricción post-diseño</div>
+      <div class="feat-desc">Una vez que el QA escribe los tests en Postman, el resto es completamente automático. Sin scripts adicionales ni configuración manual por ambiente.</div>
+    </div>
+    <div class="feat-card" style="--fc:#6B3FD4;">
+      <div class="feat-icon-box">🧠</div>
+      <div class="feat-title">Análisis IA de causa raíz</div>
+      <div class="feat-desc">Claude AI recibe el JSON de fallos y genera causa raíz técnica + acción recomendada por cada error. No solo "qué falló" sino "por qué y qué hacer".</div>
+    </div>
+    <div class="feat-card" style="--fc:#0091AE;">
+      <div class="feat-icon-box">🌍</div>
+      <div class="feat-title">Multi-país × Multi-ambiente</div>
+      <div class="feat-desc">Colombia y México en Testing y Staging sin duplicar código. Un parámetro en el dispatch de GitHub selecciona la combinación correcta de colección y variables.</div>
+    </div>
+    <div class="feat-card" style="--fc:#FF6C37;">
+      <div class="feat-icon-box">☁️</div>
+      <div class="feat-title">Colecciones siempre actualizadas</div>
+      <div class="feat-desc">Newman descarga la colección directamente desde Postman Cloud en cada ejecución. No hay archivos locales desactualizados; el pipeline usa siempre la versión más reciente.</div>
+    </div>
+    <div class="feat-card" style="--fc:#00C27A;">
+      <div class="feat-icon-box">📦</div>
+      <div class="feat-title">Trazabilidad completa</div>
+      <div class="feat-desc">Cada ejecución genera 6 artefactos: página Confluence, reporte HTML, análisis Claude, JSON de resultados, log de consola y Job Summary en GitHub.</div>
+    </div>
+    <div class="feat-card" style="--fc:#D63B3B;">
+      <div class="feat-icon-box">🛡️</div>
+      <div class="feat-title">Resiliencia incorporada</div>
+      <div class="feat-desc">Si Claude no responde, Python genera tablas de fallback automáticamente. Confluence recibe reintentos con backoff ante errores 429. El pipeline no se rompe por servicios externos.</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ LOGROS ══════════════════ -->
+  <div class="section-hd">
+    <div class="section-tag">Impacto</div>
+    <div class="section-h2">Logros del sistema</div>
+    <div class="section-sub">Lo que el pipeline entrega en cada ejecución, de forma consistente y sin esfuerzo manual.</div>
+  </div>
+
+  <div class="logros-grid">
+    <div class="logro-card green">
+      <div class="logro-num">&lt;5</div>
+      <div class="logro-unit">minutos</div>
+      <div class="logro-desc">De trigger en GitHub a reporte publicado en Confluence</div>
+    </div>
+    <div class="logro-card">
+      <div class="logro-num">0</div>
+      <div class="logro-unit">intervenciones</div>
+      <div class="logro-desc">Manuales requeridas por ciclo de pruebas una vez diseñados los tests</div>
+    </div>
+    <div class="logro-card">
+      <div class="logro-num">4</div>
+      <div class="logro-unit">ambientes</div>
+      <div class="logro-desc">CO Testing · CO Staging · MX Testing · MX Staging — un solo pipeline</div>
+    </div>
+    <div class="logro-card green">
+      <div class="logro-num">6</div>
+      <div class="logro-unit">artefactos</div>
+      <div class="logro-desc">Generados automáticamente por ejecución para auditoría y trazabilidad total</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ STACK TECNOLÓGICO ══════════════════ -->
+  <hr class="section-divider" style="margin-top:0">
+  <div class="section-hd">
+    <div class="section-tag">Stack Tecnológico</div>
+    <div class="section-h2">Herramientas que componen el pipeline</div>
+  </div>
+
+  <div class="stack-wrap">
+    <div class="stack-chip">
+      <span class="si">🧪</span>
+      <div><div class="sn">Postman</div><div class="sr">Diseño de tests y Cloud API</div></div>
+    </div>
+    <div class="stack-chip">
+      <span class="si">⚙️</span>
+      <div><div class="sn">GitHub Actions</div><div class="sr">CI/CD y orquestación del pipeline</div></div>
+    </div>
+    <div class="stack-chip">
+      <span class="si">🔬</span>
+      <div><div class="sn">Newman CLI</div><div class="sr">Ejecución headless de colecciones</div></div>
+    </div>
+    <div class="stack-chip">
+      <span class="si">🧠</span>
+      <div><div class="sn">Claude AI</div><div class="sr">Análisis de causa raíz (claude-opus-4-6)</div></div>
+    </div>
+    <div class="stack-chip">
+      <span class="si">📑</span>
+      <div><div class="sn">Confluence</div><div class="sr">Publicación automática de reportes</div></div>
+    </div>
+    <div class="stack-chip">
+      <span class="si">🐍</span>
+      <div><div class="sn">Python</div><div class="sr">Análisis, fallback y publicación</div></div>
+    </div>
+    <div class="stack-chip">
+      <span class="si">🔐</span>
+      <div><div class="sn">GitHub Secrets</div><div class="sr">Gestión segura de credenciales</div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ FLUJO END-TO-END ══════════════════ -->
+  <hr class="section-divider" style="margin-top:0">
+  <div class="section-hd">
+    <div class="section-tag">Arquitectura</div>
+    <div class="section-h2">Flujo end-to-end — paso a paso</div>
+    <div class="section-sub">Cada fase del pipeline, qué hace y cómo se conecta con la siguiente.</div>
+  </div>
+
+  <!-- FASE 1 -->
+  <div class="phase-row qa d1">
+    <div class="phase-left">
+      <div class="phase-dot"></div>
+      <div class="actor-icon">👩‍💻</div>
+      <div class="actor-name">QA<br>Engineer</div>
+    </div>
+    <div class="phase-right"><div class="cards">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">🧪</div>
+          <div>
+            <div class="card-title">Diseña y escribe las pruebas en Postman</div>
+            <div class="card-sub">Colección organizada por carpetas de país</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">Requests</span><span class="v">GET, POST, PUT, DELETE por cada endpoint de la API</span></div>
+          <div class="row"><span class="k">Scripts</span><span class="v">pm.test("Status 201"), pm.expect(response.id) — AssertionError si falla</span></div>
+          <div class="row"><span class="k">Carpetas</span><span class="v">Colombia (CO) / Mexico (MX) — separadas para ejecución por país</span></div>
+        </div>
+        <div class="pills">
+          <span class="pill p-blue">Colombia (CO)</span>
+          <span class="pill p-blue">Mexico (MX)</span>
+          <span class="pill p-navy">Suppliers</span>
+          <span class="pill p-navy">Companies</span>
+          <span class="pill p-navy">Contacts</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">🌍</div>
+          <div>
+            <div class="card-title">Configura los Environments</div>
+            <div class="card-sub">Variables por combinación país + ambiente</div>
+          </div>
+        </div>
+        <div class="pills" style="padding-top:13px;">
+          <span class="pill p-blue">CO · Testing</span>
+          <span class="pill p-blue">CO · Staging</span>
+          <span class="pill p-slate">MX · Testing</span>
+          <span class="pill p-slate">MX · Staging</span>
+          <span class="pill p-navy">Base URL · Tokens · Credenciales</span>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="connector"><div class="conn-l"></div><div class="conn-r">
+    <div class="conn-badge">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M6 11L3 8M6 11l3-3" stroke="#FF6C37" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Guardado automático en Postman Cloud
+    </div>
+  </div></div>
+
+  <!-- FASE 2 -->
+  <div class="phase-row postman d2">
+    <div class="phase-left">
+      <div class="phase-dot"></div>
+      <div class="actor-icon">☁️</div>
+      <div class="actor-name">Postman<br>Cloud</div>
+    </div>
+    <div class="phase-right"><div class="cards">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">📦</div>
+          <div>
+            <div class="card-title">Colección y Environments versionados — acceso vía API</div>
+            <div class="card-sub">Siempre disponibles sin archivos locales</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">Colección UID</span><span class="v">fc8836e1-6797-444a-a378-d43987d95165</span></div>
+          <div class="row"><span class="k">Endpoints</span><span class="v">api.getpostman.com/collections · api.getpostman.com/environments</span></div>
+        </div>
+        <div class="pills">
+          <span class="pill p-amber">POSTMAN_API_KEY</span>
+          <span class="pill p-orange">Siempre versión más reciente</span>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="connector"><div class="conn-l"></div><div class="conn-r">
+    <div class="conn-badge">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M6 11L3 8M6 11l3-3" stroke="#24292F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      workflow_dispatch — selección manual de País + Ambiente
+    </div>
+  </div></div>
+
+  <!-- FASE 3 -->
+  <div class="phase-row github d3">
+    <div class="phase-left">
+      <div class="phase-dot"></div>
+      <div class="actor-icon">⚙️</div>
+      <div class="actor-name">GitHub<br>Actions</div>
+    </div>
+    <div class="phase-right"><div class="cards">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">🧹</div>
+          <div>
+            <div class="card-title">Clean Checkout del repositorio</div>
+            <div class="card-sub">Limpia workspace y clona rama main desde cero</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">Comando</span><span class="v">git clone --depth 1 --single-branch --branch main</span></div>
+        </div>
+        <div class="pills">
+          <span class="pill p-navy">GITHUB_TOKEN</span>
+          <span class="pill p-navy">self-hosted runner</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">🔑</div>
+          <div>
+            <div class="card-title">Inyecta secrets como variables de entorno</div>
+            <div class="card-sub">Disponibles para run_all.sh en tiempo de ejecución</div>
+          </div>
+        </div>
+        <div class="pills" style="padding-top:13px;">
+          <span class="pill p-amber">POSTMAN_API_KEY</span>
+          <span class="pill p-amber">ANTHROPIC_API_KEY</span>
+          <span class="pill p-amber">CONF_TOKEN</span>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="connector"><div class="conn-l"></div><div class="conn-r">
+    <div class="conn-badge">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M6 11L3 8M6 11l3-3" stroke="#0091AE" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      bash scripts/run_all.sh {PAIS} {AMBIENTE}
+    </div>
+  </div></div>
+
+  <!-- FASE 4 -->
+  <div class="phase-row newman d4">
+    <div class="phase-left">
+      <div class="phase-dot"></div>
+      <div class="actor-icon">🔬</div>
+      <div class="actor-name">Newman<br>CLI</div>
+    </div>
+    <div class="phase-right"><div class="cards">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">▶️</div>
+          <div>
+            <div class="card-title">Descarga y ejecuta todos los requests + assertions</div>
+            <div class="card-sub">Versión más reciente directamente desde Postman Cloud</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">--folder</span><span class="v">Solo la carpeta del país seleccionado</span></div>
+          <div class="row"><span class="k">--insecure</span><span class="v">Ignora errores SSL en ambientes no productivos</span></div>
+          <div class="row"><span class="k">-r cli,json,htmlextra</span><span class="v">3 formatos de reporte simultáneos: consola, JSON y HTML</span></div>
+          <div class="row"><span class="k">tee log_CO.txt</span><span class="v">Output visible en GitHub Actions Y guardado en archivo</span></div>
+        </div>
+      </div>
+      <div class="branch">
+        <div class="bc ok">
+          <div class="bc-title">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#00C27A"/><path d="M4.5 7l2 2 3-3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            failures = [ ] — Sin fallos
+          </div>
+          <p>Todas las pruebas pasaron<br>AI_RCA = mensaje verde ✅<br>No se llama a Claude</p>
+        </div>
+        <div class="bc err">
+          <div class="bc-title">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#D63B3B"/><path d="M5 5l4 4M9 5l-4 4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+            failures = [...] — Con fallos
+          </div>
+          <p>Extrae errores del JSON<br>Guarda en /tmp/failed_data.json<br>→ Llama a Claude API</p>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="connector"><div class="conn-l"></div><div class="conn-r">
+    <div class="conn-badge">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M6 11L3 8M6 11l3-3" stroke="#6B3FD4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Solo si hay fallos — Python envía JSON a Anthropic API
+    </div>
+  </div></div>
+
+  <!-- FASE 5 -->
+  <div class="phase-row claude d5">
+    <div class="phase-left">
+      <div class="phase-dot"></div>
+      <div class="actor-icon">🧠</div>
+      <div class="actor-name">Claude<br>AI</div>
+    </div>
+    <div class="phase-right"><div class="cards">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">🔍</div>
+          <div>
+            <div class="card-title">Analiza causa raíz y genera tablas HTML para Confluence</div>
+            <div class="card-sub">Input: #|request|mensaje_error|codigo_http</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">Modelo</span><span class="v">claude-opus-4-6 · max_tokens: 1024</span></div>
+          <div class="row"><span class="k">Output</span><span class="v">Array JSON estricto: [{num, causa, accion}] — sin texto conversacional</span></div>
+          <div class="row"><span class="k">Tablas</span><span class="v">Resumen de fallas + Análisis técnico en formato Confluence</span></div>
+          <div class="row"><span class="k">Fallback</span><span class="v">Python genera tablas básicas automáticamente si Claude falla</span></div>
+        </div>
+        <div class="pills">
+          <span class="pill p-purple">claude-opus-4-6</span>
+          <span class="pill p-purple">JSON estricto</span>
+          <span class="pill p-slate">Causa raíz por fallo</span>
+          <span class="pill p-slate">Acción recomendada</span>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="connector"><div class="conn-l"></div><div class="conn-r">
+    <div class="conn-badge">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M6 11L3 8M6 11l3-3" stroke="#0052CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      HTML Confluence generado → publicación con reintentos automáticos
+    </div>
+  </div></div>
+
+  <!-- FASE 6 -->
+  <div class="phase-row pub d6">
+    <div class="phase-left">
+      <div class="phase-dot"></div>
+      <div class="actor-icon">📢</div>
+      <div class="actor-name">Publicación<br>& Artefactos</div>
+    </div>
+    <div class="phase-right"><div class="cards">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon">📄</div>
+          <div>
+            <div class="card-title">Publica página en Confluence + adjunta reporte HTML</div>
+            <div class="card-sub">Tablas de Claude + resumen Newman en bloque de código</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">Destino</span><span class="v">Espacio QA · Sub-página según Testing o Staging</span></div>
+          <div class="row"><span class="k">Reintentos</span><span class="v">Hasta 3 intentos con pausa 20s si recibe error 429</span></div>
+          <div class="row"><span class="k">Adjunto</span><span class="v">report_CO.html subido al attachment de la página creada</span></div>
+        </div>
+      </div>
+      <div class="art-grid">
+        <div class="art t-conf"><div class="ai">📑</div><div class="an">Página Confluence</div><div class="ad">Espacio QA</div></div>
+        <div class="art t-conf"><div class="ai">🌐</div><div class="an">report_CO.html</div><div class="ad">Adjunto Confluence</div></div>
+        <div class="art t-gh"><div class="ai">📋</div><div class="an">Job Summary</div><div class="ad">GitHub Actions</div></div>
+        <div class="art t-gh"><div class="ai">📊</div><div class="an">results_CO.json</div><div class="ad">Artifact GitHub</div></div>
+        <div class="art t-gh"><div class="ai">📝</div><div class="an">log_CO.txt</div><div class="ad">Artifact GitHub</div></div>
+        <div class="art t-ai"><div class="ai">🤖</div><div class="an">claude-analysis.md</div><div class="ad">Artifact GitHub</div></div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+</body>
+</html>
