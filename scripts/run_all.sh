@@ -52,9 +52,9 @@ TITLE="[#$EXEC_NUM-$UNIQUE_ID] Audit [$AMBIENTE][$PAIS] - $NOW"
 
 # ✅ Selección de Carpeta
 if [ "$PAIS" == "MX" ]; then
-    FOLDER_NAME="Mexico"
+    FOLDER_NAME="🇲🇽 Mexico"
 else
-    FOLDER_NAME="Colombia"
+    FOLDER_NAME="🇨🇴 Colombia"
 fi
 
 # ==========================================
