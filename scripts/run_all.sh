@@ -54,10 +54,16 @@ TITLE="[#$EXEC_NUM-$UNIQUE_ID] Audit [$AMBIENTE][$PAIS] - $NOW"
 # ✅ FIX: Validación de nombres de carpeta para evitar "Unable to find a folder"
 if [ "$PAIS" == "MX" ]; then
     # Intentará con "Mexico (MX)" y si falla, el script de Newman es flexible
+   # Cambia las líneas 57-62 por esto:
+if [ "$PAIS" == "MX" ]; then
+    # Intenta primero con el nombre largo, si falla, podrías probar solo con "Mexico"
     FOLDER_NAME="Mexico (MX)"
 else
+    # Verifica en Postman si el nombre es exactamente este o si tiene espacios
     FOLDER_NAME="Colombia (CO)"
 fi
+
+# FOLDER_NAME="Colombia"
 
 # ==========================================
 # 3. EJECUCIÓN NEWMAN
