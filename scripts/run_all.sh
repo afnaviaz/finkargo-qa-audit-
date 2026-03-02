@@ -8,9 +8,9 @@ AMBIENTE=$2
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ✅ FIX: Usar el número de ejecución nativo de GitHub Actions + Timestamp único para evitar títulos duplicados
+# ✅ Usar número de ejecución de GitHub + ID único
 EXEC_NUM="${GITHUB_RUN_NUMBER:-1}"
-UNIQUE_ID=$(date +'%H%M%S') # Segundos para garantizar que el título sea único en Confluence
+UNIQUE_ID=$(date +'%H%M%S') 
 
 if [[ "$PAIS_INPUT" == "ALL" ]]; then
     echo "🌍 INICIANDO AUDITORÍA GLOBAL (CO & MX) [$AMBIENTE] - Exec #$EXEC_NUM"
@@ -48,28 +48,19 @@ LOG_FILE="$SCRIPTS_DIR/log_${PAIS}.txt"
 JSON_REPORT="$SCRIPTS_DIR/results_${PAIS}.json"
 HTML_REPORT="$SCRIPTS_DIR/report_${PAIS}.html"
 
-# ✅ FIX: Título con ID Único para evitar error "A page already exists with the same TITLE"
 TITLE="[#$EXEC_NUM-$UNIQUE_ID] Audit [$AMBIENTE][$PAIS] - $NOW"
 
-# ✅ FIX: Validación de nombres de carpeta para evitar "Unable to find a folder"
+# ✅ Selección de Carpeta
 if [ "$PAIS" == "MX" ]; then
-    # Intentará con "Mexico (MX)" y si falla, el script de Newman es flexible
-   # Cambia las líneas 57-62 por esto:
-if [ "$PAIS" == "MX" ]; then
-    # Intenta primero con el nombre largo, si falla, podrías probar solo con "Mexico"
     FOLDER_NAME="Mexico (MX)"
 else
-    # Verifica en Postman si el nombre es exactamente este o si tiene espacios
     FOLDER_NAME="Colombia (CO)"
 fi
-
-# FOLDER_NAME="Colombia"
 
 # ==========================================
 # 3. EJECUCIÓN NEWMAN
 # ==========================================
 echo "🚀 Ejecutando pruebas en $PAIS ($AMBIENTE)..."
-# Se añade --folder de forma dinámica. Si falla con el nombre largo, intenta sin el alias del país.
 newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
   -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
   --folder "$FOLDER_NAME" --insecure -r cli,json,htmlextra \
@@ -80,7 +71,6 @@ newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTM
 # ==========================================
 echo "🤖 Analizando fallos técnicos con Claude API..."
 
-# Extraer fallos del JSON de Newman
 FAILED_DATA=$(python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); 
@@ -104,7 +94,6 @@ try:
 except:
     failed_data = []
 
-# Preparar datos de fallos
 fallos = []
 for i, f in enumerate(failed_data, 1):
     req = f.get('source', {}).get('name', 'N/A')
@@ -113,12 +102,9 @@ for i, f in enumerate(failed_data, 1):
     code = code.group(1) if code else 'N/A'
     fallos.append({"num": i, "req": req, "msg": msg, "code": code})
 
-# Construir tabla de resumen
 rows_resumen = "".join([f"<tr><td>{f['num']}</td><td>{f['req']}</td><td>AssertionError</td><td>{f['msg']}</td><td>{f['code']}</td><td>{'🔴 API' if f['code']=='422' else '⚠️ Cadena' if 'undefined' in f['msg'] else '🔴 Fallo'}</td></tr>" for f in fallos])
-
 fallos_texto = "\n".join([f"{f['num']}|{f['req']}|{f['msg']}|{f['code']}" for f in fallos])
 
-# Prompt optimizado para Claude 3.5 Sonnet o 3 Opus
 prompt = f"Analiza estos fallos de API y responde SOLO con un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos:\n{fallos_texto}"
 
 body = json.dumps({
@@ -151,14 +137,10 @@ except:
 print(f'<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔴 Resumen de Fallas</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Tipo</th><th>Mensaje</th><th>Código</th><th>Origen</th></tr></thead><tbody>{rows_resumen}</tbody></table></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">🔍 Análisis Técnico (Claude AI)</ac:parameter><ac:rich-text-body><table><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción</th></tr></thead><tbody>{rows_rca}</tbody></table></ac:rich-text-body></ac:structured-macro>')
 PYEOF
 )
-# Guardar análisis para Job Summary de GitHub
+    # Guardar análisis para GitHub
     mkdir -p "$SCRIPTS_DIR/../reports"
-    {
-        echo "### Fallos detectados: ${#fallos[@]}"
-        echo ""
-        echo "$AI_RCA"
-    } > "$SCRIPTS_DIR/../reports/claude-analysis.md"
-
+    echo "### Análisis Claude" > "$SCRIPTS_DIR/../reports/claude-analysis.md"
+    echo "$AI_RCA" >> "$SCRIPTS_DIR/../reports/claude-analysis.md"
 fi
 
 # ==========================================
@@ -167,7 +149,6 @@ fi
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
 HTML_BODY="<h2>📊 Reporte QA [$PAIS] - $AMBIENTE</h2>$AI_RCA<ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 
-# Generación del JSON para Confluence usando Python para evitar errores de escape
 PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 'ancestors': [{'id': sys.argv[3]}], 'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}}))" "$TITLE" "$SPACE_KEY" "$PARENT_PAGE_ID" "$HTML_BODY")
 
 echo "📤 Publicando en Confluence..."
@@ -176,7 +157,6 @@ CREATE_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: appli
 PAGE_ID=$(echo "$CREATE_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 
 if [ ! -z "$PAGE_ID" ] && [ "$PAGE_ID" != "" ] && [ "$PAGE_ID" != "None" ]; then
-    # Subir el HTML como adjunto para evidencia completa
     curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H "X-Atlassian-Token: no-check" -F "file=@$HTML_REPORT" "$CONF_BASE_URL/rest/api/content/$PAGE_ID/child/attachment" > /dev/null
     echo "✅ Reporte Publicado Exitosamente: $TITLE"
 else
