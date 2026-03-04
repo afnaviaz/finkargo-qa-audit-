@@ -8,7 +8,7 @@ on:
         required: true
         default: "CORE"
         type: choice
-        options: [CORE, FLOWS]
+        options: [CORE, FLOWS, MS_AUTH]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
