@@ -96,62 +96,72 @@ else
       --folder "$FOLDER_NAME" --insecure -r cli,json \
       --reporter-json-export "$JSON_REPORT" | tee "$LOG_FILE"
 fi
-
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE (MODO DEBUG)
 # ==========================================
 echo "🤖 Iniciando fase de análisis..."
 
+# Definimos la ruta absoluta para evitar errores de contexto en el runner
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
-# Extraemos fallos asegurando que el JSON exista
+
+# 1. Extraer fallos asegurando que el JSON exista y usando rutas absolutas
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
-    d=json.load(open('$JSON_REPORT')); 
+    with open('$JSON_REPORT', 'r') as f:
+        d = json.load(f)
     failures = d.get('run', {}).get('failures', [])
-    with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
+    with open('$FAILED_DATA_FILE', 'w') as f:
+        json.dump(failures, f)
     print(f'📊 Fallos detectados en JSON: {len(failures)}')
 else:
     print('❌ ERROR: No se encontró el reporte results_final.json')"
 
-if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
+# 2. Solo ejecutar si el archivo de fallos existe y no está vacío
+if [ -f "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
     echo "🧠 Solicitando RCA a Claude..."
     
-    # Capturamos la salida y los errores por separado
-    AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 << 'PYEOF'
+    # Pasamos la ruta del archivo como variable de entorno al bloque de Python
+    AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re, sys
 
 def log_debug(msg):
+    # Imprime en stderr para que aparezca en los logs de GitHub sin romper la variable AI_RCA
     print(f"DEBUG: {msg}", file=sys.stderr)
 
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+failed_data_path = os.environ.get("FAILED_DATA_PATH", "failed_data_debug.json")
+
 if not api_key:
     log_debug("ANTHROPIC_API_KEY está vacía.")
     print("<p style='color:red;'>⚠️ Error: API Key de Claude no encontrada en el entorno.</p>")
     sys.exit(0)
 
 try:
-    with open("failed_data_debug.json", "r") as f:
+    with open(failed_data_path, "r") as f:
         failed_data = json.load(f)
 except Exception as e:
-    log_debug(f"Error leyendo JSON: {e}")
+    log_debug(f"Error leyendo JSON en {failed_data_path}: {e}")
     sys.exit(0)
 
 fallos = []
-for i, f in enumerate(failed_data[:15], 1): # Limitamos a 15 para no saturar el prompt
+for i, f in enumerate(failed_data[:15], 1): # Limitamos a 15 para evitar exceder tokens
     req = f.get('source', {}).get('name', 'N/A')
     msg = f.get('error', {}).get('message', 'N/A')
-    code = re.search(r'got (\d{3})', msg).group(1) if re.search(r'got (\d{3})', msg) else 'N/A'
+    # Extraer código HTTP si existe (ej: 422, 401, 500)
+    code_match = re.search(r'got (\d{3})', msg)
+    code = code_match.group(1) if code_match else 'N/A'
     fallos.append({"num": i, "req": req, "msg": msg, "code": code})
 
-prompt = f"Eres un experto en QA. Analiza estos fallos de API y responde ÚNICAMENTE con un array JSON siguiendo este formato exacto: [{{'num':1,'causa':'descripción breve','accion':'qué arreglar'}}]. Fallos:\n{json.dumps(fallos)}"
+# Prompt estricto para que Claude devuelva solo el JSON
+prompt = f"Eres un experto en QA de APIs. Analiza estos fallos y responde ÚNICAMENTE con un array JSON siguiendo este formato: [{{'num':1,'causa':'descripción breve','accion':'qué arreglar'}}] . No incluyas explicaciones adicionales. Fallos:\n{json.dumps(fallos)}"
 
 payload = {
     "model": "claude-3-5-sonnet-20240620",
-    "max_tokens": 1024,
+    "max_tokens": 1500,
     "messages": [{"role": "user", "content": prompt}]
 }
 
-# Llamada a la API
+# Llamada a la API de Anthropic usando curl
 result = subprocess.run([
     "curl", "-s", "-w", "\n%{http_code}", "https://api.anthropic.com/v1/messages",
     "-H", f"x-api-key: {api_key}",
@@ -160,7 +170,7 @@ result = subprocess.run([
     "-d", json.dumps(payload)
 ], capture_output=True, text=True)
 
-# Separar el cuerpo del código de estado HTTP
+# Procesar código HTTP y cuerpo de respuesta
 output_lines = result.stdout.strip().split('\n')
 http_status = output_lines[-1]
 response_body = "\n".join(output_lines[:-1])
@@ -169,34 +179,37 @@ log_debug(f"HTTP Status: {http_status}")
 
 if http_status != "200":
     log_debug(f"Error de API Claude: {response_body}")
-    print(f"<p style='color:red;'>⚠️ Claude API Error (Status {http_status}). Revisa los logs de GitHub.</p>")
+    print(f"<p style='color:red;'>⚠️ Claude API Error (Status {http_status}). Revisa los logs.</p>")
     sys.exit(0)
 
 try:
     res_json = json.loads(response_body)
     raw_text = res_json["content"][0]["text"]
-    log_debug(f"Texto recibido de Claude: {raw_text[:100]}...")
     
-    # Extraer el JSON del texto por si Claude añade charla
+    # Limpiar la respuesta para extraer solo el bloque JSON [ ... ]
     json_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
     if json_match:
         rca_list = json.loads(json_match.group())
-        rows = "".join([f"<tr><td>{r['num']}</td><td><b>{fallos[int(r['num'])-1]['req']}</b></td><td>{r['causa']}</td><td><code>{r['accion']}</code></td></tr>" for r in rca_list])
-        print(f'<h4>🔍 Análisis de Causa Raíz (Claude AI)</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción Sugerida</th></tr></thead><tbody>{rows}</tbody></table>')
+        rows = ""
+        for r in rca_list:
+            # Vinculamos la respuesta de Claude con el nombre del request original
+            idx = int(r['num']) - 1
+            req_name = fallos[idx]['req'] if idx < len(fallos) else "N/A"
+            rows += f"<tr><td>{r['num']}</td><td><b>{req_name}</b></td><td>{r['causa']}</td><td><code>{r['accion']}</code></td></tr>"
+        
+        # Generar tabla HTML compatible con Confluence
+        print(f'<h4>🔍 Análisis de Causa Raíz (Claude AI)</h4><table border="1"><thead><tr><th>#</th><th>Petición</th><th>Posible Causa</th><th>Acción Recomendada</th></tr></thead><tbody>{rows}</tbody></table>')
     else:
-        log_debug("No se encontró formato JSON en la respuesta.")
-        print("<p>⚠️ Claude no devolvió un formato de análisis válido.</p>")
+        log_debug("No se encontró formato JSON en el texto de Claude.")
+        print("<p>⚠️ Claude no pudo generar el formato de tabla solicitado.</p>")
 except Exception as e:
-    log_debug(f"Error procesando respuesta: {e}")
+    log_debug(f"Error procesando respuesta final: {e}")
     print(f"<p>Error procesando análisis: {e}</p>")
 PYEOF
 )
 else
     AI_RCA="<p style='color:green;'>✅ Sin fallos detectados para analizar.</p>"
 fi
-
-
-
 # ==========================================
 # 5. PUBLICACIÓN EN CONFLUENCE
 # ==========================================
