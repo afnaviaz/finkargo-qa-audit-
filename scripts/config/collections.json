@@ -15,7 +15,7 @@
       "MX": "Folder Flows MX"
     }
   },
-"MS_AUTH": {
+"ms-auth": {
     "collection_id": "22777311-cef8b055-4bcd-4789-b7f5-3c9524cd970d",
     "folders": {
       "Session": "Session",
