@@ -98,53 +98,52 @@ else
 fi
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (MODO DEBUG)
 # ==========================================
-echo "🤖 Analizando fallos consolidados con Claude API..."
+echo "🤖 Iniciando fase de análisis..."
 
-# 1. Extraer fallos y guardarlos en el directorio local
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
+# Extraemos fallos asegurando que el JSON exista
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); 
     failures = d.get('run', {}).get('failures', [])
-    with open('$FAILED_DATA_FILE', 'w') as f:
-        json.dump(failures, f)
-    print(f'✅ Se encontraron {len(failures)} fallos.')
+    with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
+    print(f'📊 Fallos detectados en JSON: {len(failures)}')
 else:
-    print('⚠️ No se encontró reporte JSON.')"
+    print('❌ ERROR: No se encontró el reporte results_final.json')"
 
-# 2. Ejecutar análisis solo si hay fallos
 if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
-    echo "🧠 Enviando datos a Claude..."
+    echo "🧠 Solicitando RCA a Claude..."
     
+    # Capturamos la salida y los errores por separado
     AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 << 'PYEOF'
 import json, subprocess, os, re, sys
 
+def log_debug(msg):
+    print(f"DEBUG: {msg}", file=sys.stderr)
+
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 if not api_key:
-    print("<p style='color:red;'>⚠️ Error: ANTHROPIC_API_KEY no configurada.</p>")
+    log_debug("ANTHROPIC_API_KEY está vacía.")
+    print("<p style='color:red;'>⚠️ Error: API Key de Claude no encontrada en el entorno.</p>")
     sys.exit(0)
 
 try:
     with open("failed_data_debug.json", "r") as f:
         failed_data = json.load(f)
 except Exception as e:
-    print(f"<p>Error leyendo archivo de fallos: {e}</p>")
+    log_debug(f"Error leyendo JSON: {e}")
     sys.exit(0)
 
 fallos = []
-for i, f in enumerate(failed_data, 1):
+for i, f in enumerate(failed_data[:15], 1): # Limitamos a 15 para no saturar el prompt
     req = f.get('source', {}).get('name', 'N/A')
     msg = f.get('error', {}).get('message', 'N/A')
-    code = re.search(r'got (\d{3})', msg)
-    code = code.group(1) if code else 'N/A'
+    code = re.search(r'got (\d{3})', msg).group(1) if re.search(r'got (\d{3})', msg) else 'N/A'
     fallos.append({"num": i, "req": req, "msg": msg, "code": code})
 
-rows_resumen = "".join([f"<tr><td>{f['num']}</td><td>{f['req']}</td><td>{f['msg']}</td><td>{f['code']}</td></tr>" for f in fallos])
-
-# Prompt optimizado
-prompt = f"Analiza estos fallos de API de Finkargo. Responde SOLO con un array JSON: [{{'num':1,'causa':'...','accion':'...'}}].\nFallos: {json.dumps(fallos)}"
+prompt = f"Eres un experto en QA. Analiza estos fallos de API y responde ÚNICAMENTE con un array JSON siguiendo este formato exacto: [{{'num':1,'causa':'descripción breve','accion':'qué arreglar'}}]. Fallos:\n{json.dumps(fallos)}"
 
 payload = {
     "model": "claude-3-5-sonnet-20240620",
@@ -152,37 +151,48 @@ payload = {
     "messages": [{"role": "user", "content": prompt}]
 }
 
-# Llamada a la API con captura de error
+# Llamada a la API
 result = subprocess.run([
-    "curl", "-s", "https://api.anthropic.com/v1/messages",
+    "curl", "-s", "-w", "\n%{http_code}", "https://api.anthropic.com/v1/messages",
     "-H", f"x-api-key: {api_key}",
     "-H", "anthropic-version: 2023-06-01",
     "-H", "content-type: application/json",
     "-d", json.dumps(payload)
 ], capture_output=True, text=True)
 
-if result.returncode != 0:
-    print(f"<p>Error de CURL: {result.stderr}</p>")
+# Separar el cuerpo del código de estado HTTP
+output_lines = result.stdout.strip().split('\n')
+http_status = output_lines[-1]
+response_body = "\n".join(output_lines[:-1])
+
+log_debug(f"HTTP Status: {http_status}")
+
+if http_status != "200":
+    log_debug(f"Error de API Claude: {response_body}")
+    print(f"<p style='color:red;'>⚠️ Claude API Error (Status {http_status}). Revisa los logs de GitHub.</p>")
     sys.exit(0)
 
-rows_rca = ""
 try:
-    res_json = json.loads(result.stdout)
-    if "error" in res_json:
-        rows_rca = f"<tr><td colspan='3'>Error API Claude: {res_json['error']['message']}</td></tr>"
+    res_json = json.loads(response_body)
+    raw_text = res_json["content"][0]["text"]
+    log_debug(f"Texto recibido de Claude: {raw_text[:100]}...")
+    
+    # Extraer el JSON del texto por si Claude añade charla
+    json_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+    if json_match:
+        rca_list = json.loads(json_match.group())
+        rows = "".join([f"<tr><td>{r['num']}</td><td><b>{fallos[int(r['num'])-1]['req']}</b></td><td>{r['causa']}</td><td><code>{r['accion']}</code></td></tr>" for r in rca_list])
+        print(f'<h4>🔍 Análisis de Causa Raíz (Claude AI)</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción Sugerida</th></tr></thead><tbody>{rows}</tbody></table>')
     else:
-        content = res_json["content"][0]["text"]
-        rca_list = json.loads(re.search(r'\[.*\]', content, re.DOTALL).group())
-        for r in rca_list:
-            rows_rca += f"<tr><td>{r['num']}</td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
+        log_debug("No se encontró formato JSON en la respuesta.")
+        print("<p>⚠️ Claude no devolvió un formato de análisis válido.</p>")
 except Exception as e:
-    rows_rca = f"<tr><td colspan='3'>Error procesando respuesta: {e}</td></tr>"
-
-print(f'<h4>Resumen de Fallos</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Mensaje</th><th>Código</th></tr></thead><tbody>{rows_resumen}</tbody></table><h4>🔍 Análisis Causa Raíz (Claude AI)</h4><table border="1"><thead><tr><th>#</th><th>Causa Raíz</th><th>Acción Sugerida</th></tr></thead><tbody>{rows_rca}</tbody></table>')
+    log_debug(f"Error procesando respuesta: {e}")
+    print(f"<p>Error procesando análisis: {e}</p>")
 PYEOF
 )
 else
-    AI_RCA="<p style='color:green;'>✅ Auditoría Exitosa: No se detectaron fallos para analizar.</p>"
+    AI_RCA="<p style='color:green;'>✅ Sin fallos detectados para analizar.</p>"
 fi
 
 
