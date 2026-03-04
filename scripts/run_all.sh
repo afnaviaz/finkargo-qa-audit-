@@ -7,20 +7,24 @@ PROYECTO=$1
 PAIS_INPUT=$2      
 AMBIENTE=$3  
 
-# Localización robusta del directorio de scripts y configuración
+# Localización dinámica: detecta la carpeta real del script
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
+
+echo "📍 Validando entorno de ejecución..."
+echo "🔎 Buscando configuración en: $CONFIG_PATH"
+
+# ✅ Verificación física del archivo antes de iniciar
+if [ ! -f "$CONFIG_PATH" ]; then
+    echo "❌ ERROR: No se encontró el archivo collections.json en la ruta esperada."
+    echo "📂 Contenido de la carpeta scripts:"
+    ls -R "$SCRIPTS_DIR"
+    exit 1
+fi
 
 # ✅ Validación de parámetros iniciales
 if [ -z "$PROYECTO" ] || [ -z "$PAIS_INPUT" ] || [ -z "$AMBIENTE" ]; then
     echo "❌ Uso: ./run_all.sh <PROYECTO> <PAIS> <AMBIENTE>"
-    exit 1
-fi
-
-# Verificación de existencia del archivo de configuración
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "❌ ERROR: No se encontró el archivo de configuración en: $CONFIG_PATH"
-    echo "Asegúrate de que la carpeta 'config' esté dentro de 'scripts'."
     exit 1
 fi
 
@@ -43,7 +47,7 @@ if [ ! -z "$4" ]; then EXEC_NUM=$4; fi
 # 2. CONFIGURACIÓN DINÁMICA (JSON + PYTHON)
 # ==========================================
 
-# Función blindada para leer JSON con Emojis (UTF-8)
+# Función blindada para leer JSON con soporte UTF-8 (Emojis)
 get_config() {
     python3 -c "
 import json, sys, os
@@ -66,7 +70,7 @@ COLLECTION_UID=$(get_config "$PROYECTO" "$PAIS_INPUT" "id")
 FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
 
 if [ -z "$COLLECTION_UID" ] || [ -z "$FOLDER_NAME" ]; then
-    echo "❌ ERROR: No se encontró configuración válida para $PROYECTO / $PAIS_INPUT en el JSON."
+    echo "❌ ERROR: No se encontró la configuración para $PROYECTO / $PAIS_INPUT"
     exit 1
 fi
 
@@ -119,7 +123,7 @@ if [ "$PROYECTO" == "CORE" ]; then
       --folder "$FOLDER_CROSS" --insecure -r cli,json \
       --reporter-json-export "$SCRIPTS_DIR/results_cross.json" | tee -a "$LOG_FILE"
 
-    # Unificar fallos
+    # Unificar fallos para el análisis de Claude
     python3 -c "
 import json, os
 files = ['$JSON_REPORT', '$SCRIPTS_DIR/results_verif.json', '$SCRIPTS_DIR/results_cross.json']
@@ -138,7 +142,7 @@ fi
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE
 # ==========================================
-echo "🤖 Analizando fallos consolidados con Claude API..."
+echo "🤖 Analizando fallos con Claude AI..."
 FAILED_DATA=$(python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); 
@@ -198,8 +202,8 @@ PAGE_ID=$(echo "$CREATE_RES" | python3 -c "import sys, json; print(json.load(sys
 
 if [ ! -z "$PAGE_ID" ] && [ "$PAGE_ID" != "" ] && [ "$PAGE_ID" != "None" ]; then
     curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H "X-Atlassian-Token: no-check" -F "file=@$HTML_REPORT" "$CONF_BASE_URL/rest/api/content/$PAGE_ID/child/attachment" > /dev/null
-    echo "✅ Publicado con éxito en Confluence: $TITLE"
+    echo "✅ Publicado con éxito: $TITLE"
 else
-    echo "❌ Error de Publicación en Confluence."
+    echo "❌ Error de Publicación."
     echo "$CREATE_RES" | python3 -m json.tool
 fi

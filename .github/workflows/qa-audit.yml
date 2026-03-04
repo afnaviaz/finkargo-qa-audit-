@@ -8,26 +8,19 @@ on:
         required: true
         default: "CORE"
         type: choice
-        options:
-          - CORE
-          - FLOWS
+        options: [CORE, FLOWS]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
         default: "CO"
         type: choice
-        options:
-          - CO
-          - MX
-          - ALL
+        options: [CO, MX, ALL]
       ambiente:
         description: "Ambiente de ejecución"
         required: true
         default: "Testing"
         type: choice
-        options:
-          - Testing
-          - Staging
+        options: [Testing, Staging]
 
 permissions:
   contents: read
@@ -38,33 +31,31 @@ jobs:
     name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
     runs-on: self-hosted
     steps:
-      # --- PASO 1: DESCARGAR EL CÓDIGO ---
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # --- PASO 2: CONFIGURAR PERMISOS ---
       - name: Setup Permissions
-        run: |
-          echo "🔧 Configurando permisos de ejecución para el orquestador..."
-          chmod +x scripts/run_all.sh
+        run: chmod +x scripts/run_all.sh
 
-      # --- PASO 3: EJECUCIÓN DEL ORQUESTADOR (EL SCRIPT QUE ARREGLAMOS) ---
       - name: Execute QA Audit
+        shell: bash # Forzamos bash para evitar inconsistencias en el runner
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          echo "🚀 Iniciando Auditoría para ${{ github.event.inputs.proyecto }} en ${{ github.event.inputs.ambiente }}..."
+          # 1. Asegurar que estamos en la raíz del repo descargado
+          cd ${{ github.workspace }}
+          
+          # 2. Ejecutar usando la ruta relativa limpia
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
 
-      # --- PASO 4: RESPALDAR REPORTES EN GITHUB (OPCIONAL) ---
       - name: Upload Local Artifacts
         if: always()
         uses: actions/upload-artifact@v4
