@@ -3,7 +3,9 @@
     "collection_id": "45103176-fc8836e1-6797-444a-a378-d43987d95165",
     "folders": {
       "CO": "🇨🇴 Colombia",
-      "MX": "🇲🇽 Mexico"
+      "MX": "🇲🇽 Mexico",
+      "CROSS": "🇨🇴-🇲🇽 Cross",
+      "VERIF": "Verification"
     }
   },
   "FLOWS": {

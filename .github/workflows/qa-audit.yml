@@ -1,4 +1,4 @@
-name: QA Audit Multi-Project
+name: QA Audit Full Orchestrator
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
           - CORE
           - FLOWS
       pais:
-        description: "País a auditar"
+        description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
         default: "CO"
         type: choice
@@ -29,67 +29,49 @@ on:
           - Testing
           - Staging
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
-  run-audit:
+  run-audit-pipeline:
+    name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
     runs-on: self-hosted
     steps:
-      # --- PASO 1: CLONADO LIMPIO DE LA RAMA ACTUAL ---
-      # Usamos fetch-depth: 0 para asegurar que traiga la rama correcta (feature/multi-project-qa)
+      # --- PASO 1: DESCARGAR EL CÓDIGO ---
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          fetch-depth: 1
 
-      - name: Verify Structure
+      # --- PASO 2: CONFIGURAR PERMISOS ---
+      - name: Setup Permissions
         run: |
-          echo "📂 Estructura de carpetas actual:"
-          ls -R
-          echo "📍 Rama actual: ${{ github.ref }}"
+          echo "🔧 Configurando permisos de ejecución para el orquestador..."
+          chmod +x scripts/run_all.sh
 
-      # --- PASO 2: EJECUCIÓN DEL SCRIPT MULTI-PROYECTO ---
-      - name: Run QA Audit Script
+      # --- PASO 3: EJECUCIÓN DEL ORQUESTADOR (EL SCRIPT QUE ARREGLAMOS) ---
+      - name: Execute QA Audit
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # El CONF_USER ya está en el script, pero puedes pasarlo como secreto si prefieres
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          echo "🚀 Iniciando auditoría para ${{ github.event.inputs.proyecto }}..."
-          
-          # Aseguramos permisos de ejecución
-          chmod +x scripts/run_all.sh
-          
-          # EJECUCIÓN: Pasamos los 3 parámetros en el orden nuevo del script
+          echo "🚀 Iniciando Auditoría para ${{ github.event.inputs.proyecto }} en ${{ github.event.inputs.ambiente }}..."
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
 
-      # --- PASO 3: PUBLICAR ANÁLISIS EN GITHUB SUMMARY ---
-      - name: Publicar Análisis AI en Job Summary
-        if: always()
-        run: |
-          # Buscamos el reporte generado por el script
-          ANALYSIS_FILE=$(find . -name "claude-analysis.md" | head -n 1)
-          
-          echo "## 🤖 Análisis de Causa Raíz - Claude AI" >> $GITHUB_STEP_SUMMARY
-          echo "**Proyecto:** ${{ github.event.inputs.proyecto }} | **País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f "$ANALYSIS_FILE" ]; then
-            cat "$ANALYSIS_FILE" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ No se generó archivo de análisis detallado por Claude." >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # --- PASO 4: SUBIDA DE ARTEFACTOS (EVIDENCIAS) ---
-      - name: Upload Audit Artifacts
+      # --- PASO 4: RESPALDAR REPORTES EN GITHUB (OPCIONAL) ---
+      - name: Upload Local Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa-report-${{ github.event.inputs.proyecto }}-${{ github.event.inputs.pais }}
+          name: reports-${{ github.event.inputs.proyecto }}-${{ github.run_id }}
           path: |
-            **/report_*.html
-            **/results_*.json
-            **/log_*.txt
-          retention-days: 15
+            scripts/*.html
+            scripts/*.json
+            scripts/*.txt
+          retention-days: 7
