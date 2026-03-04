@@ -150,40 +150,55 @@ fi
 # ==========================================
 # 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
 # ==========================================
-echo "📂 Organizando jerarquía en Confluence..."
+echo "📂 Organizando jerarquía para ambiente: $AMBIENTE..."
 
-# Nombre de la página contenedora para el proyecto actual
-FOLDER_TITLE="Auditorías - $PROYECTO"
+# 1. Definir el ID del Padre según el ambiente seleccionado
+# Estos IDs corresponden a las páginas "APIS-Testing" y "APIS-Staging"
+if [ "$AMBIENTE" == "Staging" ]; then
+    # ID de la página "🎥 APIS-Staging"
+    AMBIENTE_PARENT_ID="2217115649" 
+else
+    # ID de la página "🧪 APIS-Testing"
+    AMBIENTE_PARENT_ID="2216984577" 
+fi
 
-# 1. Buscar si la carpeta del proyecto ya existe
+# Nombre de la carpeta contenedora por proyecto (Ej: Auditorías - ms-auth)
+# Añadimos el ambiente al título para evitar conflictos de nombres globales en Confluence
+FOLDER_TITLE="Auditorías $AMBIENTE - $PROYECTO"
+
+# 2. Buscar si la carpeta del proyecto ya existe en Confluence
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
 SEARCH_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL")
 PROJECT_FOLDER_ID=$(echo "$SEARCH_RES" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['results'][0]['id'] if data['results'] else '')")
 
-# 2. Si la carpeta no existe, la creamos bajo el PARENT_PAGE_ID principal
-if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ]; then
-    echo "📁 Creando carpeta de proyecto: $FOLDER_TITLE"
+# 3. Si la carpeta no existe, la creamos bajo el padre del ambiente correspondiente
+if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ] || [ "$PROJECT_FOLDER_ID" == "" ]; then
+    echo "📁 Creando nueva carpeta: $FOLDER_TITLE bajo ID: $AMBIENTE_PARENT_ID"
     FOLDER_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
         'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
         'ancestors': [{'id': sys.argv[3]}], 
-        'body': {'storage': {'value': '<p>Carpeta automática para reportes de $PROYECTO. No borrar.</p><ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}
-    }))" "$FOLDER_TITLE" "$SPACE_KEY" "$PARENT_PAGE_ID")
+        'body': {'storage': {'value': '<p>Reportes automáticos de $PROYECTO en $AMBIENTE</p><ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}
+    }))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
     
     CREATE_FOLDER_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FOLDER_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
     PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 fi
 
-# 3. Preparar contenido del reporte final
+# 4. Preparar el contenido del reporte (Análisis Claude + Resumen CLI)
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
-CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados.</p>" )
-HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
+CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados o análisis no disponible.</p>" )
 
-# 4. Publicar el reporte DENTRO de la carpeta del proyecto
+HTML_BODY="<h2>📊 Reporte Auditoría Unificada</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen de Ejecución</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
+
+# 5. Publicar el reporte final DENTRO de la carpeta del proyecto
 FINAL_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
     'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
     'ancestors': [{'id': sys.argv[3]}], 
     'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}
 }))" "$TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$HTML_BODY")
 
-echo "📤 Publicando reporte en: $FOLDER_TITLE -> $TITLE"
-curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content" | python3 -m json.tool
+echo "📤 Publicando reporte final en: $FOLDER_TITLE -> $TITLE"
+CREATE_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
+
+# Mostrar resultado final en el log
+echo "$CREATE_RES" | python3 -m json.tool
