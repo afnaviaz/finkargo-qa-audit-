@@ -7,70 +7,46 @@ PROYECTO=$1
 PAIS_INPUT=$2      
 AMBIENTE=$3  
 
-# Localización dinámica: detecta la carpeta real del script
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
 
-echo "📍 Validando entorno de ejecución..."
-echo "🔎 Buscando configuración en: $CONFIG_PATH"
-
-# ✅ Verificación física del archivo antes de iniciar
+# ✅ Validación de existencia del archivo (Evita el FileNotFoundError)
 if [ ! -f "$CONFIG_PATH" ]; then
-    echo "❌ ERROR: No se encontró el archivo collections.json en la ruta esperada."
-    echo "📂 Contenido de la carpeta scripts:"
+    echo "❌ ERROR: No se encontró $CONFIG_PATH"
+    echo "📂 Contenido de scripts/:"
     ls -R "$SCRIPTS_DIR"
-    exit 1
-fi
-
-# ✅ Validación de parámetros iniciales
-if [ -z "$PROYECTO" ] || [ -z "$PAIS_INPUT" ] || [ -z "$AMBIENTE" ]; then
-    echo "❌ Uso: ./run_all.sh <PROYECTO> <PAIS> <AMBIENTE>"
     exit 1
 fi
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-1}"
 UNIQUE_ID=$(date +'%H%M%S') 
-
-# Lógica para ejecución GLOBAL (ALL)
-if [[ "$PAIS_INPUT" == "ALL" ]]; then
-    echo "🌍 INICIANDO AUDITORÍA GLOBAL [$PROYECTO] [$AMBIENTE]"
-    for p in "CO" "MX"; do
-        bash "$0" "$PROYECTO" "$p" "$AMBIENTE" "$EXEC_NUM"
-        sleep 10
-    done
-    exit 0
-fi
-
-if [ ! -z "$4" ]; then EXEC_NUM=$4; fi
+NOW=$(date +'%Y-%m-%d %H:%M:%S')
 
 # ==========================================
 # 2. CONFIGURACIÓN DINÁMICA (JSON + PYTHON)
 # ==========================================
 
-# Función blindada para leer JSON con soporte UTF-8 (Emojis)
 get_config() {
     python3 -c "
-import json, sys, os
+import json, sys
 try:
     with open('$CONFIG_PATH', encoding='utf-8') as f:
         data = json.load(f)
-    proyecto = '$1'
-    key = '$2'
-    campo = '$3'
-    if campo == 'id':
-        print(data[proyecto]['collection_id'])
+    if '$3' == 'id':
+        print(data['$1']['collection_id'])
+    elif '$3' == 'all_folders':
+        print(' '.join(data['$1']['folders'].values()))
     else:
-        print(data[proyecto]['folders'][key])
-except Exception as e:
+        print(data['$1']['folders']['$2'])
+except Exception:
     sys.exit(1)
 "
 }
 
 COLLECTION_UID=$(get_config "$PROYECTO" "$PAIS_INPUT" "id")
-FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
 
-if [ -z "$COLLECTION_UID" ] || [ -z "$FOLDER_NAME" ]; then
-    echo "❌ ERROR: No se encontró la configuración para $PROYECTO / $PAIS_INPUT"
+if [ -z "$COLLECTION_UID" ]; then
+    echo "❌ ERROR: No se encontró la Collection ID para el proyecto: $PROYECTO"
     exit 1
 fi
 
@@ -87,71 +63,62 @@ CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA" 
 [[ "$AMBIENTE" == "Testing" ]] && PARENT_PAGE_ID="2216984577" || PARENT_PAGE_ID="2217115649"
 
-PAIS=$PAIS_INPUT
-NOW=$(date +'%Y-%m-%d %H:%M:%S')
-LOG_FILE="$SCRIPTS_DIR/log_${PAIS}_${PROYECTO}.txt"
-JSON_REPORT="$SCRIPTS_DIR/results_${PAIS}_${PROYECTO}.json"
-HTML_REPORT="$SCRIPTS_DIR/report_${PAIS}_${PROYECTO}.html"
-TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE][$PAIS] - $NOW"
+LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
+JSON_REPORT="$SCRIPTS_DIR/results_final.json"
+HTML_REPORT="$SCRIPTS_DIR/report_final.html"
+TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
 
 # ==========================================
 # 3. EJECUCIÓN SECUENCIAL NEWMAN
 # ==========================================
 
-# --- FASE 1: Carpeta del País ---
-echo "🚀 [FASE 1] Ejecutando País: $FOLDER_NAME"
-newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
-  -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-  --folder "$FOLDER_NAME" --insecure -r cli,json,htmlextra \
-  --reporter-json-export "$JSON_REPORT" --reporter-htmlextra-export "$HTML_REPORT" | tee "$LOG_FILE"
+# Limpiar reportes previos
+rm -f "$SCRIPTS_DIR/results_*.json"
 
-# --- FASE 2 y 3: Verification y Cross (Solo para CORE) ---
-if [ "$PROYECTO" == "CORE" ]; then
-    # Fase 2: Verification
-    FOLDER_VERIF=$(get_config "CORE" "VERIF" "folder")
-    echo "🔍 [FASE 2] Iniciando Verifications ($FOLDER_VERIF)..."
+if [ "$PROYECTO" == "ms-auth" ]; then
+    # --- MODO MULTI-CARPETA (ms-auth) ---
+    FOLDERS=$(get_config "$PROYECTO" "" "all_folders")
+    echo "🔐 Iniciando auditoría completa de MS-AUTH (Módulos: $FOLDERS)"
+    
+    for f in $FOLDERS; do
+        echo "🚀 Ejecutando módulo: $f"
+        newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
+          -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
+          --folder "$f" --insecure -r cli,json \
+          --reporter-json-export "$SCRIPTS_DIR/results_${f}.json" | tee -a "$LOG_FILE"
+    done
+else
+    # --- MODO PAÍS (CORE) ---
+    FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
+    echo "🚀 Ejecutando Carpeta: $FOLDER_NAME"
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-      --folder "$FOLDER_VERIF" --insecure -r cli,json \
-      --reporter-json-export "$SCRIPTS_DIR/results_verif.json" | tee -a "$LOG_FILE"
-
-    # Fase 3: Cross
-    FOLDER_CROSS=$(get_config "CORE" "CROSS" "folder")
-    echo "🌎 [FASE 3] Iniciando Cross-Entity ($FOLDER_CROSS)..."
-    newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
-      -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-      --folder "$FOLDER_CROSS" --insecure -r cli,json \
-      --reporter-json-export "$SCRIPTS_DIR/results_cross.json" | tee -a "$LOG_FILE"
-
-    # Unificar fallos para el análisis de Claude
-    python3 -c "
-import json, os
-files = ['$JSON_REPORT', '$SCRIPTS_DIR/results_verif.json', '$SCRIPTS_DIR/results_cross.json']
-try:
-    with open(files[0], 'r') as f: main = json.load(f)
-    for f_path in files[1:]:
-        if os.path.exists(f_path):
-            with open(f_path, 'r') as f:
-                extra = json.load(f)
-                main['run']['failures'].extend(extra.get('run', {}).get('failures', []))
-    with open(files[0], 'w') as f: json.dump(main, f)
-except Exception: pass
-"
+      --folder "$FOLDER_NAME" --insecure -r cli,json \
+      --reporter-json-export "$JSON_REPORT" | tee "$LOG_FILE"
 fi
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE
+# 4. UNIFICACIÓN DE RESULTADOS Y ANÁLISIS
 # ==========================================
-echo "🤖 Analizando fallos con Claude AI..."
-FAILED_DATA=$(python3 -c "import json, os; 
-if os.path.exists('$JSON_REPORT'):
-    d=json.load(open('$JSON_REPORT')); 
-    print(json.dumps(d['run']['failures']))
-else:
-    print('[]')")
+
+# Unificar todos los JSON generados en uno solo para Claude
+python3 -c "
+import json, os, glob
+files = glob.glob('$SCRIPTS_DIR/results_*.json')
+final_data = {'run': {'failures': []}}
+for f in files:
+    with open(f, 'r') as j:
+        data = json.load(j)
+        final_data['run']['failures'].extend(data.get('run', {}).get('failures', []))
+with open('$JSON_REPORT', 'w') as f:
+    json.dump(final_data, f)
+"
+
+echo "🤖 Analizando fallos consolidados con Claude API..."
+FAILED_DATA=$(python3 -c "import json, os; d=json.load(open('$JSON_REPORT')); print(json.dumps(d['run']['failures']))")
 
 if [ -z "$FAILED_DATA" ] || [ "$FAILED_DATA" == "[]" ]; then
-    AI_RCA="<p style='color:green;'>✅ Auditoría Exitosa: Todas las fases pasaron correctamente.</p>"
+    AI_RCA="<p style='color:green;'>✅ Todas las pruebas de $PROYECTO pasaron correctamente.</p>"
 else
     echo "$FAILED_DATA" > /tmp/failed_data.json
     AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 << 'PYEOF'
@@ -192,18 +159,9 @@ fi
 # 5. PUBLICACIÓN EN CONFLUENCE
 # ==========================================
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
-HTML_BODY="<h2>📊 Reporte Auditoría Unificada</h2>$AI_RCA<ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
+HTML_BODY="<h2>📊 Reporte Consolidado [$PROYECTO]</h2>$AI_RCA<ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 
 PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 'ancestors': [{'id': sys.argv[3]}], 'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}}))" "$TITLE" "$SPACE_KEY" "$PARENT_PAGE_ID" "$HTML_BODY")
 
-echo "📤 Publicando en Confluence..."
-CREATE_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$CONF_BASE_URL/rest/api/content")
-PAGE_ID=$(echo "$CREATE_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
-
-if [ ! -z "$PAGE_ID" ] && [ "$PAGE_ID" != "" ] && [ "$PAGE_ID" != "None" ]; then
-    curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H "X-Atlassian-Token: no-check" -F "file=@$HTML_REPORT" "$CONF_BASE_URL/rest/api/content/$PAGE_ID/child/attachment" > /dev/null
-    echo "✅ Publicado con éxito: $TITLE"
-else
-    echo "❌ Error de Publicación."
-    echo "$CREATE_RES" | python3 -m json.tool
-fi
+echo "📤 Publicando reporte único en Confluence..."
+curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$CONF_BASE_URL/rest/api/content" | python3 -m json.tool

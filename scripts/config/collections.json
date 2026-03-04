@@ -15,18 +15,28 @@
       "MX": "Folder Flows MX"
     }
   },
+
+
+ 
 "ms-auth": {
     "collection_id": "22777311-cef8b055-4bcd-4789-b7f5-3c9524cd970d",
     "folders": {
       "Session": "Session",
-      "MX": "Folder Flows MX"
-    }
+      "Users": "Users",
+      "Groups": "Groups",
+      "Modules": "Modules",
+      "Password": "Password",
+      "Scopes": "Scopes",
+      "Me": "Me",
+      "Marketplace products": "Marketplace products",
+      "Marketplace catalogues": "Marketplace catalogues",
+      "Roles": "Roles"
   }
 }
 
 
 
-
+}
 
 
  
