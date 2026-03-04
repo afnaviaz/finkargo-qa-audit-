@@ -97,9 +97,9 @@ else
       --reporter-json-export "$JSON_REPORT" | tee "$LOG_FILE"
 fi
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (SOLUCIÓN 404)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE 4.6
 # ==========================================
-echo "🤖 Iniciando fase de análisis..."
+echo "🤖 Iniciando fase de análisis con Claude 4.6..."
 
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
@@ -112,7 +112,7 @@ if os.path.exists('$JSON_REPORT'):
 "
 
 if [ -f "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
-    echo "🧠 Solicitando RCA a Claude..."
+    echo "🧠 Generando RCA con Claude Sonnet 4.6..."
     
     AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re, sys
@@ -130,17 +130,17 @@ except Exception as e:
     log_debug(f"Error archivo: {e}")
     sys.exit(0)
 
-# Limitar datos para no saturar el buffer
-fallos = [{"num": i, "req": f.get('source', {}).get('name', 'N/A')[:50], "msg": f.get('error', {}).get('message', 'N/A')[:100]} for i, f in enumerate(failed_data[:15], 1)]
+# Preparamos los fallos para el prompt
+fallos = [{"n": i, "req": f.get('source', {}).get('name', 'N/A')[:50], "err": f.get('error', {}).get('message', 'N/A')[:100]} for i, f in enumerate(failed_data[:20], 1)]
 
-# Usamos el alias 'latest' para evitar el error 404 de versión específica
+# USAMOS EL MODELO claude-sonnet-4-6 DE TU LISTA
 payload = {
-    "model": "claude-3-5-sonnet-latest",
-    "max_tokens": 1024,
+    "model": "claude-sonnet-4-6",
+    "max_tokens": 1500,
     "messages": [
         {
             "role": "user", 
-            "content": f"Analiza estos fallos de API y responde SOLO con un array JSON. Formato: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"
+            "content": f"Eres un experto Senior en QA. Analiza estos fallos de API de Finkargo y responde SOLO con un array JSON: [{{'num':1,'causa':'...','accion':'...'}}].\n\nFallos: {json.dumps(fallos)}"
         }
     ]
 }
@@ -168,16 +168,20 @@ if http_status == "200":
             rows = ""
             for r in rca_list:
                 idx = int(r['num']) - 1
-                req_name = fallos[idx]['req'] if idx < len(fallos) else "N/A"
-                rows += f"<tr><td>{r['num']}</td><td><b>{req_name}</b></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
-            print(f'<h4>🔍 Análisis Claude AI</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa</th><th>Acción</th></tr></thead><tbody>{rows}</tbody></table>')
+                name = fallos[idx]['req'] if idx < len(fallos) else "N/A"
+                rows += f"<tr><td>{r['num']}</td><td><b>{name}</b></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
+            
+            print(f'<h4>🔍 Análisis Inteligente (Claude 4.6)</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa Raíz</th><th>Acción Sugerida</th></tr></thead><tbody>{rows}</tbody></table>')
     except Exception as e:
-        log_debug(f"Error procesando: {e}")
+        log_debug(f"Error parseo: {e}")
+        print("<p>⚠️ Error al procesar la respuesta de la IA.</p>")
 else:
     log_debug(f"Error API: {response_body}")
-    print(f"<p style='color:red;'>⚠️ Error de Claude API ({http_status}). Revisa logs.</p>")
+    print(f"<p style='color:red;'>⚠️ Error de Claude API ({http_status}).</p>")
 PYEOF
 )
+else
+    AI_RCA="<p style='color:green;'>✅ Sin fallos detectados para analizar.</p>"
 fi
 # ==========================================
 # 5. PUBLICACIÓN EN CONFLUENCE
