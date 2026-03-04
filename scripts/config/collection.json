@@ -11,8 +11,8 @@
   "FLOWS": {
     "collection_id": "19456853-2e2dad1c-9a9c-4427-8d42-07bd1df04ddd",
     "folders": {
-      "CO": "Onboarding Colombia",
-      "MX": "Onboarding Mexico"
+      "CO": "Folder Flows CO",
+      "MX": "Folder Flows MX"
     }
   }
 }
