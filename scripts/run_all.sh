@@ -148,19 +148,44 @@ except Exception as e:
 PYEOF
 fi
 # ==========================================
-# 5. PUBLICACIÓN EN CONFLUENCE
+# 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
 # ==========================================
+echo "📂 Organizando carpetas en Confluence..."
+
+# Nombre de la carpeta contenedora por proyecto
+FOLDER_TITLE="Auditorías - $PROYECTO"
+
+# 1. Intentar obtener el ID de la carpeta del proyecto (si ya existe)
+SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
+SEARCH_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL")
+PROJECT_FOLDER_ID=$(echo "$SEARCH_RES" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['results'][0]['id'] if data['results'] else '')")
+
+# 2. Si la carpeta no existe, la creamos bajo el PARENT_PAGE_ID original
+if [ -z "$PROJECT_FOLDER_ID" ]; then
+    echo "📁 Creando nueva carpeta para el proyecto: $FOLDER_TITLE"
+    FOLDER_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
+        'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
+        'ancestors': [{'id': sys.argv[3]}], 
+        'body': {'storage': {'value': '<p>Carpeta automatizada para reportes de $PROYECTO</p>', 'representation': 'storage'}}
+    }))" "$FOLDER_TITLE" "$SPACE_KEY" "$PARENT_PAGE_ID")
+    
+    CREATE_FOLDER_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FOLDER_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
+    PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
+fi
+
+# 3. Ahora usamos PROJECT_FOLDER_ID como el nuevo ancestro para el reporte
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
 CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados.</p>" )
 
 HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 
+# El reporte final se cuelga de la carpeta del proyecto
 PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
     'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
     'ancestors': [{'id': sys.argv[3]}], 
     'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}
-}))" "$TITLE" "$SPACE_KEY" "$PARENT_PAGE_ID" "$HTML_BODY")
+}))" "$TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$HTML_BODY")
 
-echo "📤 Publicando en Confluence..."
+echo "📤 Publicando reporte final en: $FOLDER_TITLE -> $TITLE"
 CREATE_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$CONF_BASE_URL/rest/api/content")
 echo "$CREATE_RES" | python3 -m json.tool
