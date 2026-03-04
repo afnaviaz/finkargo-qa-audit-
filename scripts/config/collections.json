@@ -1,0 +1,43 @@
+{
+ "CORE": {
+    "collection_id": "45103176-fc8836e1-6797-444a-a378-d43987d95165",
+    "folders": {
+      "CO": "🇨🇴 Colombia",
+      "MX": "🇲🇽 Mexico",
+      "CROSS": "🇨🇴-🇲🇽 Cross",
+      "VERIF": "Verification"
+    }
+  },
+  "FLOWS": {
+    "collection_id": "19456853-2e2dad1c-9a9c-4427-8d42-07bd1df04ddd",
+    "folders": {
+      "CO": "Folder Flows CO",
+      "MX": "Folder Flows MX"
+    }
+  },
+
+
+ 
+"ms-auth": {
+    "collection_id": "22777311-cef8b055-4bcd-4789-b7f5-3c9524cd970d",
+    "folders": {
+      "Session": "Session",
+      "Users": "Users",
+      "Groups": "Groups",
+      "Modules": "Modules",
+      "Password": "Password",
+      "Scopes": "Scopes",
+      "Me": "Me",
+      "Marketplace products": "Marketplace products",
+      "Marketplace catalogues": "Marketplace catalogues",
+      "Roles": "Roles"
+  }
+}
+
+
+
+}
+
+
+ 
+

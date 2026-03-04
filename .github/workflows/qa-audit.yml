@@ -1,91 +1,68 @@
-name: QA Audit
+name: QA Audit Full Orchestrator
+
 on:
   workflow_dispatch:
     inputs:
+      proyecto:
+        description: "Selecciona el Proyecto a auditar"
+        required: true
+        default: "CORE"
+        type: choice
+        options: [CORE, FLOWS, ms-auth]
       pais:
-        description: "País a auditar"
+        description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
         default: "CO"
         type: choice
-        options:
-          - CO
-          - MX
-          - ALL
+        options: [CO, MX, ALL]
       ambiente:
-        description: "Ambiente"
+        description: "Ambiente de ejecución"
         required: true
         default: "Testing"
         type: choice
-        options:
-          - Testing
-          - Staging
+        options: [Testing, Staging]
+
+permissions:
+  contents: read
+  actions: read
+
 jobs:
-  run-audit:
+  run-audit-pipeline:
+    name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
     runs-on: self-hosted
     steps:
-      # --- PASO 1: CLONADO MANUAL Y REPARACIÓN DE ESTRUCTURA ---
-      - name: Manual Clean Checkout
-        run: |
-          echo "🧹 Limpiando workspace de forma absoluta..."
-          find . -mindepth 1 -delete
-          
-          echo "📥 Clonando repositorio (Rama: main)..."
-          git clone --depth 1 --single-branch --branch main https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
-          
-          echo "📍 Ubicación actual: $(pwd)"
-          echo "📂 Verificando archivos descargados:"
-          ls -R
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      # --- PASO 2: EJECUCIÓN DEL SCRIPT ---
-      - name: Run QA Audit
+      - name: Setup Permissions
+        run: chmod +x scripts/run_all.sh
+
+      - name: Execute QA Audit
+        shell: bash # Forzamos bash para evitar inconsistencias en el runner
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
-          CONF_USER: ${{ secrets.CONF_USER }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          echo "📂 Entrando a la carpeta scripts..."
-          cd scripts
+          # 1. Asegurar que estamos en la raíz del repo descargado
+          cd ${{ github.workspace }}
           
-          echo "📄 Archivos encontrados en scripts/:"
-          ls -F
-          
-          SCRIPT_TO_RUN=$(ls run_env.sh run_all.sh 2>/dev/null | head -n 1)
-          
-          if [ -f "$SCRIPT_TO_RUN" ]; then
-            echo "🚀 Ejecutando: $SCRIPT_TO_RUN"
-            chmod +x "$SCRIPT_TO_RUN"
-            ./"$SCRIPT_TO_RUN" ${{ github.event.inputs.pais }} ${{ github.event.inputs.ambiente }}
-          else
-            echo "❌ ERROR: No se encontró run_env.sh ni run_all.sh dentro de la carpeta scripts/."
-            exit 1
-          fi
+          # 2. Ejecutar usando la ruta relativa limpia
+          ./scripts/run_all.sh \
+            "${{ github.event.inputs.proyecto }}" \
+            "${{ github.event.inputs.pais }}" \
+            "${{ github.event.inputs.ambiente }}"
 
-    # --- PASO 3: PUBLICAR ANÁLISIS EN JOB SUMMARY ---
-      - name: Publicar Análisis en Job Summary
-        if: always()
-        run: |
-          ANALYSIS_FILE=$(find . -name "claude-analysis.md" | head -n 1)
-          
-          echo "## 🤖 Análisis de Causa Raíz - Claude AI" >> $GITHUB_STEP_SUMMARY
-          echo "**País:** ${{ github.event.inputs.pais }} | **Ambiente:** ${{ github.event.inputs.ambiente }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f "$ANALYSIS_FILE" ]; then
-            cat "$ANALYSIS_FILE" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ No se generó archivo de análisis." >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # --- PASO 4: SUBIDA DE ARTEFACTOS ---
-      - name: Upload Reports
+      - name: Upload Local Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa-report-${{ github.event.inputs.pais }}-${{ github.event.inputs.ambiente }}
+          name: reports-${{ github.event.inputs.proyecto }}-${{ github.run_id }}
           path: |
-            **/report_*.html
-            **/results_*.json
-            **/log_*.txt
-            **/claude-analysis.md
-          retention-days: 30
+            scripts/*.html
+            scripts/*.json
+            scripts/*.txt
+          retention-days: 7
