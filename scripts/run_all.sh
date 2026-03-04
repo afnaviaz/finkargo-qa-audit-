@@ -184,12 +184,38 @@ else
     AI_RCA="<p style='color:green;'>✅ Sin fallos detectados para analizar.</p>"
 fi
 # ==========================================
-# 5. PUBLICACIÓN EN CONFLUENCE
+# 5. PUBLICACIÓN EN CONFLUENCE (VERSIÓN FIX)
 # ==========================================
+# 1. Limpiamos el resumen de la CLI para evitar que rompa el JSON
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
-HTML_BODY="<h2>📊 Reporte Consolidado [$PROYECTO]</h2>$AI_RCA<ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 
-PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 'ancestors': [{'id': sys.argv[3]}], 'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}}))" "$TITLE" "$SPACE_KEY" "$PARENT_PAGE_ID" "$HTML_BODY")
+# 2. Aseguramos que AI_RCA sea una sola línea y no tenga caracteres extraños
+# Esto evita que el JSON de envío sea inválido
+CLEAN_AI_RCA=$(echo "$AI_RCA" | tr -d '\n' | tr -d '\r' | sed 's/"/\\"/g')
+
+# 3. Construimos el HTML Body
+HTML_BODY="<h2>📊 Reporte Auditoría Unificada</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen de Ejecución</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
+
+# 4. Generamos el PAYLOAD usando Python para asegurar un JSON perfecto
+PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
+    'type': 'page', 
+    'title': sys.argv[1], 
+    'space': {'key': sys.argv[2]}, 
+    'ancestors': [{'id': sys.argv[3]}], 
+    'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}
+}))" "$TITLE" "$SPACE_KEY" "$PARENT_PAGE_ID" "$HTML_BODY")
 
 echo "📤 Publicando reporte único en Confluence..."
-curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$CONF_BASE_URL/rest/api/content" | python3 -m json.tool
+CREATE_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$CONF_BASE_URL/rest/api/content")
+
+# Verificamos si se publicó bien
+PAGE_ID=$(echo "$CREATE_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
+
+if [ ! -z "$PAGE_ID" ] && [ "$PAGE_ID" != "None" ]; then
+    echo "✅ Reporte publicado con éxito. ID: $PAGE_ID"
+    # Adjuntamos el reporte HTML de Newman
+    curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H "X-Atlassian-Token: no-check" -F "file=@$HTML_REPORT" "$CONF_BASE_URL/rest/api/content/$PAGE_ID/child/attachment" > /dev/null
+else
+    echo "❌ Error al publicar en Confluence:"
+    echo "$CREATE_RES" | python3 -m json.tool
+fi
