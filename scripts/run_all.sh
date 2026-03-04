@@ -130,13 +130,19 @@ except Exception as e:
     log_debug(f"Error archivo: {e}")
     sys.exit(0)
 
-fallos = [{"num": i, "req": f.get('source', {}).get('name', 'N/A'), "msg": f.get('error', {}).get('message', 'N/A')} for i, f in enumerate(failed_data[:15], 1)]
+# Limitar datos para no saturar el buffer
+fallos = [{"num": i, "req": f.get('source', {}).get('name', 'N/A')[:50], "msg": f.get('error', {}).get('message', 'N/A')[:100]} for i, f in enumerate(failed_data[:15], 1)]
 
-# Corregimos el nombre del modelo al string exacto requerido por Anthropic
+# Usamos el alias 'latest' para evitar el error 404 de versión específica
 payload = {
-    "model": "claude-3-5-sonnet-20240620",
+    "model": "claude-3-5-sonnet-latest",
     "max_tokens": 1024,
-    "messages": [{"role": "user", "content": f"Analiza estos fallos de API y responde SOLO con un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"}]
+    "messages": [
+        {
+            "role": "user", 
+            "content": f"Analiza estos fallos de API y responde SOLO con un array JSON. Formato: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"
+        }
+    ]
 }
 
 result = subprocess.run([
@@ -156,14 +162,20 @@ log_debug(f"HTTP Status: {http_status}")
 if http_status == "200":
     try:
         raw_text = json.loads(response_body)["content"][0]["text"]
-        rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
-        rows = "".join([f"<tr><td>{r['num']}</td><td><b>{fallos[int(r['num'])-1]['req']}</b></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>" for r in rca_list])
-        print(f'<h4>🔍 Análisis Claude AI</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa</th><th>Acción</th></tr></thead><tbody>{rows}</tbody></table>')
+        json_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+        if json_match:
+            rca_list = json.loads(json_match.group())
+            rows = ""
+            for r in rca_list:
+                idx = int(r['num']) - 1
+                req_name = fallos[idx]['req'] if idx < len(fallos) else "N/A"
+                rows += f"<tr><td>{r['num']}</td><td><b>{req_name}</b></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
+            print(f'<h4>🔍 Análisis Claude AI</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa</th><th>Acción</th></tr></thead><tbody>{rows}</tbody></table>')
     except Exception as e:
-        log_debug(f"Error procesando JSON de Claude: {e}")
+        log_debug(f"Error procesando: {e}")
 else:
     log_debug(f"Error API: {response_body}")
-    print(f"<p style='color:red;'>⚠️ Error de Claude API ({http_status})</p>")
+    print(f"<p style='color:red;'>⚠️ Error de Claude API ({http_status}). Revisa logs.</p>")
 PYEOF
 )
 fi
