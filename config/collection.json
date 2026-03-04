@@ -1,0 +1,16 @@
+{
+  "CORE": {
+    "collection_id": "45103176-fc8836e1-6797-444a-a378-d43987d95165",
+    "folders": {
+      "CO": "🇨🇴 Colombia",
+      "MX": "🇲🇽 Mexico"
+    }
+  },
+  "FLOWS": {
+    "collection_id": "19456853-2e2dad1c-9a9c-4427-8d42-07bd1df04ddd",
+    "folders": {
+      "CO": "Onboarding Colombia",
+      "MX": "Onboarding Mexico"
+    }
+  }
+}
