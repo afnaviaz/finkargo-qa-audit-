@@ -98,35 +98,40 @@ else
 fi
 
 # ==========================================
-# 4. UNIFICACIÓN DE RESULTADOS Y ANÁLISIS
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE
 # ==========================================
-
-# Unificar todos los JSON generados en uno solo para Claude
-python3 -c "
-import json, os, glob
-files = glob.glob('$SCRIPTS_DIR/results_*.json')
-final_data = {'run': {'failures': []}}
-for f in files:
-    with open(f, 'r') as j:
-        data = json.load(j)
-        final_data['run']['failures'].extend(data.get('run', {}).get('failures', []))
-with open('$JSON_REPORT', 'w') as f:
-    json.dump(final_data, f)
-"
-
 echo "🤖 Analizando fallos consolidados con Claude API..."
-FAILED_DATA=$(python3 -c "import json, os; d=json.load(open('$JSON_REPORT')); print(json.dumps(d['run']['failures']))")
 
-if [ -z "$FAILED_DATA" ] || [ "$FAILED_DATA" == "[]" ]; then
-    AI_RCA="<p style='color:green;'>✅ Todas las pruebas de $PROYECTO pasaron correctamente.</p>"
-else
-    echo "$FAILED_DATA" > /tmp/failed_data.json
+# 1. Extraer fallos y guardarlos en el directorio local
+FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
+python3 -c "import json, os; 
+if os.path.exists('$JSON_REPORT'):
+    d=json.load(open('$JSON_REPORT')); 
+    failures = d.get('run', {}).get('failures', [])
+    with open('$FAILED_DATA_FILE', 'w') as f:
+        json.dump(failures, f)
+    print(f'✅ Se encontraron {len(failures)} fallos.')
+else:
+    print('⚠️ No se encontró reporte JSON.')"
+
+# 2. Ejecutar análisis solo si hay fallos
+if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
+    echo "🧠 Enviando datos a Claude..."
+    
     AI_RCA=$(ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 << 'PYEOF'
-import json, subprocess, os, re
+import json, subprocess, os, re, sys
+
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+if not api_key:
+    print("<p style='color:red;'>⚠️ Error: ANTHROPIC_API_KEY no configurada.</p>")
+    sys.exit(0)
+
 try:
-    with open("/tmp/failed_data.json", "r") as f: failed_data = json.load(f)
-except: failed_data = []
+    with open("failed_data_debug.json", "r") as f:
+        failed_data = json.load(f)
+except Exception as e:
+    print(f"<p>Error leyendo archivo de fallos: {e}</p>")
+    sys.exit(0)
 
 fallos = []
 for i, f in enumerate(failed_data, 1):
@@ -137,23 +142,50 @@ for i, f in enumerate(failed_data, 1):
     fallos.append({"num": i, "req": req, "msg": msg, "code": code})
 
 rows_resumen = "".join([f"<tr><td>{f['num']}</td><td>{f['req']}</td><td>{f['msg']}</td><td>{f['code']}</td></tr>" for f in fallos])
-prompt = f"Analiza estos fallos de API y responde SOLO con un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos:\n{json.dumps(fallos)}"
 
-body = json.dumps({"model": "claude-3-5-sonnet-20240620", "max_tokens": 1024, "messages": [{"role": "user", "content": prompt}]})
-result = subprocess.run(["curl", "-s", "https://api.anthropic.com/v1/messages", "-H", f"x-api-key: {api_key}", "-H", "anthropic-version: 2023-06-01", "-H", "content-type: application/json", "-d", body], capture_output=True, text=True)
+# Prompt optimizado
+prompt = f"Analiza estos fallos de API de Finkargo. Responde SOLO con un array JSON: [{{'num':1,'causa':'...','accion':'...'}}].\nFallos: {json.dumps(fallos)}"
+
+payload = {
+    "model": "claude-3-5-sonnet-20240620",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": prompt}]
+}
+
+# Llamada a la API con captura de error
+result = subprocess.run([
+    "curl", "-s", "https://api.anthropic.com/v1/messages",
+    "-H", f"x-api-key: {api_key}",
+    "-H", "anthropic-version: 2023-06-01",
+    "-H", "content-type: application/json",
+    "-d", json.dumps(payload)
+], capture_output=True, text=True)
+
+if result.returncode != 0:
+    print(f"<p>Error de CURL: {result.stderr}</p>")
+    sys.exit(0)
 
 rows_rca = ""
 try:
     res_json = json.loads(result.stdout)
-    rca_list = json.loads(re.search(r'\[.*\]', res_json["content"][0]["text"], re.DOTALL).group())
-    for r in rca_list:
-        rows_rca += f"<tr><td>{r['num']}</td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
-except: rows_rca = "<tr><td colspan='3'>Error en análisis AI</td></tr>"
+    if "error" in res_json:
+        rows_rca = f"<tr><td colspan='3'>Error API Claude: {res_json['error']['message']}</td></tr>"
+    else:
+        content = res_json["content"][0]["text"]
+        rca_list = json.loads(re.search(r'\[.*\]', content, re.DOTALL).group())
+        for r in rca_list:
+            rows_rca += f"<tr><td>{r['num']}</td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
+except Exception as e:
+    rows_rca = f"<tr><td colspan='3'>Error procesando respuesta: {e}</td></tr>"
 
-print(f'<h4>Resumen de Fallos</h4><table><thead><tr><th>#</th><th>Request</th><th>Mensaje</th><th>Código</th></tr></thead><tbody>{rows_resumen}</tbody></table><h4>🔍 Análisis Claude AI</h4><table><thead><tr><th>#</th><th>Causa Raíz</th><th>Acción Sugerida</th></tr></thead><tbody>{rows_rca}</tbody></table>')
+print(f'<h4>Resumen de Fallos</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Mensaje</th><th>Código</th></tr></thead><tbody>{rows_resumen}</tbody></table><h4>🔍 Análisis Causa Raíz (Claude AI)</h4><table border="1"><thead><tr><th>#</th><th>Causa Raíz</th><th>Acción Sugerida</th></tr></thead><tbody>{rows_rca}</tbody></table>')
 PYEOF
 )
+else
+    AI_RCA="<p style='color:green;'>✅ Auditoría Exitosa: No se detectaron fallos para analizar.</p>"
 fi
+
+
 
 # ==========================================
 # 5. PUBLICACIÓN EN CONFLUENCE
