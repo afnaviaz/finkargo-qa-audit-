@@ -32,7 +32,15 @@
       "Marketplace catalogues": "Marketplace catalogues",
       "Roles": "Roles"
   }
+},
+
+"ms-communicator": {
+    "collection_id": "19456853-edd1958b-5396-4417-b212-62f73edec165",
+    "folders": {
+      "Send mail": "Send mail"
+  }
 }
+
 
 
 
