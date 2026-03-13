@@ -10,22 +10,20 @@ AMBIENTE=$3
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
 
-# ✅ Validación de existencia del archivo (Evita el FileNotFoundError)
+# Ruta al nuevo archivo de escenarios (Data-Driven)
+DATA_FILE="$SCRIPTS_DIR/test/Data/escenarios.json"
+
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "❌ ERROR: No se encontró $CONFIG_PATH"
-    echo "📂 Contenido de scripts/:"
-    ls -R "$SCRIPTS_DIR"
     exit 1
 fi
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-1}"
-UNIQUE_ID=$(date +'%H%M%S') 
 NOW=$(date +'%Y-%m-%d %H:%M:%S')
 
 # ==========================================
-# 2. CONFIGURACIÓN DINÁMICA (JSON + PYTHON)
+# 2. CONFIGURACIÓN DINÁMICA
 # ==========================================
-
 get_config() {
     python3 -c "
 import json, sys
@@ -46,11 +44,11 @@ except Exception:
 COLLECTION_UID=$(get_config "$PROYECTO" "$PAIS_INPUT" "id")
 
 if [ -z "$COLLECTION_UID" ]; then
-    echo "❌ ERROR: No se encontró la Collection ID para el proyecto: $PROYECTO"
+    echo "❌ ERROR: No se encontró la Collection ID para: $PROYECTO"
     exit 1
 fi
 
-# IDs de Entornos de Postman
+# IDs de Entornos
 if [ "$PAIS_INPUT" == "CO" ]; then
     [[ "$AMBIENTE" == "Staging" ]] && ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf" || ENV_UID="19103266-4be86e2c-b894-4577-95c4-f4b827281933"
 else
@@ -61,41 +59,59 @@ fi
 CONF_USER="andres.navia@finkargo.com"
 CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA" 
-[[ "$AMBIENTE" == "Testing" ]] && PARENT_PAGE_ID="2216984577" || PARENT_PAGE_ID="2217115649"
 
 LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
-HTML_REPORT="$SCRIPTS_DIR/report_final.html"
 TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
 
 # ==========================================
-# 3. EJECUCIÓN SECUENCIAL NEWMAN
+# 3. EJECUCIÓN NEWMAN (CON DATA-DRIVEN)
 # ==========================================
-
-# Limpiar reportes previos
 rm -f "$SCRIPTS_DIR/results_*.json"
+rm -f "claude_report.html"
+
+# Configurar parámetro de datos si el archivo existe
+DATA_PARAM=""
+if [ -f "$DATA_FILE" ]; then
+    echo "📊 Escenarios detectados en: $DATA_FILE"
+    DATA_PARAM="-d $DATA_FILE"
+else
+    echo "ℹ️ Ejecutando sin archivo de datos (Modo estándar)"
+fi
 
 if [ "$PROYECTO" == "ms-auth" ]; then
-    # --- MODO MULTI-CARPETA (ms-auth) ---
     FOLDERS=$(get_config "$PROYECTO" "" "all_folders")
-    echo "🔐 Iniciando auditoría completa de MS-AUTH (Módulos: $FOLDERS)"
+    echo "🔐 Auditoría MS-AUTH con módulos: $FOLDERS"
     
     for f in $FOLDERS; do
-        echo "🚀 Ejecutando módulo: $f"
+        echo "🚀 Ejecutando: $f"
         newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
           -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-          --folder "$f" --insecure -r cli,json \
-          --reporter-json-export "$SCRIPTS_DIR/results_${f}.json" | tee -a "$LOG_FILE"
+          --folder "$f" $DATA_PARAM --insecure -r cli,json \
+          --reporter-json-export "$SCRIPTS_DIR/results_${f// /_}.json" | tee -a "$LOG_FILE"
     done
 else
-    # --- MODO PAÍS (CORE) ---
     FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
-    echo "🚀 Ejecutando Carpeta: $FOLDER_NAME"
+    echo "🚀 Ejecutando: $FOLDER_NAME"
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-      --folder "$FOLDER_NAME" --insecure -r cli,json \
+      --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json \
       --reporter-json-export "$JSON_REPORT" | tee "$LOG_FILE"
 fi
+
+# Unificar reportes JSON para Claude
+python3 -c "
+import json, os, glob
+files = glob.glob('$SCRIPTS_DIR/results_*.json')
+final_data = {'run': {'failures': []}}
+for f in files:
+    with open(f, 'r') as j:
+        data = json.load(j)
+        final_data['run']['failures'].extend(data.get('run', {}).get('failures', []))
+with open('$JSON_REPORT', 'w') as f:
+    json.dump(final_data, f)
+"
+
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE 4.6
 # ==========================================
@@ -111,8 +127,6 @@ if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
     ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re, sys
 
-def log_debug(msg): print(f"DEBUG: {msg}", file=sys.stderr)
-
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 failed_data_path = os.environ.get("FAILED_DATA_PATH")
 
@@ -123,82 +137,68 @@ try:
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 1500,
-        "messages": [{"role": "user", "content": f"Responde SOLO un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"}]
+        "messages": [{"role": "user", "content": f"Analiza estos fallos y responde SOLO un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"}]
     }
 
     result = subprocess.run([
-        "curl", "-s", "-w", "\n%{http_code}", "https://api.anthropic.com/v1/messages",
+        "curl", "-s", "https://api.anthropic.com/v1/messages",
         "-H", f"x-api-key: {api_key}", "-H", "anthropic-version: 2023-06-01",
         "-H", "content-type: application/json", "-d", json.dumps(payload)
     ], capture_output=True, text=True)
 
-    output = result.stdout.strip().split('\n')
-    if output[-1] == "200":
-        raw_text = json.loads("\n".join(output[:-1]))["content"][0]["text"]
-        rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
-        rows = "".join([f"<tr><td>{r['num']}</td><td><b>{fallos[int(r['num'])-1]['req']}</b></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>" for r in rca_list])
-        html = f'<h4>🔍 Análisis Inteligente (Claude 4.6)</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa</th><th>Accion</th></tr></thead><tbody>{rows}</tbody></table>'
-        with open("claude_report.html", "w") as f: f.write(html.replace("\n", ""))
-        log_debug("HTTP Status: 200 - OK")
-    else:
-        log_debug(f"HTTP Status: {output[-1]}")
-        with open("claude_report.html", "w") as f: f.write("<p>⚠️ Error API Claude</p>")
+    res_json = json.loads(result.stdout)
+    raw_text = res_json["content"][0]["text"]
+    rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
+    
+    rows = "".join([f"<tr><td>{r['num']}</td><td><b>{fallos[int(r['num'])-1]['req']}</b></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>" for r in rca_list])
+    html = f'<h4>🔍 Análisis Inteligente (Claude 4.6)</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa</th><th>Accion</th></tr></thead><tbody>{rows}</tbody></table>'
+    with open("claude_report.html", "w") as f: f.write(html.replace("\n", ""))
 except Exception as e:
-    with open("claude_report.html", "w") as f: f.write(f"<p>Error: {e}</p>")
+    with open("claude_report.html", "w") as f: f.write(f"<p>Error en análisis: {e}</p>")
 PYEOF
 fi
+
 # ==========================================
 # 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
 # ==========================================
 echo "📂 Organizando jerarquía para ambiente: $AMBIENTE..."
 
-# 1. Definir el ID del Padre según el ambiente seleccionado
-# Estos IDs corresponden a las páginas "APIS-Testing" y "APIS-Staging"
 if [ "$AMBIENTE" == "Staging" ]; then
-    # ID de la página "🎥 APIS-Staging"
     AMBIENTE_PARENT_ID="2217115649" 
 else
-    # ID de la página "🧪 APIS-Testing"
     AMBIENTE_PARENT_ID="2216984577" 
 fi
 
-# Nombre de la carpeta contenedora por proyecto (Ej: Auditorías - ms-auth)
-# Añadimos el ambiente al título para evitar conflictos de nombres globales en Confluence
 FOLDER_TITLE="Auditorías $AMBIENTE - $PROYECTO"
 
-# 2. Buscar si la carpeta del proyecto ya existe en Confluence
+# Buscar carpeta del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
 SEARCH_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL")
 PROJECT_FOLDER_ID=$(echo "$SEARCH_RES" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['results'][0]['id'] if data['results'] else '')")
 
-# 3. Si la carpeta no existe, la creamos bajo el padre del ambiente correspondiente
+# Crear carpeta si no existe
 if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ] || [ "$PROJECT_FOLDER_ID" == "" ]; then
-    echo "📁 Creando nueva carpeta: $FOLDER_TITLE bajo ID: $AMBIENTE_PARENT_ID"
+    echo "📁 Creando nueva carpeta: $FOLDER_TITLE"
     FOLDER_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
         'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
         'ancestors': [{'id': sys.argv[3]}], 
-        'body': {'storage': {'value': '<p>Reportes automáticos de $PROYECTO en $AMBIENTE</p><ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}
+        'body': {'storage': {'value': '<p>Reportes de $PROYECTO en $AMBIENTE</p><ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}
     }))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
     
     CREATE_FOLDER_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FOLDER_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
     PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 fi
 
-# 4. Preparar el contenido del reporte (Análisis Claude + Resumen CLI)
+# Preparar Reporte Final
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
-CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados o análisis no disponible.</p>" )
+CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados.</p>" )
+HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 
-HTML_BODY="<h2>📊 Reporte Auditoría Unificada</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen de Ejecución</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
-
-# 5. Publicar el reporte final DENTRO de la carpeta del proyecto
 FINAL_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
     'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
     'ancestors': [{'id': sys.argv[3]}], 
     'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}
 }))" "$TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$HTML_BODY")
 
-echo "📤 Publicando reporte final en: $FOLDER_TITLE -> $TITLE"
-CREATE_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
-
-# Mostrar resultado final en el log
-echo "$CREATE_RES" | python3 -m json.tool
+echo "📤 Publicando reporte..."
+curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content" | python3 -m json.tool

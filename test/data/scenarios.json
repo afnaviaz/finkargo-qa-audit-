@@ -1,0 +1,579 @@
+[
+  {
+    "name": "EP-01: Happy Path - Caso base con CC múltiple",
+    "type": "positive",
+    "expectedStatus": [200, 201],
+    "errorField": "",
+    "errorReason": "",
+    "body": {
+      "to": "test_ep01a@yopmail.com",
+      "cc": ["test_ep01b@yopmail.com", "test_ep01c@yopmail.com"],
+      "subject": "Transacción Completada",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Transacción Completada",
+      "data": {
+        "provider_name": "Proveedor de prueba",
+        "provider_country": "CHINA",
+        "provider_bank": "Chase Manhattan",
+        "provider_account": "123456785432",
+        "company_name": "MUSIC DE PAMELA S.A.",
+        "payment_reference": "#TRF-20240125-A7F2B9",
+        "transfer_date": "26 ene 2026 · 10:45 am",
+        "currency_source": "MXN",
+        "import_name": "Nombre #12345678",
+        "symbol_currency_destination": "$",
+        "amount_destination": 30000,
+        "currency_destination": "USD",
+        "trm_rate": 17.98,
+        "amount_source": 535542.34,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "EP-02: CC vacío - sin destinatarios en copia",
+    "type": "positive",
+    "expectedStatus": [200, 201],
+    "errorField": "",
+    "errorReason": "",
+    "body": {
+      "to": "test_ep02@mailinator.com",
+      "cc": [],
+      "subject": "Pago Procesado Exitosamente",
+      "alpha2": "co",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Pago Procesado",
+      "data": {
+        "provider_name": "Proveedor Colombia",
+        "provider_country": "USA",
+        "provider_bank": "Bancolombia",
+        "provider_account": "9876543210",
+        "company_name": "EMPRESA TEST S.A.S.",
+        "payment_reference": "#TRF-20240201-B8G3C0",
+        "transfer_date": "01 feb 2026 · 09:00 am",
+        "currency_source": "COP",
+        "import_name": "Importación #98765432",
+        "symbol_currency_destination": "$",
+        "amount_destination": 5000,
+        "currency_destination": "USD",
+        "trm_rate": 4200.50,
+        "amount_source": 21002500,
+        "provider_url": "https://app.finkargo.com.co/auth/login",
+        "download_url": "https://app.finkargo.com.co/auth/login",
+        "another_payment_url": "https://app.finkargo.com.co/auth/login"
+      }
+    }
+  },
+  {
+    "name": "VL-01: Valor Límite - Monto mínimo (0.01)",
+    "type": "positive",
+    "expectedStatus": [200, 201],
+    "errorField": "",
+    "errorReason": "",
+    "body": {
+      "to": "test_vl01@yopmail.com",
+      "cc": ["test_vl01cc@yopmail.com"],
+      "subject": "Micro Transacción",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Micro Transacción Completada",
+      "data": {
+        "provider_name": "Proveedor Micro",
+        "provider_country": "GERMANY",
+        "provider_bank": "Deutsche Bank",
+        "provider_account": "0000000001",
+        "company_name": "MICRO EMPRESA S.A.",
+        "payment_reference": "#TRF-MIN-000001",
+        "transfer_date": "13 mar 2026 · 08:00 am",
+        "currency_source": "MXN",
+        "import_name": "Micro Importación #00001",
+        "symbol_currency_destination": "$",
+        "amount_destination": 0.01,
+        "currency_destination": "USD",
+        "trm_rate": 17.00,
+        "amount_source": 0.17,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "VL-02: Valor Límite - Monto alto (9,999,999.99)",
+    "type": "positive",
+    "expectedStatus": [200, 201],
+    "errorField": "",
+    "errorReason": "",
+    "body": {
+      "to": "test_vl02@yopmail.com",
+      "cc": ["test_vl02a@yopmail.com", "test_vl02b@yopmail.com", "test_vl02c@yopmail.com"],
+      "subject": "Gran Transacción Completada",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Gran Transacción Completada",
+      "data": {
+        "provider_name": "Gran Proveedor Internacional",
+        "provider_country": "INDIA",
+        "provider_bank": "HDFC Bank",
+        "provider_account": "9999999999999",
+        "company_name": "GRAN EMPRESA INTERNACIONAL S.A.",
+        "payment_reference": "#TRF-MAX-999999",
+        "transfer_date": "13 mar 2026 · 23:59 pm",
+        "currency_source": "MXN",
+        "import_name": "Gran Importación #99999999",
+        "symbol_currency_destination": "$",
+        "amount_destination": 9999999.99,
+        "currency_destination": "USD",
+        "trm_rate": 18.50,
+        "amount_source": 184999999.82,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "EP-03: Partición Equivalencia - País Colombia (co)",
+    "type": "positive",
+    "expectedStatus": [200, 201],
+    "errorField": "",
+    "errorReason": "",
+    "body": {
+      "to": "test_ep03@mailinator.com",
+      "cc": ["test_ep03cc@mailinator.com"],
+      "subject": "Transacción Colombia Completada",
+      "alpha2": "co",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Transacción Colombia",
+      "data": {
+        "provider_name": "Proveedor Bogota",
+        "provider_country": "BRAZIL",
+        "provider_bank": "Davivienda",
+        "provider_account": "1122334455",
+        "company_name": "EMPRESA BOGOTA S.A.S.",
+        "payment_reference": "#TRF-CO-20240301-X1Y2Z3",
+        "transfer_date": "01 mar 2026 · 14:30 pm",
+        "currency_source": "COP",
+        "import_name": "Importacion Colombia #11223344",
+        "symbol_currency_destination": "$",
+        "amount_destination": 15000,
+        "currency_destination": "USD",
+        "trm_rate": 4150.75,
+        "amount_source": 62261250,
+        "provider_url": "https://app.finkargo.com.co/auth/login",
+        "download_url": "https://app.finkargo.com.co/auth/login",
+        "another_payment_url": "https://app.finkargo.com.co/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-01: Campo 'to' ausente",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "to",
+    "errorReason": "campo_faltante",
+    "body": {
+      "cc": ["test_neg01@yopmail.com"],
+      "subject": "Test sin destinatario",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-001",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #001",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-02: Campo 'subject' ausente",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "subject",
+    "errorReason": "campo_faltante",
+    "body": {
+      "to": "test_neg02@yopmail.com",
+      "cc": [],
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test sin subject",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-002",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #002",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-03: Campo 'template' ausente",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "template",
+    "errorReason": "campo_faltante",
+    "body": {
+      "to": "test_neg03@yopmail.com",
+      "cc": [],
+      "subject": "Test sin template",
+      "alpha2": "mx",
+      "attachment": null,
+      "message": "Test sin template",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-003",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #003",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-04: Campo 'alpha2' ausente",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "alpha2",
+    "errorReason": "campo_faltante",
+    "body": {
+      "to": "test_neg04@yopmail.com",
+      "cc": [],
+      "subject": "Test sin alpha2",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test sin alpha2",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-004",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #004",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-05: Objeto 'data' ausente",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "data",
+    "errorReason": "campo_faltante",
+    "body": {
+      "to": "test_neg05@yopmail.com",
+      "cc": [],
+      "subject": "Test sin data",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test sin data"
+    }
+  },
+  {
+    "name": "NEG-06: Email 'to' sin arroba",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "to",
+    "errorReason": "email_invalido",
+    "body": {
+      "to": "correo-sin-arroba.com",
+      "cc": [],
+      "subject": "Test email invalido",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test email invalido",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-006",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #006",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-07: Email 'to' vacío",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "to",
+    "errorReason": "email_vacio",
+    "body": {
+      "to": "",
+      "cc": [],
+      "subject": "Test email vacio",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test email vacio",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-007",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #007",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-08: Email en 'cc' sin dominio",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "cc",
+    "errorReason": "email_invalido",
+    "body": {
+      "to": "test_neg08@yopmail.com",
+      "cc": ["usuario@", "otro@dominio.com"],
+      "subject": "Test CC invalido",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test CC invalido",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-008",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #008",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-09: alpha2 país no soportado ('br')",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "alpha2",
+    "errorReason": "pais_no_soportado",
+    "body": {
+      "to": "test_neg09@yopmail.com",
+      "cc": [],
+      "subject": "Test alpha2 invalido",
+      "alpha2": "br",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test alpha2 invalido",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "BRAZIL", "provider_bank": "Itau",
+        "provider_account": "123456789", "company_name": "TEST BRASIL S.A.", "payment_reference": "#TRF-NEG-009",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "BRL", "import_name": "Test #009",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 5.00, "amount_source": 5000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-10: alpha2 vacío",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "alpha2",
+    "errorReason": "alpha2_vacio",
+    "body": {
+      "to": "test_neg10@yopmail.com",
+      "cc": [],
+      "subject": "Test alpha2 vacio",
+      "alpha2": "",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test alpha2 vacio",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-010",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #010",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-11: alpha2 en mayúsculas ('MX')",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "alpha2",
+    "errorReason": "alpha2_case_incorrecto",
+    "body": {
+      "to": "test_neg11@yopmail.com",
+      "cc": [],
+      "subject": "Test alpha2 mayusculas",
+      "alpha2": "MX",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test alpha2 mayusculas",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-011",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #011",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-12: Template incorrecto ('payops-payment-pending')",
+    "type": "negative",
+    "expectedStatus": [400, 404, 422],
+    "errorField": "template",
+    "errorReason": "template_incorrecto",
+    "body": {
+      "to": "test_neg12@yopmail.com",
+      "cc": [],
+      "subject": "Test template incorrecto",
+      "alpha2": "mx",
+      "template": "payops-payment-pending",
+      "attachment": null,
+      "message": "Test template incorrecto",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-012",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #012",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-13: Template vacío",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "template",
+    "errorReason": "template_vacio",
+    "body": {
+      "to": "test_neg13@yopmail.com",
+      "cc": [],
+      "subject": "Test template vacio",
+      "alpha2": "mx",
+      "template": "",
+      "attachment": null,
+      "message": "Test template vacio",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-013",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #013",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-14: Campo 'to' es número (tipo incorrecto)",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "to",
+    "errorReason": "tipo_incorrecto",
+    "body": {
+      "to": 12345678,
+      "cc": [],
+      "subject": "Test tipo incorrecto",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test tipo incorrecto",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-014",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #014",
+        "symbol_currency_destination": "$", "amount_destination": 1000, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 17000,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-15: amount_destination negativo",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "data.amount_destination",
+    "errorReason": "valor_negativo",
+    "body": {
+      "to": "test_neg15@yopmail.com",
+      "cc": [],
+      "subject": "Test monto negativo",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test monto negativo",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-015",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #015",
+        "symbol_currency_destination": "$", "amount_destination": -500, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": -8500,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  },
+  {
+    "name": "NEG-16: amount_destination cero",
+    "type": "negative",
+    "expectedStatus": [400, 422],
+    "errorField": "data.amount_destination",
+    "errorReason": "valor_cero",
+    "body": {
+      "to": "test_neg16@yopmail.com",
+      "cc": [],
+      "subject": "Test monto cero",
+      "alpha2": "mx",
+      "template": "payops-payment-completed",
+      "attachment": null,
+      "message": "Test monto cero",
+      "data": {
+        "provider_name": "Proveedor Test", "provider_country": "CHINA", "provider_bank": "Test Bank",
+        "provider_account": "123456789", "company_name": "TEST S.A.", "payment_reference": "#TRF-NEG-016",
+        "transfer_date": "13 mar 2026 · 10:00 am", "currency_source": "MXN", "import_name": "Test #016",
+        "symbol_currency_destination": "$", "amount_destination": 0, "currency_destination": "USD",
+        "trm_rate": 17.00, "amount_source": 0,
+        "provider_url": "https://app.finkargo.com.mx/auth/login",
+        "download_url": "https://app.finkargo.com.mx/auth/login",
+        "another_payment_url": "https://app.finkargo.com.mx/auth/login"
+      }
+    }
+  }
+]
