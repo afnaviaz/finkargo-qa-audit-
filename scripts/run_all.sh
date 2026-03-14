@@ -11,7 +11,7 @@ SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
 
 # Ruta al nuevo archivo de escenarios (Data-Driven)
-DATA_FILE="$SCRIPTS_DIR/test/Data/escenarios.json"
+DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "❌ ERROR: No se encontró $CONFIG_PATH"
