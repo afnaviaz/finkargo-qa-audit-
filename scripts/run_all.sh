@@ -113,10 +113,12 @@ with open('$JSON_REPORT', 'w') as f:
 "
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE 4.6
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE 4.6 (CON EVIDENCIA)
 # ==========================================
-echo "🤖 Analizando fallos con Claude..."
+echo "🤖 Analizando fallos con Claude y extrayendo Trace IDs..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
+
+# Extraemos los fallos del reporte unificado de Newman
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
@@ -131,33 +133,88 @@ api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 failed_data_path = os.environ.get("FAILED_DATA_PATH")
 
 try:
-    with open(failed_data_path, "r") as f: failed_data = json.load(f)
-    fallos = [{"n": i, "req": f.get('source', {}).get('name', 'N/A')[:50], "err": f.get('error', {}).get('message', 'N/A')[:100]} for i, f in enumerate(failed_data[:15], 1)]
+    with open(failed_data_path, "r") as f: 
+        failed_data = json.load(f)
+    
+    # Preparamos los datos para Claude, limitando a los primeros 15 fallos para no saturar el token limit
+    # 'assertion' contiene el nombre del test que ahora lleva el ID
+    fallos = []
+    for i, f in enumerate(failed_data[:15], 1):
+        fallos.append({
+            "n": i,
+            "req": f.get('source', {}).get('name', 'N/A')[:60],
+            "assertion": f.get('at', 'N/A'), # Aquí viene el nombre del test con el ID
+            "err": f.get('error', {}).get('message', 'N/A')[:100]
+        })
     
     payload = {
-        "model": "claude-sonnet-4-6",
-        "max_tokens": 1500,
-        "messages": [{"role": "user", "content": f"Analiza estos fallos y responde SOLO un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"}]
+        "model": "claude-3-5-sonnet-20240620", # Usamos la versión más estable compatible con el formato
+        "max_tokens": 2000,
+        "messages": [{
+            "role": "user", 
+            "content": f"Analiza estos fallos de auditoría de API. Responde SOLO un array JSON con este formato: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"
+        }]
     }
 
     result = subprocess.run([
         "curl", "-s", "https://api.anthropic.com/v1/messages",
-        "-H", f"x-api-key: {api_key}", "-H", "anthropic-version: 2023-06-01",
-        "-H", "content-type: application/json", "-d", json.dumps(payload)
+        "-H", f"x-api-key: {api_key}", 
+        "-H", "anthropic-version: 2023-06-01",
+        "-H", "content-type: application/json", 
+        "-d", json.dumps(payload)
     ], capture_output=True, text=True)
 
     res_json = json.loads(result.stdout)
     raw_text = res_json["content"][0]["text"]
     rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
     
-    rows = "".join([f"<tr><td>{r['num']}</td><td><b>{fallos[int(r['num'])-1]['req']}</b></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>" for r in rca_list])
-    html = f'<h4>🔍 Análisis Inteligente (Claude 4.6)</h4><table border="1"><thead><tr><th>#</th><th>Request</th><th>Causa</th><th>Accion</th></tr></thead><tbody>{rows}</tbody></table>'
-    with open("claude_report.html", "w") as f: f.write(html.replace("\n", ""))
+    # Construcción de la tabla HTML con columna de Evidencia (Trace ID)
+    rows = ""
+    for r in rca_list:
+        idx = int(r['num']) - 1
+        full_assertion = fallos[idx]['assertion']
+        
+        # Extraemos el ID usando Regex del nombre del test: "ID: 61fc0ca9-..."
+        trace_match = re.search(r'ID: ([a-z0-9-]+)', full_assertion)
+        trace_id = trace_match.group(1) if trace_match else "SIN_ID"
+        
+        # Formateamos la fila
+        rows += f"""
+        <tr>
+            <td style='text-align:center'>{r['num']}</td>
+            <td><b>{fallos[idx]['req']}</b></td>
+            <td><code>{trace_id}</code></td>
+            <td>{r['causa']}</td>
+            <td><i>{r['accion']}</i></td>
+        </tr>"""
+
+    html = f'''
+    <h4>🔍 Análisis de Auditoría con Evidencia Digital (Claude 4.6)</h4>
+    <table border="1" style="border-collapse: collapse; width: 100%;">
+        <thead>
+            <tr style="background-color: #f2f2f2;">
+                <th>#</th>
+                <th>Escenario Evaluado</th>
+                <th>Trace ID (Evidencia)</th>
+                <th>Causa Raíz</th>
+                <th>Acción Recomendada</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows}
+        </tbody>
+    </table>
+    <p><small>Nota: Los Trace IDs "SIN_ID" indican errores de nivel servidor (500) donde no se generó transacción.</small></p>
+    '''
+    
+    with open("claude_report.html", "w") as f: 
+        f.write(html.replace("\n", ""))
+        
 except Exception as e:
-    with open("claude_report.html", "w") as f: f.write(f"<p>Error en análisis: {e}</p>")
+    with open("claude_report.html", "w") as f: 
+        f.write(f"<p>⚠️ Error en el análisis de evidencia: {str(e)}</p>")
 PYEOF
 fi
-
 # ==========================================
 # 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
 # ==========================================
