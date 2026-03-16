@@ -112,9 +112,9 @@ with open('$JSON_REPORT', 'w') as f:
     json.dump(final_data, f)
 "
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PRO)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PROFESIONAL)
 # ==========================================
-echo "🤖 Generando reporte de auditoría inteligente..."
+echo "🤖 Generando reporte de auditoría técnica avanzada..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
 python3 -c "import json, os; 
@@ -130,7 +130,7 @@ import json, subprocess, os, re
 def call_claude(api_key, model_id, prompt):
     payload = {
         "model": model_id,
-        "max_tokens": 1500,
+        "max_tokens": 3000,
         "messages": [{"role": "user", "content": prompt}]
     }
     res = subprocess.run([
@@ -149,77 +149,57 @@ try:
     with open(failed_data_path, "r") as f: 
         failed_data = json.load(f)
     
-    fallos = []
+    fallos_info = []
     for i, f in enumerate(failed_data[:15], 1):
-        fallos.append({
-            "n": i,
-            "req": f.get('source', {}).get('name', 'N/A')[:60],
-            "assertion": f.get('at', 'N/A'),
-            "err": f.get('error', {}).get('message', 'N/A')[:100]
+        assertion_text = f.get('at', 'N/A')
+        trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_text)
+        
+        fallos_info.append({
+            "escenario": f.get('source', {}).get('name', 'N/A'),
+            "evidencia_id": trace_match.group(1) if trace_match else "SIN_ID",
+            "error_tecnico": f.get('error', {}).get('message', 'N/A')
         })
     
-    prompt = f"Analiza estos fallos de API. Responde SOLO un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Datos: {json.dumps(fallos)}"
+    # Prompt de Auditoría Senior
+    prompt = f"""
+    Actúa como un Auditor de QA Senior especializado en Ciberseguridad y APIs. 
+    Analiza estos fallos y genera un REPORTE HTML para desarrolladores.
     
-    # Intento de modelos en cascada (Fallback)
-    models = ["claude-sonnet-4-5"]
+    CLASIFICA los fallos en estas 3 secciones:
+    1. VULNERABILIDADES DE NEGOCIO (Ej: Montos negativos o en cero que devuelven 200 OK).
+    2. FALLOS DE ESQUEMA Y TIPADO (Ej: Emails inválidos o números donde debe haber texto).
+    3. INESTABILIDAD DEL SERVIDOR (Ej: Errores 500/502).
+
+    Para cada tabla, incluye: Escenario, Trace ID (Evidencia), Falla Técnica y Acción Correctiva.
+    Usa estilos profesionales (Header azul #2980b9, celdas claras).
+    DATOS: {json.dumps(fallos_info)}
+    """
+    
+    # Multi-model Fallback para evitar errores de tier
+    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229", "claude-3-opus-20240229"]
     res_json = {}
     for model in models:
         res_json = call_claude(api_key, model, prompt)
         if "content" in res_json: break
     
     if "content" not in res_json:
-        raise Exception(f"Error de API en todos los modelos: {res_json.get('error', {}).get('message', 'Unknown')}")
+        api_err = res_json.get("error", {}).get("message", "Unknown API error")
+        raise Exception(f"Falla de comunicación con Claude: {api_err}")
 
-    raw_text = res_json["content"][0]["text"]
-    rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
+    raw_html = res_json["content"][0]["text"]
     
-    rows = ""
-    for r in rca_list:
-        idx = int(r['num']) - 1
-        full_assertion = fallos[idx]['assertion']
-        trace_match = re.search(r'ID: ([a-z0-9-]+)', full_assertion)
-        trace_id = trace_match.group(1) if trace_match else "N/A"
-        
-        # Color según el tipo de error
-        color = "#e74c3c" if "500" in fallos[idx]['err'] else "#f39c12"
-        
-        rows += f"""
-        <tr>
-            <td style='text-align:center; padding:10px; border:1px solid #ddd;'>{r['num']}</td>
-            <td style='padding:10px; border:1px solid #ddd;'><b>{fallos[idx]['req']}</b></td>
-            <td style='padding:10px; border:1px solid #ddd;'><code style='background:#f4f4f4; color:#c0392b;'>{trace_id}</code></td>
-            <td style='padding:10px; border:1px solid #ddd;'>{r['causa']}</td>
-            <td style='padding:10px; border:1px solid #ddd; background:#f9f9f9;'>{r['accion']}</td>
-        </tr>"""
+    # Extraer el HTML puro del bloque de respuesta de Claude
+    clean_html = re.sub(r'```html|```', '', raw_html).strip()
 
-    html = f'''
-    <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-        <h3 style="color: #2980b9; margin-top: 0;">🔍 Panel de Hallazgos de Auditoría (IA)</h3>
-        <p>Análisis automatizado de fallas detectadas en la ejecución actual.</p>
-        <table style="width:100%; border-collapse:collapse; font-size: 13px;">
-            <thead>
-                <tr style="background:#2980b9; color:white; text-align:left;">
-                    <th style="padding:12px; border:1px solid #2980b9;">#</th>
-                    <th style="padding:12px; border:1px solid #2980b9;">Escenario</th>
-                    <th style="padding:12px; border:1px solid #2980b9;">Evidencia (Trace ID)</th>
-                    <th style="padding:12px; border:1px solid #2980b9;">Causa Raíz</th>
-                    <th style="padding:12px; border:1px solid #2980b9;">Acción Recomendada</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows}
-            </tbody>
-        </table>
-        <p style="font-size: 11px; color: #7f8c8d; margin-top: 15px;">
-            <b>Nota:</b> Los IDs "N/A" indican fallos de infraestructura donde no se alcanzó la capa de persistencia.
-        </p>
-    </div>'''
-    
-    with open("claude_report.html", "w") as f: f.write(html.replace("\n", ""))
+    # Guardar reporte
+    with open("claude_report.html", "w") as f: 
+        f.write(clean_html.replace("\n", " "))
         
 except Exception as e:
     with open("claude_report.html", "w") as f: 
-        f.write(f"<div style='border:1px solid red; padding:10px; color:red;'>⚠️ Error en Auditoría Inteligente: {str(e)}</div>")
+        f.write(f"<div style='border:1px solid red; padding:15px; border-radius:5px;'>")
+        f.write(f"<h4 style='color:red; margin:0;'>⚠️ Fallo en Generación de Informe Agéntico</h4>")
+        f.write(f"<p style='font-size:12px;'>Detalle: {str(e)}</p></div>")
 PYEOF
 fi
 # ==========================================
