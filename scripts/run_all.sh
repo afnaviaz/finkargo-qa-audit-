@@ -112,9 +112,9 @@ with open('$JSON_REPORT', 'w') as f:
     json.dump(final_data, f)
 "
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PROFESIONAL)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PRO - FORMATO REPORTE)
 # ==========================================
-echo "🤖 Generando reporte de auditoría técnica avanzada..."
+echo "🤖 Generando Informe de Auditoría Técnica para Confluence..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
 python3 -c "import json, os; 
@@ -130,7 +130,7 @@ import json, subprocess, os, re
 def call_claude(api_key, model_id, prompt):
     payload = {
         "model": model_id,
-        "max_tokens": 3000,
+        "max_tokens": 3500,
         "messages": [{"role": "user", "content": prompt}]
     }
     res = subprocess.run([
@@ -149,57 +149,58 @@ try:
     with open(failed_data_path, "r") as f: 
         failed_data = json.load(f)
     
-    fallos_info = []
-    for i, f in enumerate(failed_data[:15], 1):
+    # Extraemos la información relevante de cada fallo
+    fallos_raw = []
+    for f in failed_data[:20]:
         assertion_text = f.get('at', 'N/A')
         trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_text)
         
-        fallos_info.append({
+        fallos_raw.append({
             "escenario": f.get('source', {}).get('name', 'N/A'),
-            "evidencia_id": trace_match.group(1) if trace_match else "SIN_ID",
-            "error_tecnico": f.get('error', {}).get('message', 'N/A')
+            "error": f.get('error', {}).get('message', 'N/A'),
+            "trace_id": trace_match.group(1) if trace_match else "SIN_ID"
         })
-    
-    # Prompt de Auditoría Senior
-    prompt = f"""
-    Actúa como un Auditor de QA Senior especializado en Ciberseguridad y APIs. 
-    Analiza estos fallos y genera un REPORTE HTML para desarrolladores.
-    
-    CLASIFICA los fallos en estas 3 secciones:
-    1. VULNERABILIDADES DE NEGOCIO (Ej: Montos negativos o en cero que devuelven 200 OK).
-    2. FALLOS DE ESQUEMA Y TIPADO (Ej: Emails inválidos o números donde debe haber texto).
-    3. INESTABILIDAD DEL SERVIDOR (Ej: Errores 500/502).
 
-    Para cada tabla, incluye: Escenario, Trace ID (Evidencia), Falla Técnica y Acción Correctiva.
-    Usa estilos profesionales (Header azul #2980b9, celdas claras).
-    DATOS: {json.dumps(fallos_info)}
+    # PROMPT PARA GENERAR EL REPORTE ESTRUCTURADO
+    prompt = f"""
+    Genera un 'Informe de Auditoría Técnica' profesional en HTML. 
+    Usa como base estos datos de fallos: {json.dumps(fallos_raw)}
+    
+    El reporte DEBE tener esta estructura exacta:
+    1. Título: Informe de Auditoría: ms-communicator (Validación de Esquema)
+    2. Resumen de Ejecución: Total escenarios: 21, Fallas: {len(fallos_raw)}.
+    3. Sección: 🚨 Hallazgos de Alta Prioridad.
+    4. Categoría 1: Fallas de Integridad Financiera (Reglas de Negocio). Mostrar tabla con Escenario, Dato Enviado (dedúcelo del error), Resultado (200 OK), Hallazgo y Evidencia (ID).
+    5. Categoría 2: Ausencia de Validación de Tipos y Formatos (Data Schema). Mostrar tabla con Escenario, Campo, Dato Enviado, Hallazgo y Evidencia (ID).
+    6. Categoría 3: Inestabilidad y Crashing (Errores 500). Mostrar tabla con Escenario, Condición de Fallo, Resultado (500), Hallazgo y Evidencia.
+    7. Sección: 🛠️ Recomendaciones Técnicas para Desarrollo (Joi/Zod, Sanitización, Error Handler).
+
+    REGLAS DE ESTILO:
+    - Usa etiquetas <table>, <tr>, <th>, <td> con estilos inline.
+    - Headers de tabla en fondo azul oscuro (#2c3e50) y texto blanco.
+    - Filas alternas en gris claro.
+    - Responde SOLO el código HTML limpio, sin bloques de código markdown.
     """
     
-    # Multi-model Fallback para evitar errores de tier
-    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229", "claude-3-opus-20240229"]
+    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229"]
     res_json = {}
     for model in models:
         res_json = call_claude(api_key, model, prompt)
         if "content" in res_json: break
     
-    if "content" not in res_json:
-        api_err = res_json.get("error", {}).get("message", "Unknown API error")
-        raise Exception(f"Falla de comunicación con Claude: {api_err}")
-
-    raw_html = res_json["content"][0]["text"]
-    
-    # Extraer el HTML puro del bloque de respuesta de Claude
-    clean_html = re.sub(r'```html|```', '', raw_html).strip()
-
-    # Guardar reporte
-    with open("claude_report.html", "w") as f: 
-        f.write(clean_html.replace("\n", " "))
+    if "content" in res_json:
+        html_report = res_json["content"][0]["text"]
+        # Limpiar posibles etiquetas markdown si Claude las incluye
+        html_report = html_report.replace("```html", "").replace("```", "").strip()
         
+        with open("claude_report.html", "w") as f: 
+            f.write(html_report.replace("\n", " "))
+    else:
+        raise Exception("No se pudo obtener respuesta de Claude")
+
 except Exception as e:
     with open("claude_report.html", "w") as f: 
-        f.write(f"<div style='border:1px solid red; padding:15px; border-radius:5px;'>")
-        f.write(f"<h4 style='color:red; margin:0;'>⚠️ Fallo en Generación de Informe Agéntico</h4>")
-        f.write(f"<p style='font-size:12px;'>Detalle: {str(e)}</p></div>")
+        f.write(f"<p style='color:red;'>Error al generar reporte: {str(e)}</p>")
 PYEOF
 fi
 # ==========================================
