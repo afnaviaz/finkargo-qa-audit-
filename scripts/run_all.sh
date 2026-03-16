@@ -182,7 +182,7 @@ try:
     - Responde SOLO el código HTML limpio, sin bloques de código markdown.
     """
     
-    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229"]
+    models = ["claude-4-5"]
     res_json = {}
     for model in models:
         res_json = call_claude(api_key, model, prompt)
