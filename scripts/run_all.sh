@@ -113,12 +113,11 @@ with open('$JSON_REPORT', 'w') as f:
 "
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE 4.6 (CON EVIDENCIA)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE 3.5 (CON EVIDENCIA)
 # ==========================================
 echo "🤖 Analizando fallos con Claude y extrayendo Trace IDs..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
-# Extraemos los fallos del reporte unificado de Newman
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
@@ -136,24 +135,24 @@ try:
     with open(failed_data_path, "r") as f: 
         failed_data = json.load(f)
     
-    # Preparamos los datos para Claude, limitando a los primeros 15 fallos para no saturar el token limit
-    # 'assertion' contiene el nombre del test que ahora lleva el ID
     fallos = []
     for i, f in enumerate(failed_data[:15], 1):
+        # Capturamos el nombre del test donde inyectamos el ID
+        assertion_name = f.get('at', 'N/A')
         fallos.append({
             "n": i,
             "req": f.get('source', {}).get('name', 'N/A')[:60],
-            "assertion": f.get('at', 'N/A'), # Aquí viene el nombre del test con el ID
+            "assertion": assertion_name,
             "err": f.get('error', {}).get('message', 'N/A')[:100]
         })
     
+    # Prompt optimizado para evitar respuestas vacías
+    prompt = f"Analiza estos fallos de API. Responde UNICAMENTE un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Datos: {json.dumps(fallos)}"
+    
     payload = {
-        "model": "claude-3-5-sonnet-20240620", # Usamos la versión más estable compatible con el formato
+        "model": "claude-3-5-sonnet-20240620",
         "max_tokens": 2000,
-        "messages": [{
-            "role": "user", 
-            "content": f"Analiza estos fallos de auditoría de API. Responde SOLO un array JSON con este formato: [{{'num':1,'causa':'...','accion':'...'}}]. Fallos: {json.dumps(fallos)}"
-        }]
+        "messages": [{"role": "user", "content": prompt}]
     }
 
     result = subprocess.run([
@@ -165,54 +164,36 @@ try:
     ], capture_output=True, text=True)
 
     res_json = json.loads(result.stdout)
-    raw_text = res_json["content"][0]["text"]
-    rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
     
-    # Construcción de la tabla HTML con columna de Evidencia (Trace ID)
+    # VALIDACIÓN DE RESPUESTA DE API
+    if "content" not in res_json:
+        error_msg = res_json.get("error", {}).get("message", "Unknown API Error")
+        raise Exception(f"Claude API Error: {error_msg}")
+
+    raw_text = res_json["content"][0]["text"]
+    rca_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+    if not rca_match:
+        raise Exception("No se encontró el formato JSON en la respuesta de Claude")
+        
+    rca_list = json.loads(rca_match.group())
+    
     rows = ""
     for r in rca_list:
         idx = int(r['num']) - 1
         full_assertion = fallos[idx]['assertion']
-        
-        # Extraemos el ID usando Regex del nombre del test: "ID: 61fc0ca9-..."
+        # Regex para extraer el ID: 61fc0ca9-27df...
         trace_match = re.search(r'ID: ([a-z0-9-]+)', full_assertion)
-        trace_id = trace_match.group(1) if trace_match else "SIN_ID"
+        trace_id = trace_match.group(1) if trace_match else "N/A"
         
-        # Formateamos la fila
-        rows += f"""
-        <tr>
-            <td style='text-align:center'>{r['num']}</td>
-            <td><b>{fallos[idx]['req']}</b></td>
-            <td><code>{trace_id}</code></td>
-            <td>{r['causa']}</td>
-            <td><i>{r['accion']}</i></td>
-        </tr>"""
+        rows += f"<tr><td style='text-align:center'>{r['num']}</td><td><b>{fallos[idx]['req']}</b></td><td><code>{trace_id}</code></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
 
-    html = f'''
-    <h4>🔍 Análisis de Auditoría con Evidencia Digital (Claude 4.6)</h4>
-    <table border="1" style="border-collapse: collapse; width: 100%;">
-        <thead>
-            <tr style="background-color: #f2f2f2;">
-                <th>#</th>
-                <th>Escenario Evaluado</th>
-                <th>Trace ID (Evidencia)</th>
-                <th>Causa Raíz</th>
-                <th>Acción Recomendada</th>
-            </tr>
-        </thead>
-        <tbody>
-            {rows}
-        </tbody>
-    </table>
-    <p><small>Nota: Los Trace IDs "SIN_ID" indican errores de nivel servidor (500) donde no se generó transacción.</small></p>
-    '''
+    html = f'<h4>🔍 Reporte de Evidencia Digital</h4><table border="1" style="width:100%; border-collapse:collapse;"><tr style="background:#f2f2f2;"><th>#</th><th>Escenario</th><th>Trace ID</th><th>Causa Raíz</th><th>Acción</th></tr>{rows}</table>'
     
-    with open("claude_report.html", "w") as f: 
-        f.write(html.replace("\n", ""))
+    with open("claude_report.html", "w") as f: f.write(html.replace("\n", ""))
         
 except Exception as e:
     with open("claude_report.html", "w") as f: 
-        f.write(f"<p>⚠️ Error en el análisis de evidencia: {str(e)}</p>")
+        f.write(f"<p style='color:red;'>⚠️ Error en análisis: {str(e)}</p>")
 PYEOF
 fi
 # ==========================================
