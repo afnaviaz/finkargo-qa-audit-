@@ -67,52 +67,8 @@ TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
 # ==========================================
 # 3. EJECUCIÓN NEWMAN (CON DATA-DRIVEN)
 # ==========================================
-rm -f "$SCRIPTS_DIR/results_*.json"
-rm -f "claude_report.html"
-
-# Configurar parámetro de datos si el archivo existe
-DATA_PARAM=""
-if [ -f "$DATA_FILE" ]; then
-    echo "📊 Escenarios detectados en: $DATA_FILE"
-    DATA_PARAM="-d $DATA_FILE"
-else
-    echo "ℹ️ Ejecutando sin archivo de datos (Modo estándar)"
-fi
-
-if [ "$PROYECTO" == "ms-auth" ]; then
-    FOLDERS=$(get_config "$PROYECTO" "" "all_folders")
-    echo "🔐 Auditoría MS-AUTH con módulos: $FOLDERS"
-    
-    for f in $FOLDERS; do
-        echo "🚀 Ejecutando: $f"
-        newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
-          -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-          --folder "$f" $DATA_PARAM --insecure -r cli,json \
-          --reporter-json-export "$SCRIPTS_DIR/results_${f// /_}.json" | tee -a "$LOG_FILE"
-    done
-else
-    FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
-    echo "🚀 Ejecutando: $FOLDER_NAME"
-    newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
-      -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-      --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json \
-      --reporter-json-export "$JSON_REPORT" | tee "$LOG_FILE"
-fi
-
-# Unificar reportes JSON para Claude
-python3 -c "
-import json, os, glob
-files = glob.glob('$SCRIPTS_DIR/results_*.json')
-final_data = {'run': {'failures': []}}
-for f in files:
-    with open(f, 'r') as j:
-        data = json.load(j)
-        final_data['run']['failures'].extend(data.get('run', {}).get('failures', []))
-with open('$JSON_REPORT', 'w') as f:
-    json.dump(final_data, f)
-"
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PRO - FORMATO REPORTE)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PROFESIONAL)
 # ==========================================
 echo "🤖 Generando Informe de Auditoría Técnica para Confluence..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
@@ -130,17 +86,20 @@ import json, subprocess, os, re
 def call_claude(api_key, model_id, prompt):
     payload = {
         "model": model_id,
-        "max_tokens": 3500,
+        "max_tokens": 4000,
         "messages": [{"role": "user", "content": prompt}]
     }
     res = subprocess.run([
-        "curl", "-s", "https://api.anthropic.com/v1/messages",
+        "curl", "-s", "[https://api.anthropic.com/v1/messages](https://api.anthropic.com/v1/messages)",
         "-H", f"x-api-key: {api_key}", 
         "-H", "anthropic-version: 2023-06-01",
         "-H", "content-type: application/json", 
         "-d", json.dumps(payload)
     ], capture_output=True, text=True)
-    return json.loads(res.stdout)
+    try:
+        return json.loads(res.stdout)
+    except:
+        return {"error": {"message": "Invalid JSON response from API"}}
 
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 failed_data_path = os.environ.get("FAILED_DATA_PATH")
@@ -149,60 +108,63 @@ try:
     with open(failed_data_path, "r") as f: 
         failed_data = json.load(f)
     
-    # Extraemos la información relevante de cada fallo
     fallos_raw = []
     for f in failed_data[:20]:
         assertion_text = f.get('at', 'N/A')
         trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_text)
-        
         fallos_raw.append({
             "escenario": f.get('source', {}).get('name', 'N/A'),
-            "error": f.get('error', {}).get('message', 'N/A'),
+            "error_msg": f.get('error', {}).get('message', 'N/A'),
             "trace_id": trace_match.group(1) if trace_match else "SIN_ID"
         })
 
-    # PROMPT PARA GENERAR EL REPORTE ESTRUCTURADO
     prompt = f"""
-    Genera un 'Informe de Auditoría Técnica' profesional en HTML. 
-    Usa como base estos datos de fallos: {json.dumps(fallos_raw)}
+    Eres un Auditor Senior de Ciberseguridad. Genera un INFORME DE AUDITORÍA TÉCNICA en HTML puro.
+    Dátos de fallos: {json.dumps(fallos_raw)}
     
-    El reporte DEBE tener esta estructura exacta:
-    1. Título: Informe de Auditoría: ms-communicator (Validación de Esquema)
-    2. Resumen de Ejecución: Total escenarios: 21, Fallas: {len(fallos_raw)}.
-    3. Sección: 🚨 Hallazgos de Alta Prioridad.
-    4. Categoría 1: Fallas de Integridad Financiera (Reglas de Negocio). Mostrar tabla con Escenario, Dato Enviado (dedúcelo del error), Resultado (200 OK), Hallazgo y Evidencia (ID).
-    5. Categoría 2: Ausencia de Validación de Tipos y Formatos (Data Schema). Mostrar tabla con Escenario, Campo, Dato Enviado, Hallazgo y Evidencia (ID).
-    6. Categoría 3: Inestabilidad y Crashing (Errores 500). Mostrar tabla con Escenario, Condición de Fallo, Resultado (500), Hallazgo y Evidencia.
-    7. Sección: 🛠️ Recomendaciones Técnicas para Desarrollo (Joi/Zod, Sanitización, Error Handler).
+    ESTRUCTURA OBLIGATORIA:
+    1. Título H2: Informe de Auditoría: ms-communicator (Validación de Esquema)
+    2. Resumen de Ejecución: Total escenarios: 21, Fallas detectadas: {len(fallos_raw)}.
+    3. Categoría 1: Fallas de Integridad Financiera (Reglas de Negocio). Tabla con Escenario, Dato Enviado, Resultado (200 OK), Hallazgo y Evidencia (ID).
+    4. Categoría 2: Ausencia de Validación de Esquema. Tabla con Escenario, Campo, Dato Enviado, Hallazgo y Evidencia (ID).
+    5. Categoría 3: Inestabilidad y Crashing (Errores 500). Tabla con Escenario, Condición de Fallo, Resultado (500), Hallazgo y Evidencia.
+    6. Sección: Recomendaciones Técnicas (Joi/Zod, Sanitización, Error Handler).
 
-    REGLAS DE ESTILO:
-    - Usa etiquetas <table>, <tr>, <th>, <td> con estilos inline.
-    - Headers de tabla en fondo azul oscuro (#2c3e50) y texto blanco.
-    - Filas alternas en gris claro.
-    - Responde SOLO el código HTML limpio, sin bloques de código markdown.
+    ESTILO: 
+    - No uses etiquetas ```html. Responde directamente con el código <div>...</div>.
+    - Headers de tabla fondo #2c3e50, letras blancas.
+    - Usa estilos inline para todo.
     """
     
-    models = ["claude-4-5"]
-    res_json = {}
-    for model in models:
-        res_json = call_claude(api_key, model, prompt)
-        if "content" in res_json: break
+    # Intentamos modelos en cascada desde el más nuevo al más compatible
+    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229", "claude-2.1"]
+    final_html = ""
     
-    if "content" in res_json:
-        html_report = res_json["content"][0]["text"]
-        # Limpiar posibles etiquetas markdown si Claude las incluye
-        html_report = html_report.replace("```html", "").replace("```", "").strip()
-        
+    for model in models:
+        response = call_claude(api_key, model, prompt)
+        if "content" in response:
+            final_html = response["content"][0]["text"]
+            break
+        else:
+            print(f"DEBUG: Falló modelo {model}: {response.get('error', {}).get('message')}")
+    
+    if final_html:
+        # Limpieza de seguridad
+        final_html = final_html.replace("```html", "").replace("```", "").strip()
         with open("claude_report.html", "w") as f: 
-            f.write(html_report.replace("\n", " "))
+            f.write(final_html.replace("\n", " "))
     else:
-        raise Exception("No se pudo obtener respuesta de Claude")
+        raise Exception("Ningún modelo de Claude respondió. Revisa permisos y API Key.")
 
 except Exception as e:
     with open("claude_report.html", "w") as f: 
-        f.write(f"<p style='color:red;'>Error al generar reporte: {str(e)}</p>")
+        f.write(f"<p style='color:red;'>⚠️ Error Crítico en Auditoría: {str(e)}</p>")
 PYEOF
 fi
+
+
+
+
 # ==========================================
 # 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
 # ==========================================
