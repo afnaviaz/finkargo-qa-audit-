@@ -113,11 +113,12 @@ with open('$JSON_REPORT', 'w') as f:
 "
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE 3.5 (FIXED)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PROFESIONAL)
 # ==========================================
-echo "🤖 Analizando fallos con Claude y extrayendo Trace IDs..."
+echo "🤖 Generando Informe de Auditoría Técnica para Confluence..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
+# Extraemos fallos del reporte de Newman
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
@@ -128,6 +129,24 @@ if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
     ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re
 
+def call_claude(api_key, model_id, prompt):
+    payload = {
+        "model": model_id,
+        "max_tokens": 4000,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    res = subprocess.run([
+        "curl", "-s", "https://api.anthropic.com/v1/messages",
+        "-H", f"x-api-key: {api_key}", 
+        "-H", "anthropic-version: 2023-06-01",
+        "-H", "content-type: application/json", 
+        "-d", json.dumps(payload)
+    ], capture_output=True, text=True)
+    try:
+        return json.loads(res.stdout)
+    except:
+        return {"error": {"message": "Respuesta inválida de la API"}}
+
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 failed_data_path = os.environ.get("FAILED_DATA_PATH")
 
@@ -135,72 +154,60 @@ try:
     with open(failed_data_path, "r") as f: 
         failed_data = json.load(f)
     
-    fallos = []
-    for i, f in enumerate(failed_data[:15], 1):
+    fallos_info = []
+    for f in failed_data:
         assertion_name = f.get('at', 'N/A')
-        fallos.append({
-            "n": i,
-            "req": f.get('source', {}).get('name', 'N/A')[:60],
-            "assertion": assertion_name,
-            "err": f.get('error', {}).get('message', 'N/A')[:100]
+        trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_name)
+        fallos_info.append({
+            "escenario": f.get('source', {}).get('name', 'N/A'),
+            "error_msg": f.get('error', {}).get('message', 'N/A'),
+            "trace_id": trace_match.group(1) if trace_match else "SIN_ID"
         })
-    
-    # Usamos un modelo con ID estándar para evitar el error previo
-    payload = {
-        "model": "claude-sonnet-4-5",
-        "max_tokens": 1500,
-        "messages": [{
-            "role": "user", 
-            "content": f"Analiza estos fallos de API. Responde SOLO un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Datos: {json.dumps(fallos)}"
-        }]
-    }
 
-    result = subprocess.run([
-        "curl", "-s", "https://api.anthropic.com/v1/messages",
-        "-H", f"x-api-key: {api_key}", 
-        "-H", "anthropic-version: 2023-06-01",
-        "-H", "content-type: application/json", 
-        "-d", json.dumps(payload)
-    ], capture_output=True, text=True)
-
-    res_json = json.loads(result.stdout)
+    prompt = f"""
+    Eres un Auditor Senior de QA y Ciberseguridad. Tu objetivo es transformar estos datos técnicos en un INFORME DE AUDITORÍA PROFESIONAL para Confluence.
     
-    if "content" not in res_json:
-        # Fallback por si el ID de modelo sigue fallando, intentamos el ID de Opus o Haiku
-        raise Exception(f"Error de API: {res_json.get('error', {}).get('message', 'Unknown')}")
+    DATOS DE ENTRADA: {json.dumps(fallos_info)}
 
-    raw_text = res_json["content"][0]["text"]
-    rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
+    INSTRUCCIONES DE FORMATO (HTML PURO):
+    1. Título: <h2>Informe de Auditoría: ms-communicator (Validación de Esquema)</h2>
+    2. Resumen: <p><b>Total escenarios:</b> 21 | <b>Fallas detectadas:</b> {len(fallos_info)}</p>
+    3. SECCIÓN: 🚨 Hallazgos de Alta Prioridad.
     
-    rows = ""
-    for r in rca_list:
-        idx = int(r['num']) - 1
-        full_assertion = fallos[idx]['assertion']
-        # Buscamos el ID que inyectaste en Postman: ID: 6dd7e8a3...
-        trace_match = re.search(r'ID: ([a-z0-9-]+)', full_assertion)
-        trace_id = trace_match.group(1) if trace_match else "N/A"
-        
-        rows += f"""
-        <tr>
-            <td style='text-align:center'>{r['num']}</td>
-            <td><b>{fallos[idx]['req']}</b></td>
-            <td><code>{trace_id}</code></td>
-            <td>{r['causa']}</td>
-            <td>{r['accion']}</td>
-        </tr>"""
+    CATEGORÍAS A MOSTRAR (Solo si hay datos para ellas):
+    - 'Fallas de Reglas de Negocio': Para NEG-15, NEG-16 y montos. Tabla: Escenario, Dato Enviado, Resultado, Hallazgo, Evidencia(ID).
+    - 'Ausencia de Validación de Tipos y Formatos': Para NEG-06, 07, 08, 14. Tabla: Escenario, Campo, Dato, Resultado, Hallazgo, Evidencia(ID).
+    - 'Inestabilidad y Crashing (Errores 500)': Para NEG-05, 09, 10, 11. Tabla: Escenario, Condición de Fallo, Resultado, Hallazgo, Evidencia.
 
-    html = f'''
-    <h4>🔍 Auditoría de Evidencia Digital</h4>
-    <table border="1" style="width:100%; border-collapse:collapse;">
-        <tr style="background:#f2f2f2;"><th>#</th><th>Escenario</th><th>Trace ID (Evidencia)</th><th>Causa Raíz</th><th>Acción</th></tr>
-        {rows}
-    </table>'''
+    RECOMENDACIONES: Incluye una sección final '🛠️ Recomendaciones Técnicas' (Joi/Zod, Sanitización, Error Handler).
+
+    ESTILO VISUAL:
+    - No uses markdown (etiquetas ```).
+    - Tablas con width="100%", cellpadding="8", border="1".
+    - Headers de tabla con background-color: #2c3e50; color: white;
+    - Celdas con vertical-align: middle;
+    """
     
-    with open("claude_report.html", "w") as f: f.write(html.replace("\n", ""))
-        
+    # Fallback de modelos
+    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229"]
+    final_html = ""
+    for model in models:
+        response = call_claude(api_key, model, prompt)
+        if "content" in response:
+            final_html = response["content"][0]["text"]
+            break
+    
+    if final_html:
+        # Limpieza por si Claude incluye texto extra
+        clean_html = re.sub(r'```html|```', '', final_html).strip()
+        with open("claude_report.html", "w") as f: 
+            f.write(clean_html.replace("\n", " "))
+    else:
+        raise Exception("Sin respuesta de Claude.")
+
 except Exception as e:
     with open("claude_report.html", "w") as f: 
-        f.write(f"<p style='color:red;'>⚠️ Error en análisis: {str(e)}</p>")
+        f.write(f"<p style='color:red;'>⚠️ Error en análisis IA: {str(e)}</p>")
 PYEOF
 fi
 # ==========================================
