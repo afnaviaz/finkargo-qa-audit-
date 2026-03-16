@@ -189,7 +189,7 @@ try:
     """
     
     # Fallback de modelos
-    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229"]
+    models = ["claude-sonnet-4-5"]
     final_html = ""
     for model in models:
         response = call_claude(api_key, model, prompt)
