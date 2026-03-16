@@ -64,34 +64,41 @@ LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
 
-
 # ==========================================
 # 3. EJECUCIÓN NEWMAN (DATA-DRIVEN)
 # ==========================================
-echo "🚀 Iniciando ejecución de Newman con escenarios..."
+echo "🚀 Iniciando ejecución de Newman..."
 mkdir -p "$SCRIPTS_DIR"
 
-# Intentamos ejecutar con el archivo local si existe, sino con el UID
+# --- Lógica de Colección ---
 RUN_TARGET="$COLLECTION_PATH"
 if [ ! -f "$COLLECTION_PATH" ]; then
-    echo "⚠️ Colección local no encontrada, intentando con UID: $COLLECTION_UID"
+    echo "⚠️ Colección local no encontrada, usando UID: $COLLECTION_UID"
     RUN_TARGET="$COLLECTION_UID"
 fi
 
+# --- Lógica de Ambiente (EL FIX AQUÍ) ---
+ENV_TARGET="$ENV_PATH"
+if [ ! -f "$ENV_PATH" ]; then
+    echo "⚠️ Ambiente local no encontrado, usando UID: $ENV_UID"
+    ENV_TARGET="$ENV_UID"
+fi
+
+# Ejecutamos Newman
+# Nota: agregamos el API Key de Postman si usas UIDs
 newman run "$RUN_TARGET" \
-    -e "$ENV_PATH" \
+    -e "$ENV_TARGET" \
     -d "$DATA_PATH" \
     --reporters cli,json \
     --reporter-json-export "$JSON_REPORT" \
     --suppress-exit-code | tee "$LOG_FILE"
 
 if [ ! -f "$JSON_REPORT" ]; then
-    echo "❌ ERROR: No se pudo generar el reporte JSON en $JSON_REPORT"
+    echo "❌ ERROR: No se pudo generar el reporte JSON."
     exit 1
 fi
 
-echo "✅ Ejecución finalizada. Reporte generado."
-
+echo "✅ Ejecución finalizada correctamente."
 
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PROFESIONAL)
