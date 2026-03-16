@@ -147,7 +147,7 @@ try:
     
     # Usamos un modelo con ID estándar para evitar el error previo
     payload = {
-        "model": "claude-3-sonnet-20240229", 
+        "model": "claude-sonnet-4-5",
         "max_tokens": 1500,
         "messages": [{
             "role": "user", 
