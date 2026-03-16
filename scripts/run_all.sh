@@ -113,7 +113,7 @@ with open('$JSON_REPORT', 'w') as f:
 "
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE 3.5 (CON EVIDENCIA)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE 3.5 (FIXED)
 # ==========================================
 echo "🤖 Analizando fallos con Claude y extrayendo Trace IDs..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
@@ -126,7 +126,7 @@ if os.path.exists('$JSON_REPORT'):
 
 if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
     ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
-import json, subprocess, os, re, sys
+import json, subprocess, os, re
 
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 failed_data_path = os.environ.get("FAILED_DATA_PATH")
@@ -137,7 +137,6 @@ try:
     
     fallos = []
     for i, f in enumerate(failed_data[:15], 1):
-        # Capturamos el nombre del test donde inyectamos el ID
         assertion_name = f.get('at', 'N/A')
         fallos.append({
             "n": i,
@@ -146,13 +145,14 @@ try:
             "err": f.get('error', {}).get('message', 'N/A')[:100]
         })
     
-    # Prompt optimizado para evitar respuestas vacías
-    prompt = f"Analiza estos fallos de API. Responde UNICAMENTE un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Datos: {json.dumps(fallos)}"
-    
+    # Usamos un modelo con ID estándar para evitar el error previo
     payload = {
-        "model": "claude-3-5-sonnet-20240620",
-        "max_tokens": 2000,
-        "messages": [{"role": "user", "content": prompt}]
+        "model": "claude-3-sonnet-20240229", 
+        "max_tokens": 1500,
+        "messages": [{
+            "role": "user", 
+            "content": f"Analiza estos fallos de API. Responde SOLO un array JSON: [{{'num':1,'causa':'...','accion':'...'}}]. Datos: {json.dumps(fallos)}"
+        }]
     }
 
     result = subprocess.run([
@@ -165,29 +165,36 @@ try:
 
     res_json = json.loads(result.stdout)
     
-    # VALIDACIÓN DE RESPUESTA DE API
     if "content" not in res_json:
-        error_msg = res_json.get("error", {}).get("message", "Unknown API Error")
-        raise Exception(f"Claude API Error: {error_msg}")
+        # Fallback por si el ID de modelo sigue fallando, intentamos el ID de Opus o Haiku
+        raise Exception(f"Error de API: {res_json.get('error', {}).get('message', 'Unknown')}")
 
     raw_text = res_json["content"][0]["text"]
-    rca_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
-    if not rca_match:
-        raise Exception("No se encontró el formato JSON en la respuesta de Claude")
-        
-    rca_list = json.loads(rca_match.group())
+    rca_list = json.loads(re.search(r'\[.*\]', raw_text, re.DOTALL).group())
     
     rows = ""
     for r in rca_list:
         idx = int(r['num']) - 1
         full_assertion = fallos[idx]['assertion']
-        # Regex para extraer el ID: 61fc0ca9-27df...
+        # Buscamos el ID que inyectaste en Postman: ID: 6dd7e8a3...
         trace_match = re.search(r'ID: ([a-z0-9-]+)', full_assertion)
         trace_id = trace_match.group(1) if trace_match else "N/A"
         
-        rows += f"<tr><td style='text-align:center'>{r['num']}</td><td><b>{fallos[idx]['req']}</b></td><td><code>{trace_id}</code></td><td>{r['causa']}</td><td>{r['accion']}</td></tr>"
+        rows += f"""
+        <tr>
+            <td style='text-align:center'>{r['num']}</td>
+            <td><b>{fallos[idx]['req']}</b></td>
+            <td><code>{trace_id}</code></td>
+            <td>{r['causa']}</td>
+            <td>{r['accion']}</td>
+        </tr>"""
 
-    html = f'<h4>🔍 Reporte de Evidencia Digital</h4><table border="1" style="width:100%; border-collapse:collapse;"><tr style="background:#f2f2f2;"><th>#</th><th>Escenario</th><th>Trace ID</th><th>Causa Raíz</th><th>Acción</th></tr>{rows}</table>'
+    html = f'''
+    <h4>🔍 Auditoría de Evidencia Digital</h4>
+    <table border="1" style="width:100%; border-collapse:collapse;">
+        <tr style="background:#f2f2f2;"><th>#</th><th>Escenario</th><th>Trace ID (Evidencia)</th><th>Causa Raíz</th><th>Acción</th></tr>
+        {rows}
+    </table>'''
     
     with open("claude_report.html", "w") as f: f.write(html.replace("\n", ""))
         
