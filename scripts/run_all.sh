@@ -64,9 +64,32 @@ LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
 
+
 # ==========================================
-# 3. EJECUCIÓN NEWMAN (CON DATA-DRIVEN)
+# 3. EJECUCIÓN NEWMAN (DATA-DRIVEN)
 # ==========================================
+echo "🚀 Iniciando ejecución de Newman con escenarios..."
+
+# Aseguramos que la carpeta de reportes exista
+mkdir -p "$SCRIPTS_DIR"
+
+newman run "$COLLECTION_PATH" \
+    -e "$ENV_PATH" \
+    -d "$DATA_PATH" \
+    --reporters cli,json \
+    --reporter-json-export "$JSON_REPORT" \
+    --suppress-exit-code
+
+# Verificación de seguridad: ¿Se generó el reporte?
+if [ ! -f "$JSON_REPORT" ]; then
+    echo "❌ ERROR: No se pudo generar el reporte JSON en $JSON_REPORT"
+    exit 1
+fi
+
+echo "✅ Ejecución finalizada. Reporte generado."
+
+
+
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PROFESIONAL)
 # ==========================================
