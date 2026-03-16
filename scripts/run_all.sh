@@ -189,7 +189,7 @@ try:
     """
     
     # Fallback de modelos
-    models = ["sonnet-4.6"]
+    models = ["claude-sonnet-4-5"]
     final_html = ""
     for model in models:
         response = call_claude(api_key, model, prompt)
