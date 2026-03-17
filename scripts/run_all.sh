@@ -113,48 +113,42 @@ with open('$JSON_REPORT', 'w') as f:
 "
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (ISTQB AUDIT MODE)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA DINÁMICA)
 # ==========================================
-echo "🤖 Analizando cobertura técnica e ISTQB..."
+echo "🤖 Generando Informe de Auditoría Inteligente..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
-# Paso A: Extraer fallos (como ya lo hacíamos)
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
     with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
 "
 
-# Paso B: Ejecutar Python para el reporte híbrido (Datos + Análisis)
-if [ -f "$DATA_PATH" ]; then
-    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" ORIGIN_DATA_PATH="$DATA_PATH" python3 << 'PYEOF'
+if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
+    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re
 
 def call_claude(api_key, model_id, prompt):
-    payload = {"model": model_id, "max_tokens": 4000, "messages": [{"role": "user", "content": prompt}]}
-    res = subprocess.run(["curl", "-s", "https://api.anthropic.com/v1/messages", "-H", f"x-api-key: {api_key}", "-H", "anthropic-version: 2023-06-01", "-H", "content-type: application/json", "-d", json.dumps(payload)], capture_output=True, text=True)
+    payload = {
+        "model": model_id,
+        "max_tokens": 4000,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    res = subprocess.run([
+        "curl", "-s", "https://api.anthropic.com/v1/messages",
+        "-H", f"x-api-key: {api_key}", 
+        "-H", "anthropic-version: 2023-06-01",
+        "-H", "content-type: application/json", 
+        "-d", json.dumps(payload)
+    ], capture_output=True, text=True)
     try: return json.loads(res.stdout)
-    except: return {}
+    except: return {"error": {"message": "Invalid API Response"}}
 
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-failed_path = os.environ.get("FAILED_DATA_PATH")
-origin_path = os.environ.get("ORIGIN_DATA_PATH")
+failed_data_path = os.environ.get("FAILED_DATA_PATH")
 
 try:
-    # 1. Leer Escenarios Totales para el resumen ISTQB
-    with open(origin_path, "r") as f:
-        all_scenarios = json.load(f)
-    
-    total_count = len(all_scenarios)
-    # Contamos por prefijo de nombre de escenario
-    tecnicas = {
-        "Happy Path (EP)": len([s for s in all_scenarios if "EP-" in s['scenario_name']]),
-        "Boundary Value Analysis (VL)": len([s for s in all_scenarios if "VL-" in s['scenario_name']]),
-        "Error Guessing / Negative (NEG)": len([s for s in all_scenarios if "NEG-" in s['scenario_name']])
-    }
-
-    # 2. Leer Fallos Reales
-    with open(failed_path, "r") as f:
+    with open(failed_data_path, "r") as f: 
         failed_data = json.load(f)
     
     fallos_puros = []
@@ -162,31 +156,33 @@ try:
         assertion_text = f.get('at', 'N/A')
         trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_text)
         fallos_puros.append({
-            "escenario": f.get('source', {}).get('name', 'N/A'),
-            "error": f.get('error', {}).get('message', 'N/A'),
-            "id": trace_match.group(1) if trace_match else "SIN_ID"
+            "request_name": f.get('source', {}).get('name', 'N/A'),
+            "error_detail": f.get('error', {}).get('message', 'N/A'),
+            "evidence_id": trace_match.group(1) if trace_match else "N/A"
         })
 
-    # 3. Prompt Maestro ISTQB
+    # PROMPT GENÉRICO Y AGENTE DE AUDITORÍA
     prompt = f"""
-    Eres un QA Lead Certificado ISTQB. Genera un INFORME DE AUDITORÍA en HTML.
-    
-    RESUMEN DE COBERTURA:
-    - Total Escenarios: {total_count}
-    - Distribución: {json.dumps(tecnicas)}
-    
-    DATOS DE FALLOS: {json.dumps(fallos_puros)}
+    Actúa como un Auditor Senior de QA y Ciberseguridad. Tu tarea es analizar un set de fallos técnicos y generar un INFORME DE HALLAZGOS para Confluence.
 
-    ESTRUCTURA OBLIGATORIA:
-    1. Título H2: 📑 Reporte de Auditoría Técnica ms-communicator
-    2. Sección 'Métricas de Ejecución': Tabla con la cantidad de escenarios ejecutados por técnica ISTQB (Happy Path, Boundary Value Analysis, Error Guessing).
-    3. Sección 'Hallazgos Críticos': Las dos tablas de Vulnerabilidades (200 OK) e Inestabilidad (500) que definimos antes.
-    4. Conclusión: Explica por qué fallaron las reglas de negocio desde la perspectiva de 'Test-First' y 'Defensive Programming'.
+    DATOS DE FALLOS (JSON): {json.dumps(fallos_puros)}
 
-    ESTILO: HTML puro, tablas con header azul oscuro #2c3e50, texto blanco, sin etiquetas markdown.
+    INSTRUCCIONES DE ANÁLISIS:
+    1. Identifica patrones en los errores y AGRÚPALOS por categorías lógicas (ej: 'Seguridad', 'Estabilidad', 'Contrato de API', 'Reglas de Negocio', etc.). No uses categorías fijas, créalas según lo que veas en los datos.
+    2. Para cada categoría, genera una tabla HTML que resuma los casos afectados.
+    3. Para cada fallo, deduce e infiere el 'Hallazgo' y la 'Acción Recomendada' basándote en el nombre del escenario y el error técnico.
+
+    REGLAS DE FORMATO (HTML):
+    - Título principal: <h2>Informe de Auditoría Técnica</h2>
+    - Resumen ejecutivo: <p><b>Fallas analizadas:</b> {len(fallos_puros)}</p>
+    - Estilo de tablas: width="100%", border="1", cellpadding="8", estilos inline.
+    - Headers de tabla: fondo #2c3e50, color blanco.
+    - RECOMENDACIONES: Incluye una sección final '🛠️ Recomendaciones Técnicas' con soluciones de ingeniería (ej: validadores, manejo de errores, sanitización).
+    - NO uses Markdown (etiquetas ```).
+    - NO incluyas información de SLA.
     """
 
-    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229"]
+    models = ["claude-sonnet-4-5"]
     final_html = ""
     for m in models:
         resp = call_claude(api_key, m, prompt)
@@ -197,11 +193,10 @@ try:
     if final_html:
         clean_html = re.sub(r'```html|```', '', final_html).strip()
         with open("claude_report.html", "w") as f: f.write(clean_html.replace("\n", " "))
-    else:
-        raise Exception("Error de respuesta")
+    else: raise Exception("Claude no respondió.")
 
 except Exception as e:
-    with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error en reporte ISTQB: {str(e)}</p>")
+    with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error: {str(e)}</p>")
 PYEOF
 fi
 # ==========================================
