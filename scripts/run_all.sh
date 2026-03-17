@@ -168,16 +168,21 @@ try:
     DATOS DE FALLOS (JSON): {json.dumps(fallos_puros)}
 
     INSTRUCCIONES DE ANÁLISIS:
-    1. Identifica patrones en los errores y AGRÚPALOS por categorías lógicas (ej: 'Seguridad', 'Estabilidad', 'Contrato de API', 'Reglas de Negocio', etc.). No uses categorías fijas, créalas según lo que veas en los datos.
+    1. Identifica patrones en los errores y AGRÚPALOS por categorías lógicas (ej: 'Seguridad', 'Estabilidad', 'Contrato de API', 'Reglas de Negocio', etc.). 
+    No uses categorías fijas, créalas según lo que veas en los datos.
     2. Para cada categoría, genera una tabla HTML que resuma los casos afectados.
     3. Para cada fallo, deduce e infiere el 'Hallazgo' y la 'Acción Recomendada' basándote en el nombre del escenario y el error técnico.
+    4. El informe debe ser claro, conciso y orientado a la acción, dirigido a un equipo de desarrollo con conocimientos técnicos.
+    5. Prioriza los hallazgos según su impacto potencial (ej: seguridad > estabilidad > otros).
+    6. Evita información redundante y enfócate en insights accionables.
+    7. El resultado final debe ser un bloque de HTML listo para pegar en Confluence, con tablas bien formateadas y un resumen ejecutivo al inicio.
+    8. debes permitir evidencir e identificar los datos de prueba con los que falla el test, para que el equipo de desarrollo pueda reproducirlo fácilmente.
 
     REGLAS DE FORMATO (HTML):
     - Título principal: <h2>Informe de Auditoría Técnica</h2>
     - Resumen ejecutivo: <p><b>Fallas analizadas:</b> {len(fallos_puros)}</p>
     - Estilo de tablas: width="100%", border="1", cellpadding="8", estilos inline.
     - Headers de tabla: fondo #2c3e50, color blanco.
-    - RECOMENDACIONES: Incluye una sección final '🛠️ Recomendaciones Técnicas' con soluciones de ingeniería (ej: validadores, manejo de errores, sanitización).
     - NO uses Markdown (etiquetas ```).
     - NO incluyas información de SLA.
     """
