@@ -113,101 +113,95 @@ with open('$JSON_REPORT', 'w') as f:
 "
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA PROFESIONAL)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (ISTQB AUDIT MODE)
 # ==========================================
-echo "🤖 Generando Informe de Auditoría Técnica para Confluence..."
+echo "🤖 Analizando cobertura técnica e ISTQB..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
-# Extraemos fallos del reporte de Newman
+# Paso A: Extraer fallos (como ya lo hacíamos)
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
     with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
 "
 
-if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
-    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
+# Paso B: Ejecutar Python para el reporte híbrido (Datos + Análisis)
+if [ -f "$DATA_PATH" ]; then
+    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" ORIGIN_DATA_PATH="$DATA_PATH" python3 << 'PYEOF'
 import json, subprocess, os, re
 
 def call_claude(api_key, model_id, prompt):
-    payload = {
-        "model": model_id,
-        "max_tokens": 4000,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    res = subprocess.run([
-        "curl", "-s", "https://api.anthropic.com/v1/messages",
-        "-H", f"x-api-key: {api_key}", 
-        "-H", "anthropic-version: 2023-06-01",
-        "-H", "content-type: application/json", 
-        "-d", json.dumps(payload)
-    ], capture_output=True, text=True)
-    try:
-        return json.loads(res.stdout)
-    except:
-        return {"error": {"message": "Respuesta inválida de la API"}}
+    payload = {"model": model_id, "max_tokens": 4000, "messages": [{"role": "user", "content": prompt}]}
+    res = subprocess.run(["curl", "-s", "https://api.anthropic.com/v1/messages", "-H", f"x-api-key: {api_key}", "-H", "anthropic-version: 2023-06-01", "-H", "content-type: application/json", "-d", json.dumps(payload)], capture_output=True, text=True)
+    try: return json.loads(res.stdout)
+    except: return {}
 
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-failed_data_path = os.environ.get("FAILED_DATA_PATH")
+failed_path = os.environ.get("FAILED_DATA_PATH")
+origin_path = os.environ.get("ORIGIN_DATA_PATH")
 
 try:
-    with open(failed_data_path, "r") as f: 
+    # 1. Leer Escenarios Totales para el resumen ISTQB
+    with open(origin_path, "r") as f:
+        all_scenarios = json.load(f)
+    
+    total_count = len(all_scenarios)
+    # Contamos por prefijo de nombre de escenario
+    tecnicas = {
+        "Happy Path (EP)": len([s for s in all_scenarios if "EP-" in s['scenario_name']]),
+        "Boundary Value Analysis (VL)": len([s for s in all_scenarios if "VL-" in s['scenario_name']]),
+        "Error Guessing / Negative (NEG)": len([s for s in all_scenarios if "NEG-" in s['scenario_name']])
+    }
+
+    # 2. Leer Fallos Reales
+    with open(failed_path, "r") as f:
         failed_data = json.load(f)
     
-    fallos_info = []
+    fallos_puros = []
     for f in failed_data:
-        assertion_name = f.get('at', 'N/A')
-        trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_name)
-        fallos_info.append({
+        assertion_text = f.get('at', 'N/A')
+        trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_text)
+        fallos_puros.append({
             "escenario": f.get('source', {}).get('name', 'N/A'),
-            "error_msg": f.get('error', {}).get('message', 'N/A'),
-            "trace_id": trace_match.group(1) if trace_match else "SIN_ID"
+            "error": f.get('error', {}).get('message', 'N/A'),
+            "id": trace_match.group(1) if trace_match else "SIN_ID"
         })
 
+    # 3. Prompt Maestro ISTQB
     prompt = f"""
-    Eres un Auditor Senior de QA y Ciberseguridad. Tu objetivo es transformar estos datos técnicos en un INFORME DE AUDITORÍA PROFESIONAL para Confluence.
+    Eres un QA Lead Certificado ISTQB. Genera un INFORME DE AUDITORÍA en HTML.
     
-    DATOS DE ENTRADA: {json.dumps(fallos_info)}
-
-    INSTRUCCIONES DE FORMATO (HTML PURO):
-    1. Título: <h2>Informe de Auditoría: ms-communicator (Validación de Esquema)</h2>
-    2. Resumen: <p><b>Total escenarios:</b> 21 | <b>Fallas detectadas:</b> {len(fallos_info)}</p>
-    3. SECCIÓN: 🚨 Hallazgos de Alta Prioridad.
+    RESUMEN DE COBERTURA:
+    - Total Escenarios: {total_count}
+    - Distribución: {json.dumps(tecnicas)}
     
-    CATEGORÍAS A MOSTRAR (Solo si hay datos para ellas):
-    - 'Fallas de Reglas de Negocio': Para NEG-15, NEG-16 y montos. Tabla: Escenario, Dato Enviado, Resultado, Hallazgo, Evidencia(ID).
-    - 'Ausencia de Validación de Tipos y Formatos': Para NEG-06, 07, 08, 14. Tabla: Escenario, Campo, Dato, Resultado, Hallazgo, Evidencia(ID).
-    - 'Inestabilidad y Crashing (Errores 500)': Para NEG-05, 09, 10, 11. Tabla: Escenario, Condición de Fallo, Resultado, Hallazgo, Evidencia.
+    DATOS DE FALLOS: {json.dumps(fallos_puros)}
 
-    RECOMENDACIONES: Incluye una sección final '🛠️ Recomendaciones Técnicas' (Joi/Zod, Sanitización, Error Handler).
+    ESTRUCTURA OBLIGATORIA:
+    1. Título H2: 📑 Reporte de Auditoría Técnica ms-communicator
+    2. Sección 'Métricas de Ejecución': Tabla con la cantidad de escenarios ejecutados por técnica ISTQB (Happy Path, Boundary Value Analysis, Error Guessing).
+    3. Sección 'Hallazgos Críticos': Las dos tablas de Vulnerabilidades (200 OK) e Inestabilidad (500) que definimos antes.
+    4. Conclusión: Explica por qué fallaron las reglas de negocio desde la perspectiva de 'Test-First' y 'Defensive Programming'.
 
-    ESTILO VISUAL:
-    - No uses markdown (etiquetas ```).
-    - Tablas con width="100%", cellpadding="8", border="1".
-    - Headers de tabla con background-color: #2c3e50; color: white;
-    - Celdas con vertical-align: middle;
+    ESTILO: HTML puro, tablas con header azul oscuro #2c3e50, texto blanco, sin etiquetas markdown.
     """
-    
-    # Fallback de modelos
-    models = ["claude-sonnet-4-5"]
+
+    models = ["claude-3-5-sonnet-20240620", "claude-3-sonnet-20240229"]
     final_html = ""
-    for model in models:
-        response = call_claude(api_key, model, prompt)
-        if "content" in response:
-            final_html = response["content"][0]["text"]
+    for m in models:
+        resp = call_claude(api_key, m, prompt)
+        if "content" in resp:
+            final_html = resp["content"][0]["text"]
             break
     
     if final_html:
-        # Limpieza por si Claude incluye texto extra
         clean_html = re.sub(r'```html|```', '', final_html).strip()
-        with open("claude_report.html", "w") as f: 
-            f.write(clean_html.replace("\n", " "))
+        with open("claude_report.html", "w") as f: f.write(clean_html.replace("\n", " "))
     else:
-        raise Exception("Sin respuesta de Claude.")
+        raise Exception("Error de respuesta")
 
 except Exception as e:
-    with open("claude_report.html", "w") as f: 
-        f.write(f"<p style='color:red;'>⚠️ Error en análisis IA: {str(e)}</p>")
+    with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error en reporte ISTQB: {str(e)}</p>")
 PYEOF
 fi
 # ==========================================
