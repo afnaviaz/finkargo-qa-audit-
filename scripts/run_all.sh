@@ -91,7 +91,25 @@ if [ "$PROYECTO" == "ms-auth" ]; then
           --reporter-json-export "$SCRIPTS_DIR/results_${f// /_}.json" | tee -a "$LOG_FILE"
     done
 else
+    # ✅ FIX: Si el proyecto no tiene separación por país, usar el primer folder disponible
     FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
+
+    if [ -z "$FOLDER_NAME" ]; then
+        FOLDER_NAME=$(python3 -c "
+import json
+with open('$CONFIG_PATH', encoding='utf-8') as f:
+    data = json.load(f)
+folders = data.get('$PROYECTO', {}).get('folders', {})
+print(list(folders.values())[0] if folders else '')
+")
+        echo "ℹ️ Proyecto sin separación por país — usando folder: $FOLDER_NAME"
+    fi
+
+    if [ -z "$FOLDER_NAME" ]; then
+        echo "❌ ERROR: No se encontró el folder para: $PROYECTO"
+        exit 1
+    fi
+
     echo "🚀 Ejecutando: $FOLDER_NAME"
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
@@ -161,7 +179,6 @@ try:
             "evidence_id": trace_match.group(1) if trace_match else "N/A"
         })
 
-    # PROMPT GENÉRICO Y AGENTE DE AUDITORÍA
     prompt = f"""
     Actúa como un Auditor Senior de QA y Ciberseguridad. Tu tarea es analizar un set de fallos técnicos y generar un INFORME DE HALLAZGOS para Confluence.
 
@@ -176,7 +193,7 @@ try:
     5. Prioriza los hallazgos según su impacto potencial (ej: seguridad > estabilidad > otros).
     6. Evita información redundante y enfócate en insights accionables.
     7. El resultado final debe ser un bloque de HTML listo para pegar en Confluence, con tablas bien formateadas y un resumen ejecutivo al inicio.
-    8. debes permitir evidencir e identificar los datos de prueba con los que falla el test, para que el equipo de desarrollo pueda reproducirlo fácilmente.
+    8. Debes permitir evidenciar e identificar los datos de prueba con los que falla el test, para que el equipo de desarrollo pueda reproducirlo fácilmente.
 
     REGLAS DE FORMATO (HTML):
     - Título principal: <h2>Informe de Auditoría Técnica</h2>
@@ -204,6 +221,7 @@ except Exception as e:
     with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error: {str(e)}</p>")
 PYEOF
 fi
+
 # ==========================================
 # 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
 # ==========================================
@@ -235,8 +253,13 @@ if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ] || [ "$PROJ
     PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 fi
 
-# Preparar Reporte Final
+# ✅ FIX: Fallback si el resumen CLI está vacío — mostrar el log completo
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+
+if [ -z "$SUMMARY_CLI" ]; then
+    SUMMARY_CLI=$(cat "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+fi
+
 CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados.</p>" )
 HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 
