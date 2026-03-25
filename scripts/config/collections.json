@@ -49,11 +49,11 @@
 },
 
 "INTEGRATIONS": {
-    "collection_id": "19456853-0fd0250c-bf05-4ea7-a0a8-249198a27a78",
+    "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
     "folders": {
-      "Happy path": "INTEGRATIONS"
+        "Happy path": "Happy path"
     }
-  }
+}
 }
  
 
