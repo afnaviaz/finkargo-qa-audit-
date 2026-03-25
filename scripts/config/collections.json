@@ -39,6 +39,13 @@
     "folders": {
       "Send mail": "Send mail"
   }
+},
+
+"PAGOS": {
+    "collection_id": "19456853-f14dfded-ed86-4f73-b5da-0534315775ea",
+    "folders": {
+      "Happy path": "Happy path"
+  }
 }
 
 
