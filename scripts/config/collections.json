@@ -50,10 +50,12 @@
 
 "INTEGRATIONS": {
     "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
+    "multi_folder": true,
     "folders": {
-        "Happy path": "Happy path"
+      "SUPRA INTEGRATION": "SUPRA INTEGRATION",
+      "SUPRA EPAYMENTS": "SUPRA EPAYMENTS",
+      "SUPRA WALLET - EPAYMENTS": "SUPRA WALLET - EPAYMENTS"
     }
+  }
 }
-}
- 
 
