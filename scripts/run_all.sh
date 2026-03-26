@@ -33,9 +33,14 @@ try:
     if '$3' == 'id':
         print(data['$1']['collection_id'])
     elif '$3' == 'all_folders':
-        print(' '.join(data['$1']['folders'].values()))
+        print('\n'.join(data['$1']['folders'].values()))
+    elif '$3' == 'multi_folder':
+        print('true' if data['$1'].get('multi_folder', False) else 'false')
+    elif '$3' == 'first_folder':
+        folders = data['$1']['folders']
+        print(list(folders.values())[0] if folders else '')
     else:
-        print(data['$1']['folders']['$2'])
+        print(data['$1']['folders'].get('$2', ''))
 except Exception:
     sys.exit(1)
 "
@@ -79,29 +84,26 @@ else
     echo "ℹ️ Ejecutando sin archivo de datos (Modo estándar)"
 fi
 
-if [ "$PROYECTO" == "ms-auth" ]; then
-    FOLDERS=$(get_config "$PROYECTO" "" "all_folders")
-    echo "🔐 Auditoría MS-AUTH con módulos: $FOLDERS"
-    
-    for f in $FOLDERS; do
-        echo "🚀 Ejecutando: $f"
+# ✅ Leer dinámicamente si el proyecto tiene múltiples folders
+IS_MULTI=$(get_config "$PROYECTO" "" "multi_folder")
+
+if [ "$IS_MULTI" == "true" ]; then
+    # Proyectos con múltiples folders — ejecutar cada uno por separado
+    echo "🗂️ Auditoría multi-folder: $PROYECTO"
+    while IFS= read -r folder; do
+        [ -z "$folder" ] && continue
+        echo "🚀 Ejecutando folder: $folder"
         newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
           -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-          --folder "$f" $DATA_PARAM --insecure -r cli,json \
-          --reporter-json-export "$SCRIPTS_DIR/results_${f// /_}.json" | tee -a "$LOG_FILE"
-    done
+          --folder "$folder" $DATA_PARAM --insecure -r cli,json \
+          --reporter-json-export "$SCRIPTS_DIR/results_${folder// /_}.json" | tee -a "$LOG_FILE"
+    done < <(get_config "$PROYECTO" "" "all_folders")
 else
-    # ✅ FIX: Si el proyecto no tiene separación por país, usar el primer folder disponible
+    # Proyectos con un solo folder — buscar por PAIS_INPUT o usar el primero disponible
     FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
 
     if [ -z "$FOLDER_NAME" ]; then
-        FOLDER_NAME=$(python3 -c "
-import json
-with open('$CONFIG_PATH', encoding='utf-8') as f:
-    data = json.load(f)
-folders = data.get('$PROYECTO', {}).get('folders', {})
-print(list(folders.values())[0] if folders else '')
-")
+        FOLDER_NAME=$(get_config "$PROYECTO" "" "first_folder")
         echo "ℹ️ Proyecto sin separación por país — usando folder: $FOLDER_NAME"
     fi
 
@@ -110,7 +112,7 @@ print(list(folders.values())[0] if folders else '')
         exit 1
     fi
 
-    echo "🚀 Ejecutando: $FOLDER_NAME"
+    echo "🚀 Ejecutando folder: $FOLDER_NAME"
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
       --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json \
@@ -253,7 +255,7 @@ if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ] || [ "$PROJ
     PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 fi
 
-# ✅ FIX: Fallback si el resumen CLI está vacío — mostrar el log completo
+# ✅ Fallback si el resumen CLI está vacío — mostrar el log completo
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
 
 if [ -z "$SUMMARY_CLI" ]; then
