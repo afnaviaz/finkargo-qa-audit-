@@ -48,6 +48,14 @@
   }
 },
 
+"OB v2 - MX": {
+    "collection_id": "17667316-0c00fabe-d3b5-462f-9186-c8cdcd6c7658",
+    "folders": {
+      "ow": "Flow"
+  }
+},
+
+
 "INTEGRATIONS": {
     "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
     "multi_folder": true,
