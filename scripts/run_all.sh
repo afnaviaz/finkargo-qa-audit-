@@ -146,14 +146,20 @@ RESPONSE_PUB=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: app
 NEW_PAGE_ID=$(echo "$RESPONSE_PUB" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 
 # ==========================================
-# 6. SECCIÓN 6: ADJUNTAR REPORTE VISUAL (HTMLEXTRA)
+# 6. ADJUNTAR REPORTE VISUAL (HTMLEXTRA)
 # ==========================================
 if [ -n "$NEW_PAGE_ID" ] && [ "$NEW_PAGE_ID" != "None" ] && [ -f "$HTML_NEWMAN" ]; then
     echo "📎 Adjuntando reporte htmlextra a la página ID: $NEW_PAGE_ID"
-    curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H "X-Atlassian-Token: nocheck" \
+    
+    # Subir el archivo como adjunto a la página de Confluence
+    curl -s -u "$CONF_USER:$CONF_TOKEN" \
+         -X POST \
+         -H "X-Atlassian-Token: nocheck" \
          -F "file=@$HTML_NEWMAN" \
-         -F "comment=Reporte htmlextra automático" \
+         -F "comment=Reporte detallado Newman generado automáticamente" \
          "$CONF_BASE_URL/rest/api/content/$NEW_PAGE_ID/attachments" | python3 -m json.tool
+    
+    echo "✅ Todo finalizado. Revisa Confluence para ver el reporte y el adjunto."
+else
+    echo "⚠️ No se pudo adjuntar el reporte (Página no encontrada o archivo faltante)."
 fi
-
-echo "✅ Auditoría finalizada con éxito."
