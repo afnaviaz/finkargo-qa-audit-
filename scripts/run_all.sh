@@ -33,9 +33,14 @@ try:
     if '$3' == 'id':
         print(data['$1']['collection_id'])
     elif '$3' == 'all_folders':
-        print(' '.join(data['$1']['folders'].values()))
+        print('\n'.join(data['$1']['folders'].values()))
+    elif '$3' == 'multi_folder':
+        print('true' if data['$1'].get('multi_folder', False) else 'false')
+    elif '$3' == 'first_folder':
+        folders = data['$1']['folders']
+        print(list(folders.values())[0] if folders else '')
     else:
-        print(data['$1']['folders']['$2'])
+        print(data['$1']['folders'].get('$2', ''))
 except Exception:
     sys.exit(1)
 "
@@ -79,20 +84,35 @@ else
     echo "ℹ️ Ejecutando sin archivo de datos (Modo estándar)"
 fi
 
-if [ "$PROYECTO" == "ms-auth" ]; then
-    FOLDERS=$(get_config "$PROYECTO" "" "all_folders")
-    echo "🔐 Auditoría MS-AUTH con módulos: $FOLDERS"
-    
-    for f in $FOLDERS; do
-        echo "🚀 Ejecutando: $f"
+# ✅ Leer dinámicamente si el proyecto tiene múltiples folders
+IS_MULTI=$(get_config "$PROYECTO" "" "multi_folder")
+
+if [ "$IS_MULTI" == "true" ]; then
+    # Proyectos con múltiples folders — ejecutar cada uno por separado
+    echo "🗂️ Auditoría multi-folder: $PROYECTO"
+    while IFS= read -r folder; do
+        [ -z "$folder" ] && continue
+        echo "🚀 Ejecutando folder: $folder"
         newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
           -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-          --folder "$f" $DATA_PARAM --insecure -r cli,json \
-          --reporter-json-export "$SCRIPTS_DIR/results_${f// /_}.json" | tee -a "$LOG_FILE"
-    done
+          --folder "$folder" $DATA_PARAM --insecure -r cli,json \
+          --reporter-json-export "$SCRIPTS_DIR/results_${folder// /_}.json" | tee -a "$LOG_FILE"
+    done < <(get_config "$PROYECTO" "" "all_folders")
 else
+    # Proyectos con un solo folder — buscar por PAIS_INPUT o usar el primero disponible
     FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
-    echo "🚀 Ejecutando: $FOLDER_NAME"
+
+    if [ -z "$FOLDER_NAME" ]; then
+        FOLDER_NAME=$(get_config "$PROYECTO" "" "first_folder")
+        echo "ℹ️ Proyecto sin separación por país — usando folder: $FOLDER_NAME"
+    fi
+
+    if [ -z "$FOLDER_NAME" ]; then
+        echo "❌ ERROR: No se encontró el folder para: $PROYECTO"
+        exit 1
+    fi
+
+    echo "🚀 Ejecutando folder: $FOLDER_NAME"
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
       --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json \
@@ -161,7 +181,6 @@ try:
             "evidence_id": trace_match.group(1) if trace_match else "N/A"
         })
 
-    # PROMPT GENÉRICO Y AGENTE DE AUDITORÍA
     prompt = f"""
     Actúa como un Auditor Senior de QA y Ciberseguridad. Tu tarea es analizar un set de fallos técnicos y generar un INFORME DE HALLAZGOS para Confluence.
 
@@ -176,7 +195,7 @@ try:
     5. Prioriza los hallazgos según su impacto potencial (ej: seguridad > estabilidad > otros).
     6. Evita información redundante y enfócate en insights accionables.
     7. El resultado final debe ser un bloque de HTML listo para pegar en Confluence, con tablas bien formateadas y un resumen ejecutivo al inicio.
-    8. debes permitir evidencir e identificar los datos de prueba con los que falla el test, para que el equipo de desarrollo pueda reproducirlo fácilmente.
+    8. Debes permitir evidenciar e identificar los datos de prueba con los que falla el test, para que el equipo de desarrollo pueda reproducirlo fácilmente.
 
     REGLAS DE FORMATO (HTML):
     - Título principal: <h2>Informe de Auditoría Técnica</h2>
@@ -204,6 +223,7 @@ except Exception as e:
     with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error: {str(e)}</p>")
 PYEOF
 fi
+
 # ==========================================
 # 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
 # ==========================================
@@ -235,8 +255,13 @@ if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ] || [ "$PROJ
     PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 fi
 
-# Preparar Reporte Final
+# ✅ Fallback si el resumen CLI está vacío — mostrar el log completo
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+
+if [ -z "$SUMMARY_CLI" ]; then
+    SUMMARY_CLI=$(cat "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+fi
+
 CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados.</p>" )
 HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 

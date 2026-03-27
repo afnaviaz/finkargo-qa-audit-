@@ -1,5 +1,4 @@
 name: QA Audit Full Orchestrator
-
 on:
   workflow_dispatch:
     inputs:
@@ -21,11 +20,9 @@ on:
         default: "Testing"
         type: choice
         options: [Testing, Staging]
-
 permissions:
   contents: read
   actions: read
-
 jobs:
   run-audit-pipeline:
     name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
@@ -35,34 +32,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
       - name: Setup Permissions
         run: chmod +x scripts/run_all.sh
-
       - name: Execute QA Audit
-        shell: bash # Forzamos bash para evitar inconsistencias en el runner
+        shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          # 1. Asegurar que estamos en la raíz del repo descargado
           cd ${{ github.workspace }}
-          
-          # 2. Ejecutar usando la ruta relativa limpia
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
-
       - name: Upload Local Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports-${{ github.event.inputs.proyecto }}-${{ github.run_id }}
-          path: |
-            scripts/*.html
-            scripts/*.json
-            scripts/*.txt
-          retention-days: 7
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts
+          cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true
+          echo "📦 Artifacts guardados:"
+          ls -la ${{ github.workspace }}/artifacts/
