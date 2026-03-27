@@ -39,7 +39,7 @@ except: sys.exit(1)
 
 COLLECTION_UID=$(get_config "$PROYECTO" "$PAIS_INPUT" "id")
 
-# IDs de Entornos (Corregido para asegurar variables de Suppliers)
+# IDs de Entornos (Se mantiene tu ID de Testing CO: 19103266-4be86e2c-b894-4577-95c4-f4b827281933)
 if [ "$PAIS_INPUT" == "CO" ] || [ "$PAIS_INPUT" == "Suppliers" ]; then
     if [ "$AMBIENTE" == "Staging" ]; then
         ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf"
@@ -60,7 +60,7 @@ CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA" 
 
 # ==========================================
-# 3. EJECUCIÓN NEWMAN (CON DATA-DRIVEN Y HTMLEXTRA)
+# 3. EJECUCIÓN NEWMAN (CON HTMLEXTRA Y FIX VARIABLES)
 # ==========================================
 rm -f "$SCRIPTS_DIR"/results_*.json "$SCRIPTS_DIR"/newman_report_*.html claude_report.html
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
@@ -70,15 +70,16 @@ LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
 DATA_PARAM=""
 [ -f "$DATA_FILE" ] && DATA_PARAM="-d $DATA_FILE"
 
-# Priorizar carpeta Suppliers si viene del input
-if [ -n "$FOLDER_OVERRIDE" ] && [ "$FOLDER_OVERRIDE" != "CO" ] && [ "$FOLDER_OVERRIDE" != "MX" ]; then
-    FOLDER_NAME="$FOLDER_OVERRIDE"
+# Lógica para detectar el folder correcto (Prioridad absoluta a Suppliers si viene en el input)
+if [ "$PAIS_INPUT" == "Suppliers" ] || [ "$FOLDER_OVERRIDE" == "Suppliers" ]; then
+    FOLDER_NAME="Suppliers"
 else
     FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "")
 fi
 
-echo "🚀 Ejecutando folder: $FOLDER_NAME con Environment: $ENV_UID"
+echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
 
+# Usamos la URL completa del environment para forzar la descarga y resolución de {{api_version}}
 newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
   --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
   --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json,htmlextra \
@@ -141,7 +142,7 @@ HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><h3>💻 Resumen CL
 FINAL_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 'ancestors': [{'id': sys.argv[3]}], 'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}}))" "$TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$HTML_BODY")
 RESPONSE_PUB=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
 
-# CAPTURAR ID DE LA NUEVA PÁGINA
+# CAPTURAR ID DE LA NUEVA PÁGINA PARA ADJUNTAR EL HTML
 NEW_PAGE_ID=$(echo "$RESPONSE_PUB" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 
 # ==========================================
@@ -155,7 +156,7 @@ if [ -n "$NEW_PAGE_ID" ] && [ "$NEW_PAGE_ID" != "None" ] && [ -f "$HTML_NEWMAN" 
          -F "file=@$HTML_NEWMAN" \
          -F "comment=Reporte detallado Newman generado automáticamente" \
          "$CONF_BASE_URL/rest/api/content/$NEW_PAGE_ID/attachments" | python3 -m json.tool
-    echo "✅ Adjunto finalizado."
+    echo "✅ Adjunto finalizado con éxito."
 else
-    echo "⚠️ No se pudo adjuntar el reporte (ID vacío o archivo no encontrado)."
+    echo "⚠️ No se pudo adjuntar el reporte (ID de página vacío o archivo no generado)."
 fi
