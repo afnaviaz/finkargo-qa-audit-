@@ -137,96 +137,86 @@ for f in files:
 with open('$JSON_REPORT', 'w') as f:
     json.dump(final_data, f)
 "
-
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA DINÁMICA)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA DINÁMICA & ISTQB)
 # ==========================================
 echo "🤖 Generando Informe de Auditoría Inteligente..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
+# Extraemos fallos del reporte unificado
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
     with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
 "
 
+# Análisis de Cobertura ISTQB (Agnóstico)
+if [ -f "$DATA_FILE" ]; then
+    METRICAS_ISTQB=$(python3 -c "
+import json
+try:
+    with open('$DATA_FILE') as f:
+        data = json.load(f)
+        total = len(data)
+        ep = len([s for s in data if 'EP-' in s.get('scenario_name', '')])
+        vl = len([s for s in data if 'VL-' in s.get('scenario_name', '')])
+        neg = len([s for s in data if 'NEG-' in s.get('scenario_name', '')])
+        print(f'Total: {total} | EP: {ep} | VL: {vl} | NEG: {neg}')
+except: print('No disponible')
+")
+else
+    METRICAS_ISTQB="Archivo de escenarios no encontrado"
+fi
+
 if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
-    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
+    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" METRICAS="$METRICAS_ISTQB" python3 << 'PYEOF'
 import json, subprocess, os, re
 
 def call_claude(api_key, model_id, prompt):
-    payload = {
-        "model": model_id,
-        "max_tokens": 4000,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    res = subprocess.run([
-        "curl", "-s", "https://api.anthropic.com/v1/messages",
-        "-H", f"x-api-key: {api_key}", 
-        "-H", "anthropic-version: 2023-06-01",
-        "-H", "content-type: application/json", 
-        "-d", json.dumps(payload)
-    ], capture_output=True, text=True)
+    payload = {"model": model_id, "max_tokens": 4000, "messages": [{"role": "user", "content": prompt}]}
+    res = subprocess.run(["curl", "-s", "https://api.anthropic.com/v1/messages", "-H", f"x-api-key: {api_key}", "-H", "anthropic-version: 2023-06-01", "-H", "content-type: application/json", "-d", json.dumps(payload)], capture_output=True, text=True)
     try: return json.loads(res.stdout)
-    except: return {"error": {"message": "Invalid API Response"}}
+    except: return {}
 
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-failed_data_path = os.environ.get("FAILED_DATA_PATH")
+failed_path = os.environ.get("FAILED_DATA_PATH")
+metricas_raw = os.environ.get("METRICAS")
 
 try:
-    with open(failed_data_path, "r") as f: 
-        failed_data = json.load(f)
+    with open(failed_path, "r") as f: failed_data = json.load(f)
     
-    fallos_puros = []
+    fallos_info = []
     for f in failed_data:
         assertion_text = f.get('at', 'N/A')
         trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_text)
-        fallos_puros.append({
-            "request_name": f.get('source', {}).get('name', 'N/A'),
-            "error_detail": f.get('error', {}).get('message', 'N/A'),
+        fallos_info.append({
+            "scenario": f.get('source', {}).get('name', 'N/A'),
+            "error": f.get('error', {}).get('message', 'N/A'),
             "evidence_id": trace_match.group(1) if trace_match else "N/A"
         })
 
     prompt = f"""
-    Actúa como un Auditor Senior de QA y Ciberseguridad. Tu tarea es analizar un set de fallos técnicos y generar un INFORME DE HALLAZGOS para Confluence.
+    Actúa como un QA Lead Senior certificado en ISTQB. Tu tarea es analizar los fallos de una auditoría técnica.
+    
+    RESUMEN DE COBERTURA: {metricas_raw}
+    DATOS DE FALLOS: {json.dumps(fallos_info)}
 
-    DATOS DE FALLOS (JSON): {json.dumps(fallos_puros)}
+    INSTRUCCIONES:
+    1. RESUMEN METODOLÓGICO: Explica qué técnicas ISTQB se usaron basándote en los prefijos (EP: Equivalence Partitioning, VL: Boundary Value Analysis, NEG: Error Guessing).
+    2. ANÁLISIS DE FALLOS: Agrupa los fallos por categorías lógicas (Seguridad, Estabilidad, Negocio).
+    3. DETALLE TÉCNICO: Crea tablas HTML con: Escenario, Hallazgo Deducido (analiza el nombre del escenario para inferir qué dato falló), Impacto y Acción Sugerida.
+    4. RECOMENDACIONES: Sugiere mejoras de ingeniería (validadores Joi/Zod, Global Error Handlers, etc.).
 
-    INSTRUCCIONES DE ANÁLISIS:
-    1. Identifica patrones en los errores y AGRÚPALOS por categorías lógicas (ej: 'Seguridad', 'Estabilidad', 'Contrato de API', 'Reglas de Negocio', etc.). 
-    No uses categorías fijas, créalas según lo que veas en los datos.
-    2. Para cada categoría, genera una tabla HTML que resuma los casos afectados.
-    3. Para cada fallo, deduce e infiere el 'Hallazgo' y la 'Acción Recomendada' basándote en el nombre del escenario y el error técnico.
-    4. El informe debe ser claro, conciso y orientado a la acción, dirigido a un equipo de desarrollo con conocimientos técnicos.
-    5. Prioriza los hallazgos según su impacto potencial (ej: seguridad > estabilidad > otros).
-    6. Evita información redundante y enfócate en insights accionables.
-    7. El resultado final debe ser un bloque de HTML listo para pegar en Confluence, con tablas bien formateadas y un resumen ejecutivo al inicio.
-    8. Debes permitir evidenciar e identificar los datos de prueba con los que falla el test, para que el equipo de desarrollo pueda reproducirlo fácilmente.
-
-    REGLAS DE FORMATO (HTML):
-    - Título principal: <h2>Informe de Auditoría Técnica</h2>
-    - Resumen ejecutivo: <p><b>Fallas analizadas:</b> {len(fallos_puros)}</p>
-    - Estilo de tablas: width="100%", border="1", cellpadding="8", estilos inline.
-    - Headers de tabla: fondo #2c3e50, color blanco.
-    - NO uses Markdown (etiquetas ```).
-    - NO incluyas información de SLA.
+    FORMATO: HTML puro, tablas con headers #2c3e50, sin markdown, sin SLAs.
     """
 
-    models = ["claude-sonnet-4-5"]
-    final_html = ""
-    for m in models:
-        resp = call_claude(api_key, m, prompt)
-        if "content" in resp:
-            final_html = resp["content"][0]["text"]
-            break
-    
-    if final_html:
-        clean_html = re.sub(r'```html|```', '', final_html).strip()
-        with open("claude_report.html", "w") as f: f.write(clean_html.replace("\n", " "))
-    else: raise Exception("Claude no respondió.")
-
+    # ID de modelo corregido (Sonnet 3.5 es el mejor para análisis técnico)
+    response = call_claude(api_key, "claude-3-5-sonnet-20240620", prompt)
+    if "content" in response:
+        html = response["content"][0]["text"].replace("```html", "").replace("```", "").strip()
+        with open("claude_report.html", "w") as f: f.write(html.replace("\n", " "))
 except Exception as e:
-    with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error: {str(e)}</p>")
+    with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error IA: {str(e)}</p>")
 PYEOF
 fi
 
