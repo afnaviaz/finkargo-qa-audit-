@@ -56,9 +56,23 @@ fi
 
 # IDs de Entornos
 if [ "$PAIS_INPUT" == "CO" ]; then
-    [[ "$AMBIENTE" == "Staging" ]] && ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf" || ENV_UID="19103266-4be86e2c-b894-4577-95c4-f4b827281933"
+    if [ "$AMBIENTE" == "Staging" ]; then
+        ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf"
+    elif [ "$AMBIENTE" == "Testing" ]; then
+        ENV_UID="19103266-4be86e2c-b894-4577-95c4-f4b827281933"
+    else
+        echo "❌ ERROR: Ambiente '$AMBIENTE' no reconocido para CO. Usa: Staging | Testing"
+        exit 1
+    fi
 else
-    [[ "$AMBIENTE" == "Staging" ]] && ENV_UID="19103266-8187ac0e-07bd-497d-a228-fefdeec90492" || ENV_UID="19456853-52efb174-794f-4837-a1bf-fc913c9b0f10"
+    if [ "$AMBIENTE" == "Staging" ]; then
+        ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf"
+    elif [ "$AMBIENTE" == "Testing" ]; then
+        ENV_UID="19456853-52efb174-794f-4837-a1bf-fc913c9b0f10"
+    else
+        echo "❌ ERROR: Ambiente '$AMBIENTE' no reconocido para MX. Usa: Staging | Testing"
+        exit 1
+    fi
 fi
 
 # Configuración Confluence
