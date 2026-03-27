@@ -1,5 +1,5 @@
 {
- "CORE": {
+ "ms-core-entities": {
     "collection_id": "45103176-fc8836e1-6797-444a-a378-d43987d95165",
     "folders": {
       "CO": "🇨🇴 Colombia",
@@ -7,7 +7,7 @@
       "CROSS": "🇨🇴-🇲🇽 Cross",
       "VERIF": "Verification",
       "Legal": "02-Legal info CO",
-      "Suppliers CO": "Suppliers"
+      "Suppliers": "Suppliers"
     }
   },
   "FLOWS": {
@@ -48,8 +48,7 @@
     "folders": {
       "Risks": "Risks"
   }
-}
-
+},
 
 "PAGOS": {
     "collection_id": "19456853-f14dfded-ed86-4f73-b5da-0534315775ea",

@@ -7,7 +7,7 @@ on:
         required: true
         default: "CORE"
         type: choice
-        options: [CORE, FLOWS, ms-auth, ms-accounts, ms-payments, ms-kyc, ms-notifications, ms-reports, Risks, Suppliers]
+        options: [ms-core-entities, FLOWS, ms-auth, ms-accounts, ms-payments, ms-kyc, ms-notifications, ms-reports,]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
@@ -20,6 +20,10 @@ on:
         default: "Testing"
         type: choice
         options: [Testing, Staging]
+      folder:
+        description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
+        required: false
+        default: ""
 permissions:
   contents: read
   actions: read
@@ -46,7 +50,8 @@ jobs:
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
             "${{ github.event.inputs.pais }}" \
-            "${{ github.event.inputs.ambiente }}"
+            "${{ github.event.inputs.ambiente }}" \
+            "${{ github.event.inputs.folder }}"
       - name: Upload Local Artifacts
         if: always()
         run: |

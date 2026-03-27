@@ -3,9 +3,10 @@
 # ==========================================
 # 1. LÓGICA DE EJECUCIÓN Y PARÁMETROS
 # ==========================================
-PROYECTO=$1        
-PAIS_INPUT=$2      
-AMBIENTE=$3  
+PROYECTO=$1
+PAIS_INPUT=$2
+AMBIENTE=$3
+FOLDER_OVERRIDE=$4
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
@@ -99,8 +100,13 @@ if [ "$IS_MULTI" == "true" ]; then
           --reporter-json-export "$SCRIPTS_DIR/results_${folder// /_}.json" | tee -a "$LOG_FILE"
     done < <(get_config "$PROYECTO" "" "all_folders")
 else
-    # Proyectos con un solo folder — buscar por PAIS_INPUT o usar el primero disponible
-    FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
+    # Proyectos con un solo folder — usar override si viene definido, si no buscar por PAIS_INPUT
+    if [ -n "$FOLDER_OVERRIDE" ]; then
+        FOLDER_NAME="$FOLDER_OVERRIDE"
+        echo "📁 Usando folder específico: $FOLDER_NAME"
+    else
+        FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
+    fi
 
     if [ -z "$FOLDER_NAME" ]; then
         FOLDER_NAME=$(get_config "$PROYECTO" "" "first_folder")
