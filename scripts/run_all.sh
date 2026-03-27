@@ -87,35 +87,91 @@ newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTM
   --reporter-htmlextra-export "$HTML_NEWMAN" \
   --suppress-exit-code | tee "$LOG_FILE"
 
+#!/bin/bash
+
+# ... [Secciones 1, 2 y 3 se mantienen iguales] ...
+
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE
 # ==========================================
 echo "🤖 Analizando fallos con IA..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
+CLAUDE_REPORT_FILE="claude_report.html"
+
+# Resetear reporte de la IA
+echo "<p>⏳ Iniciando análisis de IA...</p>" > "$CLAUDE_REPORT_FILE"
+
+# Extraemos fallos del reporte unificado
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
-    d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
+    with open('$JSON_REPORT', 'r') as f:
+        d=json.load(f)
+    failures = d.get('run', {}).get('failures', [])
     with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
+else:
+    with open('$FAILED_DATA_FILE', 'w') as f: json.dump([], f)
 "
 
-if [ -s "$FAILED_DATA_FILE" ]; then
+# SOLO ejecutar Claude si hay fallos registrados
+if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
     ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re
+
 def call_claude(api_key, model_id, prompt):
-    payload = {"model": model_id, "max_tokens": 4000, "messages": [{"role": "user", "content": prompt}]}
-    res = subprocess.run(["curl", "-s", "https://api.anthropic.com/v1/messages", "-H", f"x-api-key: {api_key}", "-H", "anthropic-version: 2023-06-01", "-H", "content-type: application/json", "-d", json.dumps(payload)], capture_output=True, text=True)
-    try: return json.loads(res.stdout)
-    except: return {}
+    payload = {
+        "model": model_id, 
+        "max_tokens": 4000, 
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    res = subprocess.run([
+        "curl", "-s", "https://api.anthropic.com/v1/messages",
+        "-H", f"x-api-key: {api_key}", 
+        "-H", "anthropic-version: 2023-06-01",
+        "-H", "content-type: application/json", 
+        "-d", json.dumps(payload)
+    ], capture_output=True, text=True)
+    try:
+        return json.loads(res.stdout)
+    except:
+        return {"error": {"message": "Error decodificando respuesta de Anthropic"}}
 
-api_key, failed_path = os.environ.get("ANTHROPIC_API_KEY", ""), os.environ.get("FAILED_DATA_PATH")
-with open(failed_path, "r") as f: failed_data = json.load(f)
-fallos = [{"scenario": f.get('source', {}).get('name', 'N/A'), "error": f.get('error', {}).get('message', 'N/A'), "id": re.search(r'ID: ([a-z0-9-]+)', f.get('at', '')).group(1) if re.search(r'ID: ([a-z0-9-]+)', f.get('at', '')) else "N/A"} for f in failed_data]
+api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+failed_path = os.environ.get("FAILED_DATA_PATH")
 
-prompt = f"Actúa como Auditor QA Senior. Analiza estos fallos y genera un reporte HTML profesional con tablas (headers #2c3e50), categorizando por Negocio/Estabilidad/Seguridad. FALLOS: {json.dumps(fallos)}"
-response = call_claude(api_key, "claude-3-5-sonnet-20240620", prompt)
-if "content" in response:
-    with open("claude_report.html", "w") as f: f.write(response["content"][0]["text"].replace("```html", "").replace("```", "").strip())
+try:
+    with open(failed_path, "r") as f:
+        failed_data = json.load(f)
+    
+    # Limpiamos los datos para enviarle a Claude solo lo importante (ahorro de tokens y claridad)
+    fallos_puros = []
+    for f in failed_data:
+        assertion_text = f.get('at', 'N/A')
+        fallos_puros.append({
+            "request": f.get('source', {}).get('name', 'N/A'),
+            "error": f.get('error', {}).get('message', 'N/A'),
+            "test": assertion_text
+        })
+
+    prompt = f"Actúa como QA Lead Senior. Analiza estos fallos técnicos de Postman y genera un reporte HTML (solo el contenido interno de <div>) categorizando por Negocio, Estabilidad y Seguridad. Sé muy técnico y directo. FALLOS: {json.dumps(fallos_puros)}"
+
+    # Usar el modelo correcto
+    response = call_claude(api_key, "claude-3-5-sonnet-20240620", prompt)
+    
+    if "content" in response:
+        html_content = response["content"][0]["text"]
+        # Limpiar posibles bloques de código markdown
+        html_content = re.sub(r'```html|```', '', html_content).strip()
+        with open("claude_report.html", "w") as f:
+            f.write(html_content)
+    elif "error" in response:
+        with open("claude_report.html", "w") as f:
+            f.write(f"<p>⚠️ Error de API: {response['error'].get('message')}</p>")
+except Exception as e:
+    with open("claude_report.html", "w") as f:
+        f.write(f"<p>⚠️ Error en script de análisis: {str(e)}</p>")
 PYEOF
+else
+    echo "<p>✅ <b>Finkargo Audit:</b> No se detectaron fallos funcionales en esta corrida.</p>" > "$CLAUDE_REPORT_FILE"
 fi
 
 # ==========================================
