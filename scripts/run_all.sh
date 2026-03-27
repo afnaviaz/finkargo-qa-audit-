@@ -54,23 +54,23 @@ if [ -z "$COLLECTION_UID" ]; then
     exit 1
 fi
 
-# IDs de Entornos
+# IDs de Entornos (Lógica por País y Ambiente)
 if [ "$PAIS_INPUT" == "CO" ]; then
     if [ "$AMBIENTE" == "Staging" ]; then
         ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf"
     elif [ "$AMBIENTE" == "Testing" ]; then
         ENV_UID="19103266-4be86e2c-b894-4577-95c4-f4b827281933"
     else
-        echo "❌ ERROR: Ambiente '$AMBIENTE' no reconocido para CO. Usa: Staging | Testing"
+        echo "❌ ERROR: Ambiente '$AMBIENTE' no reconocido para CO."
         exit 1
     fi
 else
     if [ "$AMBIENTE" == "Staging" ]; then
-        ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf"
+        ENV_UID="19103266-8187ac0e-07bd-497d-a228-fefdeec90492"
     elif [ "$AMBIENTE" == "Testing" ]; then
         ENV_UID="19456853-52efb174-794f-4837-a1bf-fc913c9b0f10"
     else
-        echo "❌ ERROR: Ambiente '$AMBIENTE' no reconocido para MX. Usa: Staging | Testing"
+        echo "❌ ERROR: Ambiente '$AMBIENTE' no reconocido para MX."
         exit 1
     fi
 fi
@@ -87,10 +87,11 @@ TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
 # ==========================================
 # 3. EJECUCIÓN NEWMAN (CON DATA-DRIVEN)
 # ==========================================
+# Limpiar reportes previos
 rm -f "$SCRIPTS_DIR/results_*.json"
+rm -f "$SCRIPTS_DIR/newman_report_*.html"
 rm -f "claude_report.html"
 
-# Configurar parámetro de datos si el archivo existe
 DATA_PARAM=""
 if [ -f "$DATA_FILE" ]; then
     echo "📊 Escenarios detectados en: $DATA_FILE"
@@ -99,47 +100,39 @@ else
     echo "ℹ️ Ejecutando sin archivo de datos (Modo estándar)"
 fi
 
-# ✅ Leer dinámicamente si el proyecto tiene múltiples folders
 IS_MULTI=$(get_config "$PROYECTO" "" "multi_folder")
 
 if [ "$IS_MULTI" == "true" ]; then
-    # Proyectos con múltiples folders — ejecutar cada uno por separado
-    echo "🗂️ Auditoría multi-folder: $PROYECTO"
+    echo "🗂️ Auditoría multi-folder detectada"
     while IFS= read -r folder; do
         [ -z "$folder" ] && continue
         echo "🚀 Ejecutando folder: $folder"
         newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
           -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-          --folder "$folder" $DATA_PARAM --insecure -r cli,json \
-          --reporter-json-export "$SCRIPTS_DIR/results_${folder// /_}.json" | tee -a "$LOG_FILE"
+          --folder "$folder" $DATA_PARAM --insecure -r cli,json,htmlextra \
+          --reporter-json-export "$SCRIPTS_DIR/results_${folder// /_}.json" \
+          --reporter-htmlextra-export "$SCRIPTS_DIR/newman_report_${folder// /_}.html" | tee -a "$LOG_FILE"
     done < <(get_config "$PROYECTO" "" "all_folders")
 else
-    # Proyectos con un solo folder — usar override si viene definido, si no buscar por PAIS_INPUT
     if [ -n "$FOLDER_OVERRIDE" ]; then
         FOLDER_NAME="$FOLDER_OVERRIDE"
-        echo "📁 Usando folder específico: $FOLDER_NAME"
     else
         FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
     fi
 
     if [ -z "$FOLDER_NAME" ]; then
         FOLDER_NAME=$(get_config "$PROYECTO" "" "first_folder")
-        echo "ℹ️ Proyecto sin separación por país — usando folder: $FOLDER_NAME"
-    fi
-
-    if [ -z "$FOLDER_NAME" ]; then
-        echo "❌ ERROR: No se encontró el folder para: $PROYECTO"
-        exit 1
     fi
 
     echo "🚀 Ejecutando folder: $FOLDER_NAME"
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-      --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json \
-      --reporter-json-export "$JSON_REPORT" | tee "$LOG_FILE"
+      --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json,htmlextra \
+      --reporter-json-export "$JSON_REPORT" \
+      --reporter-htmlextra-export "$SCRIPTS_DIR/newman_report_${FOLDER_NAME// /_}.html" | tee "$LOG_FILE"
 fi
 
-# Unificar reportes JSON para Claude
+# Unificar reportes JSON si hubo múltiples carpetas
 python3 -c "
 import json, os, glob
 files = glob.glob('$SCRIPTS_DIR/results_*.json')
@@ -151,27 +144,27 @@ for f in files:
 with open('$JSON_REPORT', 'w') as f:
     json.dump(final_data, f)
 "
+
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA DINÁMICA & ISTQB)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE (ISTQB & DINÁMICO)
 # ==========================================
 echo "🤖 Generando Informe de Auditoría Inteligente..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 
-# Extraemos fallos del reporte unificado
+# Extraemos fallos
 python3 -c "import json, os; 
 if os.path.exists('$JSON_REPORT'):
     d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
     with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
 "
 
-# Análisis de Cobertura ISTQB (Agnóstico)
+# Métricas ISTQB automáticas
 if [ -f "$DATA_FILE" ]; then
     METRICAS_ISTQB=$(python3 -c "
 import json
 try:
     with open('$DATA_FILE') as f:
-        data = json.load(f)
-        total = len(data)
+        data = json.load(f); total = len(data)
         ep = len([s for s in data if 'EP-' in s.get('scenario_name', '')])
         vl = len([s for s in data if 'VL-' in s.get('scenario_name', '')])
         neg = len([s for s in data if 'NEG-' in s.get('scenario_name', '')])
@@ -198,7 +191,6 @@ metricas_raw = os.environ.get("METRICAS")
 
 try:
     with open(failed_path, "r") as f: failed_data = json.load(f)
-    
     fallos_info = []
     for f in failed_data:
         assertion_text = f.get('at', 'N/A')
@@ -206,25 +198,24 @@ try:
         fallos_info.append({
             "scenario": f.get('source', {}).get('name', 'N/A'),
             "error": f.get('error', {}).get('message', 'N/A'),
-            "evidence_id": trace_match.group(1) if trace_match else "N/A"
+            "id": trace_match.group(1) if trace_match else "N/A"
         })
 
     prompt = f"""
-    Actúa como un QA Lead Senior certificado en ISTQB. Tu tarea es analizar los fallos de una auditoría técnica.
-    
-    RESUMEN DE COBERTURA: {metricas_raw}
-    DATOS DE FALLOS: {json.dumps(fallos_info)}
+    Actúa como un QA Lead Senior certificado en ISTQB. Analiza estos fallos técnicos.
+    COBERTURA: {metricas_raw}
+    FALLOS: {json.dumps(fallos_info)}
 
     INSTRUCCIONES:
-    1. RESUMEN METODOLÓGICO: Explica qué técnicas ISTQB se usaron basándote en los prefijos (EP: Equivalence Partitioning, VL: Boundary Value Analysis, NEG: Error Guessing).
-    2. ANÁLISIS DE FALLOS: Agrupa los fallos por categorías lógicas (Seguridad, Estabilidad, Negocio).
-    3. DETALLE TÉCNICO: Crea tablas HTML con: Escenario, Hallazgo Deducido (analiza el nombre del escenario para inferir qué dato falló), Impacto y Acción Sugerida.
-    4. RECOMENDACIONES: Sugiere mejoras de ingeniería (validadores Joi/Zod, Global Error Handlers, etc.).
+    1. Título H2: Informe de Auditoría Técnica
+    2. Resumen Metodológico: Explica técnicas usadas (EP, VL, NEG).
+    3. Categorías: Agrupa fallos por Seguridad, Estabilidad o Negocio.
+    4. Hallazgos: Tabla con Escenario, Hallazgo deducido, Impacto y Acción Sugerida.
+    5. Acción: Incluye datos de prueba que evidencien el fallo.
 
-    FORMATO: HTML puro, tablas con headers #2c3e50, sin markdown, sin SLAs.
+    FORMATO: HTML puro, tablas headers #2c3e50, sin markdown ni SLAs.
     """
 
-    # ID de modelo corregido (Sonnet 3.5 es el mejor para análisis técnico)
     response = call_claude(api_key, "claude-3-5-sonnet-20240620", prompt)
     if "content" in response:
         html = response["content"][0]["text"].replace("```html", "").replace("```", "").strip()
@@ -235,42 +226,29 @@ PYEOF
 fi
 
 # ==========================================
-# 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
+# 5. PUBLICACIÓN EN CONFLUENCE
 # ==========================================
-echo "📂 Organizando jerarquía para ambiente: $AMBIENTE..."
+echo "📂 Publicando resultados en Confluence..."
 
-if [ "$AMBIENTE" == "Staging" ]; then
-    AMBIENTE_PARENT_ID="2217115649" 
-else
-    AMBIENTE_PARENT_ID="2216984577" 
-fi
-
+[[ "$AMBIENTE" == "Staging" ]] && AMBIENTE_PARENT_ID="2217115649" || AMBIENTE_PARENT_ID="2216984577"
 FOLDER_TITLE="Auditorías $AMBIENTE - $PROYECTO"
 
-# Buscar carpeta del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
 SEARCH_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL")
 PROJECT_FOLDER_ID=$(echo "$SEARCH_RES" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['results'][0]['id'] if data['results'] else '')")
 
-# Crear carpeta si no existe
-if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ] || [ "$PROJECT_FOLDER_ID" == "" ]; then
-    echo "📁 Creando nueva carpeta: $FOLDER_TITLE"
+if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ]; then
     FOLDER_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
         'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
         'ancestors': [{'id': sys.argv[3]}], 
-        'body': {'storage': {'value': '<p>Reportes de $PROYECTO en $AMBIENTE</p><ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}
+        'body': {'storage': {'value': '<ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}
     }))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
-    
-    CREATE_FOLDER_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FOLDER_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
-    PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
+    CREATE_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FOLDER_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
+    PROJECT_FOLDER_ID=$(echo "$CREATE_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 fi
 
-# ✅ Fallback si el resumen CLI está vacío — mostrar el log completo
 SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
-
-if [ -z "$SUMMARY_CLI" ]; then
-    SUMMARY_CLI=$(cat "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
-fi
+[ -z "$SUMMARY_CLI" ] && SUMMARY_CLI=$(cat "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
 
 CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados.</p>" )
 HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
@@ -281,5 +259,4 @@ FINAL_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
     'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}
 }))" "$TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$HTML_BODY")
 
-echo "📤 Publicando reporte..."
 curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content" | python3 -m json.tool
