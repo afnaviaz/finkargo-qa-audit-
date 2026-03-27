@@ -94,85 +94,94 @@ newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTM
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE
 # ==========================================
-echo "🤖 Analizando fallos con IA..."
+echo "🤖 Analizando resultados con Claude 3.5 Sonnet..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 CLAUDE_REPORT_FILE="claude_report.html"
 
-# Resetear reporte de la IA
-echo "<p>⏳ Iniciando análisis de IA...</p>" > "$CLAUDE_REPORT_FILE"
-
-# Extraemos fallos del reporte unificado
-python3 -c "import json, os; 
-if os.path.exists('$JSON_REPORT'):
-    with open('$JSON_REPORT', 'r') as f:
-        d=json.load(f)
-    failures = d.get('run', {}).get('failures', [])
-    with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
-else:
-    with open('$FAILED_DATA_FILE', 'w') as f: json.dump([], f)
+# 1. Extraer los fallos del JSON de Newman
+python3 -c "
+import json, os
+try:
+    if os.path.exists('$JSON_REPORT'):
+        with open('$JSON_REPORT', 'r') as f:
+            data = json.load(f)
+        # Newman guarda los fallos en run.failures
+        failures = data.get('run', {}).get('failures', [])
+        with open('$FAILED_DATA_FILE', 'w') as f:
+            json.dump(failures, f)
+        print(f'✅ Se encontraron {len(failures)} fallos para analizar.')
+    else:
+        print('⚠️ No se encontró el archivo de resultados JSON.')
+except Exception as e:
+    print(f'❌ Error procesando JSON: {e}')
 "
 
-# SOLO ejecutar Claude si hay fallos registrados
-if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
-    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
+# 2. Llamar a la IA solo si hay fallos o para generar resumen positivo
+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re
 
-def call_claude(api_key, model_id, prompt):
+def call_claude(api_key, prompt):
     payload = {
-        "model": model_id, 
-        "max_tokens": 4000, 
+        "model": "claude-3-5-sonnet-20240620",
+        "max_tokens": 4000,
         "messages": [{"role": "user", "content": prompt}]
     }
     res = subprocess.run([
         "curl", "-s", "https://api.anthropic.com/v1/messages",
-        "-H", f"x-api-key: {api_key}", 
+        "-H", f"x-api-key: {api_key}",
         "-H", "anthropic-version: 2023-06-01",
-        "-H", "content-type: application/json", 
+        "-H", "content-type: application/json",
         "-d", json.dumps(payload)
     ], capture_output=True, text=True)
-    try:
-        return json.loads(res.stdout)
-    except:
-        return {"error": {"message": "Error decodificando respuesta de Anthropic"}}
+    return res.stdout
 
-api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+api_key = os.environ.get("ANTHROPIC_API_KEY")
 failed_path = os.environ.get("FAILED_DATA_PATH")
 
 try:
     with open(failed_path, "r") as f:
-        failed_data = json.load(f)
-    
-    # Limpiamos los datos para enviarle a Claude solo lo importante (ahorro de tokens y claridad)
-    fallos_puros = []
-    for f in failed_data:
-        assertion_text = f.get('at', 'N/A')
-        fallos_puros.append({
-            "request": f.get('source', {}).get('name', 'N/A'),
-            "error": f.get('error', {}).get('message', 'N/A'),
-            "test": assertion_text
-        })
+        failures = json.load(f)
 
-    prompt = f"Actúa como QA Lead Senior. Analiza estos fallos técnicos de Postman y genera un reporte HTML (solo el contenido interno de <div>) categorizando por Negocio, Estabilidad y Seguridad. Sé muy técnico y directo. FALLOS: {json.dumps(fallos_puros)}"
+    if not failures:
+        html = "<p style='color: #27ae60;'><b>✅ Auditoría Exitosa:</b> No se detectaron fallos técnicos en los escenarios evaluados.</p>"
+    else:
+        # Simplificar datos para Claude
+        clean_failures = []
+        for f in failures:
+            clean_failures.append({
+                "escenario": f.get('source', {}).get('name', 'N/A'),
+                "error_tecnico": f.get('error', {}).get('message', 'N/A'),
+                "request_url": f.get('source', {}).get('request', {}).get('url', {}).get('raw', 'N/A')
+            })
 
-    # Usar el modelo correcto
-    response = call_claude(api_key, "claude-3-5-sonnet-20240620", prompt)
-    
-    if "content" in response:
-        html_content = response["content"][0]["text"]
-        # Limpiar posibles bloques de código markdown
-        html_content = re.sub(r'```html|```', '', html_content).strip()
-        with open("claude_report.html", "w") as f:
-            f.write(html_content)
-    elif "error" in response:
-        with open("claude_report.html", "w") as f:
-            f.write(f"<p>⚠️ Error de API: {response['error'].get('message')}</p>")
+        prompt = f"""
+        Actúa como un Auditor Senior de QA. Analiza estos fallos de API en Finkargo:
+        {json.dumps(clean_failures)}
+        
+        Instrucciones:
+        1. Genera un reporte técnico en HTML (solo el contenido de un div).
+        2. Crea una tabla con: Escenario, Hallazgo, Impacto (Alto/Medio/Bajo) y Acción Recomendada.
+        3. Usa estilos inline: header de tabla color #2c3e50 y texto blanco.
+        4. Si ves errores '400', infiere si es por datos duplicados o validación de campos.
+        """
+        
+        response_raw = call_claude(api_key, prompt)
+        response_json = json.loads(response_raw)
+        
+        if "content" in response_json:
+            html = response_json["content"][0]["text"]
+            html = re.sub(r'```html|```', '', html).strip()
+        else:
+            error_msg = response_json.get('error', {}).get('message', 'Unknown Error')
+            html = f"<p style='color: red;'>⚠️ Error de Claude: {error_msg}</p>"
+
+    with open("claude_report.html", "w") as f:
+        f.write(html)
+
 except Exception as e:
     with open("claude_report.html", "w") as f:
-        f.write(f"<p>⚠️ Error en script de análisis: {str(e)}</p>")
+        f.write(f"<p>❌ Error Crítico en Script: {str(e)}</p>")
 PYEOF
-else
-    echo "<p>✅ <b>Finkargo Audit:</b> No se detectaron fallos funcionales en esta corrida.</p>" > "$CLAUDE_REPORT_FILE"
-fi
 
 # ==========================================
 # 5. PUBLICACIÓN EN CONFLUENCE
