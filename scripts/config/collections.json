@@ -58,9 +58,11 @@
     }
   },
 
-  "Risks": {
-    "collection_id": "17667316-dd923e14-27a2-4fbf-b0f4-6554c4415577",
+  "ms-api-co": {
+    "collection_id": "17667316-b2840d32-de77-4305-8b68-c204d0cad0a3",
     "folders": {
+      "v1":"v1",
+      "External":"External",
       "Risks": "Risks"
   }
  }
