@@ -8,7 +8,7 @@ on:
         required: true
         default: "CORE"
         type: choice
-        options: [CORE, FLOWS, ms-auth, ms-communicator, PAGOS, INTEGRATIONS, ms_api-co]
+        options: [CORE, FLOWS, ms-auth, ms-communicator, PAGOS, INTEGRATIONS, ms-api-co]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
