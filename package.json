@@ -6,7 +6,7 @@
     "test": "bash scripts/run_all.sh"
   },
   "dependencies": {
-    "newman": "^6.1.0",
-    "newman-reporter-htmlextra": "^1.23.1"
+    "newman": "^2.1.2",
+    "newman-reporter-htmlextra": "^1.22.5"
   }
 }
