@@ -1,0 +1,57 @@
+name: QA Audit - ms-core-entities
+on:
+  workflow_dispatch:
+    inputs:
+      folder:
+        description: "Colección a auditar"
+        required: true
+        default: "Suppliers"
+        type: choice
+        options:
+          - "🇨🇴 Colombia"
+          - "🇲🇽 Mexico"
+          - "🇨🇴-🇲🇽 Cross"
+          - "Verification"
+          - "02-Legal info CO"
+          - "Suppliers"
+      ambiente:
+        description: "Ambiente de ejecución"
+        required: true
+        default: "Testing"
+        type: choice
+        options: [Testing, Staging]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  run-audit-pipeline:
+    name: "Audit: ms-core-entities / ${{ github.event.inputs.folder }}"
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Setup Permissions
+        run: chmod +x scripts/run_all.sh
+      - name: Execute QA Audit
+        shell: bash
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          cd ${{ github.workspace }}
+          ./scripts/run_all.sh \
+            "ms-core-entities" \
+            "CO" \
+            "${{ github.event.inputs.ambiente }}" \
+            "${{ github.event.inputs.folder }}"
+      - name: Upload Local Artifacts
+        if: always()
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts
+          cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true
+          echo "📦 Artifacts guardados:"
+          ls -la ${{ github.workspace }}/artifacts/
