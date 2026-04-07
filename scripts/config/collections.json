@@ -1,11 +1,10 @@
 {
  "ms-core-entities-k8s": {
-    "collection_id": "28918329-0c40a473-fcd2-4042-a731-c684819aa5cc",
+    "collection_id": "28918329-df9dcacc-1630-417a-89c4-c42ffb5e24f7",
     "folders": {
       "CO": "🇨🇴 Colombia",
       "MX": "🇲🇽 Mexico",
       "CROSS": "🇨🇴-🇲🇽 Cross",
-      "VERIF": "Verification",
       "Legal": "02-Legal info CO",
       "Suppliers": "Suppliers"
     }

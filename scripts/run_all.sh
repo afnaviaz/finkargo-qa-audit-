@@ -77,14 +77,23 @@ else
     FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "")
 fi
 
-echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
+# Construir flags --folder para Newman
+if [ "$PAIS_INPUT" == "ALL" ]; then
+    FOLDER_CO=$(get_config "$PROYECTO" "CO" "")
+    FOLDER_MX=$(get_config "$PROYECTO" "MX" "")
+    FOLDER_FLAGS="--folder \"$FOLDER_CO\" --folder \"$FOLDER_MX\""
+    echo "🚀 Iniciando Newman para Folders: $FOLDER_CO + $FOLDER_MX con Env UID: $ENV_UID"
+else
+    FOLDER_FLAGS="--folder \"$FOLDER_NAME\""
+    echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
+fi
 
 # Usamos la URL completa del environment para forzar la descarga y resolución de {{api_version}}
-newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
-  --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-  --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json,htmlextra \
-  --reporter-json-export "$JSON_REPORT" \
-  --reporter-htmlextra-export "$HTML_NEWMAN" \
+eval newman run "\"https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY\"" \
+  --environment "\"https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY\"" \
+  $FOLDER_FLAGS $DATA_PARAM --insecure -r cli,json,htmlextra \
+  --reporter-json-export "\"$JSON_REPORT\"" \
+  --reporter-htmlextra-export "\"$HTML_NEWMAN\"" \
   --suppress-exit-code | tee "$LOG_FILE"
 
 #!/bin/bash
