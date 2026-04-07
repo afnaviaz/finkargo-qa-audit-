@@ -1,0 +1,34 @@
+name: QA Audit - Onboarding V2 (Flow)
+
+on:
+  workflow_dispatch: # Habilita el botón manual en la interfaz de GitHub
+
+jobs:
+  run-postman-tests:
+    runs-on: self-hosted # Ejecuta en los servidores de Finkargo para alcanzar las APIs internas
+
+    steps:
+      - name: 📥 Checkout del Repositorio
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Instalar Newman y HTML Extra
+        run: |
+          npm install -g newman
+          npm install -g newman-reporter-htmlextra
+
+      - name: 🚀 Ejecutar Carpeta Flow en Newman
+        run: |
+          newman run scripts/postman/exports/OB-v2-MX-Flow-with-tests.postman_collection.json --folder "Flow" -r cli,htmlextra --reporter-htmlextra-export newman/report-ob-v2.html --insecure
+
+      - name: 📊 Subir Reporte HTML como Artefacto
+        uses: actions/upload-artifact@v4
+        if: always() # Obliga a subir el reporte incluso si alguna prueba falla
+        with:
+          name: Newman-HTML-Report-OBv2
+          path: newman/report-ob-v2.html
+          retention-days: 7

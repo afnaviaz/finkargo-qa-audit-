@@ -1,0 +1,3542 @@
+{
+  "info": {
+    "_postman_id": "0c00fabe-d3b5-462f-9186-c8cdcd6c7658",
+    "name": "OB v2 - MX",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "createdAt": "2026-03-19T21:48:50.000Z",
+    "updatedAt": "2026-04-06T22:56:01.000Z",
+    "lastUpdatedBy": "49509846",
+    "uid": "17667316-0c00fabe-d3b5-462f-9186-c8cdcd6c7658"
+  },
+  "item": [
+    {
+      "name": "Flow",
+      "item": [
+        {
+          "name": "Create OB",
+          "event": [
+            {
+              "script": {
+                "id": "dcbcfe29-67d1-484d-bc48-1f9139ceaa46",
+                "exec": [
+                  "// Test 1: Validate response status code",
+                  "pm.test(\"Status code is 200 or 201\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "// Test 2: Validate response time",
+                  "pm.test(\"Response time is less than 5000ms\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});",
+                  "// Test 3: Validate response has JSON body",
+                  "pm.test(\"Response is JSON\", function () {",
+                  "    pm.response.to.have.jsonBody();",
+                  "});",
+                  "// Parse response",
+                  "const responseJson = pm.response.json();",
+                  "// Test 4: Validate response structure",
+                  "pm.test(\"Response has data object\", function () {",
+                  "    pm.expect(responseJson).to.have.property('data');",
+                  "});",
+                  "// Test 5: Validate required fields in data",
+                  "pm.test(\"Data contains required fields\", function () {",
+                  "    const data = responseJson.data;",
+                  "    pm.expect(data).to.have.property('id_onboarding');",
+                  "    pm.expect(data).to.have.property('status');",
+                  "    pm.expect(data).to.have.property('credit_request');",
+                  "    pm.expect(data).to.have.property('requested_credit_amount');",
+                  "});",
+                  "// Test 6: Validate data types",
+                  "pm.test(\"Data fields have correct types\", function () {",
+                  "    const data = responseJson.data;",
+                  "    pm.expect(data.id_onboarding).to.be.a('number');",
+                  "    pm.expect(data.status).to.be.a('string');",
+                  "    pm.expect(data.requested_credit_amount).to.be.a('number');",
+                  "});",
+                  "// Test 7: Validate requested amount matches request",
+                  "pm.test(\"Requested credit amount matches request\", function () {",
+                  "    const data = responseJson.data;",
+                  "    pm.expect(data.requested_credit_amount).to.equal(500);",
+                  "});",
+                  "// Test 8: Save variables for subsequent requests",
+                  "if (responseJson.data) {",
+                  "    pm.collectionVariables.set(\"id_credit_request\", responseJson.data.credit_request);",
+                  "    console.log(\"Saved id_credit_request: \" + responseJson.data.credit_request);",
+                  "}",
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              },
+              "listen": "test"
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "9f7df1d7-b3bc-4913-9d03-ad915c80da2f",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "425cb0e3-72b9-4baa-b16d-746ec1d4ee9c",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"requested_credit_amount\": 500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/status",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "status"
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-26T13:54:59.000Z",
+          "updatedAt": "2026-04-06T22:20:23.000Z",
+          "uid": "17667316-425cb0e3-72b9-4baa-b16d-746ec1d4ee9c"
+        },
+        {
+          "name": "Documents Catalog - Initial Documents",
+          "id": "161f1539-736e-4e3f-b321-67080340b717",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "catalog"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "51f0035e-2b7e-410c-a7dc-65ca753f279b",
+              "name": "DOCUMENTOS INICIALES",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "2969",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "documents",
+                    "catalog"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Wed, 25 Mar 2026 20:20:09 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "1213"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 6,\n        \"current_phase\": 1,\n        \"status\": \"INITIAL_DOCUMENTS\",\n        \"documents\": [\n            {\n                \"code\": \"ACO\",\n                \"name\": \"Acta constitutiva c/ inscripción al registro público de comercio\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"PODN\",\n                \"name\": \"Acta de poder, asamblea o aumento\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": false\n            },\n            {\n                \"code\": \"ACRL\",\n                \"name\": \"Acta con últimos cambios de aumento de capital y/o cambio de estatutos\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": false\n            },\n            {\n                \"code\": \"EF2A\",\n                \"name\": \"Estados financieros 2024\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"EF1\",\n                \"name\": \"Estados financieros 2025\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"INE\",\n                \"name\": \"Identificación del Representante Legal\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": \"\"\n                },\n                \"file_id\": null,\n                \"required\": true\n            }\n        ]\n    }\n}",
+              "createdAt": "2026-03-26T13:55:52.000Z",
+              "updatedAt": "2026-03-26T13:55:52.000Z",
+              "uid": "17667316-51f0035e-2b7e-410c-a7dc-65ca753f279b"
+            }
+          ],
+          "createdAt": "2026-03-26T13:55:52.000Z",
+          "updatedAt": "2026-04-06T15:24:51.000Z",
+          "uid": "17667316-161f1539-736e-4e3f-b321-67080340b717",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Fase documentación inicial', function () {",
+                  "  pm.expect(j.data.status).to.eql('INITIAL_DOCUMENTS');",
+                  "  pm.expect(j.data.documents).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "const required = j.data.documents.filter(function (d) { return d.required; });",
+                  "pm.test('[' + req + '] Hay documentos obligatorios', function () {",
+                  "  pm.expect(required.length).to.be.at.least(1);",
+                  "});",
+                  "pm.collectionVariables.set('flow_initial_doc_codes', JSON.stringify(j.data.documents.map(function (d) { return d.code; })));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Link initial documents",
+          "id": "bc2ae836-d282-45dd-80b5-d15289fcd7f6",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"code\": \"ACO\",\n    \"file_name\": \"jose.pdf\",\n    \"file_id\": \"2787cd0c-977e-4a2b-85b4-547864cd0773\",\n    \"custom_code\": {\n        \"operation\": \"0\",\n        \"creditrequest\": \"0\"\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/link",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "link"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "773f4c99-c2e1-4dc4-ad29-29fb8b4bedc1",
+              "name": "VINCULAR DOCUMENTOS",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"code\": \"ACO\",\n    \"file_name\": \"jose.pdf\",\n    \"file_id\": \"2787cd0c-977e-4a2b-85b4-547864cd0773\",\n    \"custom_code\": {\n        \"operation\": \"0\",\n        \"creditrequest\": \"0\"\n    }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/documents/link",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "documents",
+                    "link"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:14:55 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "143"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"code\": \"ACO\",\n        \"file_id\": \"2787cd0c-977e-4a2b-85b4-547864cd0773\",\n        \"file_name\": \"jose.pdf\",\n        \"status\": \"linked\"\n    }\n}",
+              "createdAt": "2026-03-31T22:14:57.000Z",
+              "updatedAt": "2026-03-31T22:15:10.000Z",
+              "uid": "17667316-773f4c99-c2e1-4dc4-ad29-29fb8b4bedc1"
+            }
+          ],
+          "createdAt": "2026-03-26T19:45:49.000Z",
+          "updatedAt": "2026-03-31T22:14:57.000Z",
+          "uid": "17667316-bc2ae836-d282-45dd-80b5-d15289fcd7f6",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] Vínculo documento 200', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estado linked', function () {",
+                  "  pm.expect(j.data.status).to.eql('linked');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Documents Submit Initial Documents",
+          "id": "12666232-e0e3-4f65-87ae-484dadc2208a",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/submit",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "submit"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "1e55934f-eab9-4264-8950-a7b17f8aec07",
+              "name": "ANALIZANDO DOCUMENTOS",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/documents/submit",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "documents",
+                    "submit"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:15:17 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "125"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"status\": \"ANALYZING_DOCUMENTS\",\n        \"message\": \"Documentos recibidos. Procesamiento en curso.\"\n    }\n}",
+              "createdAt": "2026-03-31T22:15:20.000Z",
+              "updatedAt": "2026-03-31T22:15:26.000Z",
+              "uid": "17667316-1e55934f-eab9-4264-8950-a7b17f8aec07"
+            }
+          ],
+          "createdAt": "2026-03-26T13:56:40.000Z",
+          "updatedAt": "2026-03-31T22:15:20.000Z",
+          "uid": "17667316-12666232-e0e3-4f65-87ae-484dadc2208a",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 transición', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Mensaje de proceso', function () {",
+                  "  pm.expect(j.data.message || '').to.include('Procesamiento');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status OB",
+          "event": [
+            {
+              "script": {
+                "exec": [
+                  "// Test 1: Validate response status code",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "// Test 2: Validate response time",
+                  "pm.test(\"Response time is less than 3000ms\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});",
+                  "// Test 3: Validate Content-Type header",
+                  "pm.test(\"Content-Type is application/json\", function () {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "});",
+                  "// Parse response",
+                  "const responseJson = pm.response.json();",
+                  "// Test 4: Validate response structure",
+                  "pm.test(\"Response has complete structure\", function () {",
+                  "    pm.expect(responseJson).to.have.property('data');",
+                  "    const data = responseJson.data;",
+                  "    pm.expect(data).to.have.all.keys(",
+                  "        'id_onboarding',",
+                  "        'company',",
+                  "        'credit_request',",
+                  "        'status',",
+                  "        'status_label',",
+                  "        'current_phase',",
+                  "        'requested_credit_amount',",
+                  "        'credit_request_status',",
+                  "        'credit_request_status_label',",
+                  "        'credit_request_sub_status',",
+                  "        'credit_request_sub_status_label',",
+                  "        'hiring_documents',",
+                  "        'created_at',",
+                  "        'updated_at'",
+                  "    );",
+                  "});",
+                  "// Test 5: Validate status field",
+                  "pm.test(\"Status is a valid onboarding status\", function () {",
+                  "    const validStatuses = [",
+                  "        'ANALYZING_DOCUMENTS',",
+                  "        'PENDING_DOCUMENTS',",
+                  "        'IN_COMMITTEE_REVIEW',",
+                  "        'APPROVED',",
+                  "        'REJECTED',",
+                  "        'DOCUMENTS_SIGNED'",
+                  "    ];",
+                  "    pm.expect(validStatuses).to.include(responseJson.data.status);",
+                  "});",
+                  "// Test 6: Validate current_phase is positive",
+                  "pm.test(\"Current phase is valid\", function () {",
+                  "    pm.expect(responseJson.data.current_phase).to.be.a('number');",
+                  "    pm.expect(responseJson.data.current_phase).to.be.at.least(1);",
+                  "});",
+                  "// Test 7: Validate timestamps format",
+                  "pm.test(\"Timestamps are in ISO format\", function () {",
+                  "    const data = responseJson.data;",
+                  "    pm.expect(data.created_at).to.match(/^\\d{4}-\\d{2}-\\d{2}T/);",
+                  "    pm.expect(data.updated_at).to.match(/^\\d{4}-\\d{2}-\\d{2}T/);",
+                  "});",
+                  "// Test 8: Log current status for debugging",
+                  "console.log(\"Current Onboarding Status: \" + responseJson.data.status);",
+                  "console.log(\"Status Label: \" + responseJson.data.status_label);",
+                  "console.log(\"Current Phase: \" + responseJson.data.current_phase);",
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 status onboarding', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estructura data mínima', function () {",
+                  "  pm.expect(j.data).to.include.keys('id_onboarding', 'status', 'current_phase');",
+                  "});",
+                  "pm.test('[' + req + '] Estado esperado (flujo)', function () {",
+                  "  pm.expect([\"ANALYZING_DOCUMENTS\",\"ADDITIONAL_INFO_REQUESTED\",\"PENDING_DOCUMENTS\"]).to.include(j.data.status);",
+                  "});",
+                  "pm.collectionVariables.set('flow_last_status', j.data.status);",
+                  "pm.collectionVariables.set('flow_last_phase', String(j.data.current_phase));"
+                ],
+                "type": "text/javascript"
+              },
+              "listen": "test"
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "id": "a483f100-aec0-419e-a5ad-fa0f9de4d33b",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/status",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "status"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "176071c2-00e6-4e0e-aeba-236db2dc60ca",
+              "name": "Analizando documentos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/status",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 16:34:06 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "503"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 16,\n        \"company\": 2389,\n        \"credit_request\": 1449,\n        \"status\": \"ANALYZING_DOCUMENTS\",\n        \"status_label\": \"Analizando Documentos\",\n        \"current_phase\": 1,\n        \"requested_credit_amount\": 500,\n        \"credit_request_status\": \"FK004\",\n        \"credit_request_status_label\": \"EN REVISIÓN\",\n        \"credit_request_sub_status\": \"FK053\",\n        \"credit_request_sub_status_label\": \"EN REVISIÓN DEL CLIENTE\",\n        \"hiring_documents\": {},\n        \"created_at\": \"2026-03-31T16:33:10.005646\",\n        \"updated_at\": \"2026-03-31T16:33:35.621393\"\n    }\n}",
+              "createdAt": "2026-03-31T16:34:14.000Z",
+              "updatedAt": "2026-03-31T16:34:23.000Z",
+              "uid": "17667316-176071c2-00e6-4e0e-aeba-236db2dc60ca"
+            },
+            {
+              "id": "205dc754-94ea-4140-b6af-cb4710b9c5e6",
+              "name": "INFO ADICIONAL REQUERIDA",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/status",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:15:45 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "590"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"company\": 2388,\n        \"credit_request\": 1450,\n        \"status\": \"ADDITIONAL_INFO_REQUESTED\",\n        \"status_label\": \"Información Adicional Solicitada\",\n        \"current_phase\": 2,\n        \"requested_credit_amount\": 500,\n        \"credit_request_status\": \"FK004\",\n        \"credit_request_status_label\": \"EN REVISIÓN\",\n        \"credit_request_sub_status\": \"FK053\",\n        \"credit_request_sub_status_label\": \"EN REVISIÓN DEL CLIENTE\",\n        \"hiring_documents\": {},\n        \"credit_summary\": {},\n        \"company_name\": null,\n        \"company_rfc\": null,\n        \"created_at\": \"2026-03-31T22:14:30.293812\",\n        \"updated_at\": \"2026-03-31T22:15:44.389400\"\n    }\n}",
+              "createdAt": "2026-03-31T22:15:50.000Z",
+              "updatedAt": "2026-03-31T22:16:04.000Z",
+              "uid": "17667316-205dc754-94ea-4140-b6af-cb4710b9c5e6"
+            }
+          ],
+          "createdAt": "2026-03-26T13:56:56.000Z",
+          "updatedAt": "2026-04-01T20:41:06.000Z",
+          "uid": "17667316-a483f100-aec0-419e-a5ad-fa0f9de4d33b"
+        },
+        {
+          "name": "Documents catalog + shareholders",
+          "id": "a6ce063c-687c-49f4-ae7b-41354f0ef559",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "catalog"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "1db025df-eb26-4295-9c2d-efed436543b6",
+              "name": "INFORMACIÓN ADICIONAL REQUERIDA",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "documents",
+                    "catalog"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:16:38 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "1201"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"current_phase\": 2,\n        \"status\": \"ADDITIONAL_INFO_REQUESTED\",\n        \"documents\": [],\n        \"shareholders\": [\n            {\n                \"id_associate\": 6841,\n                \"name\": \"Alejandro\",\n                \"last_name\": \"Mazin\",\n                \"second_last_name\": \"Alcántara\",\n                \"full_name\": \"Alejandro Mazin Alcántara\",\n                \"percentage\": 50,\n                \"email\": \"jose.rosales.2@finkargo.com\",\n                \"phone\": \"3006498240\",\n                \"calling_code\": \"MX\",\n                \"marital_status\": \"Soltero\",\n                \"birth_country\": \"CO\",\n                \"role_code\": \"SIR\",\n                \"role_name\": \"Representante Legal\",\n                \"rfc\": \"MAAA700316EP57\",\n                \"nit\": \"TPVZJN711220091600\",\n                \"type_identification_code\": \"INE\",\n                \"type_identification_name\": \"IDENTIFICACION NACIONAL ELECTORAL\",\n                \"document\": null\n            },\n            {\n                \"id_associate\": 6842,\n                \"name\": \"Juan Carlos\",\n                \"last_name\": \"Tapia\",\n                \"second_last_name\": \"Vazquez\",\n                \"full_name\": \"Juan Carlos Tapia Vazquez\",\n                \"percentage\": 50,\n                \"email\": \"jose.rosales@finkargo.com\",\n                \"phone\": \"3006498240\",\n                \"calling_code\": \"MX\",\n                \"marital_status\": \"Soltero\",\n                \"birth_country\": \"CO\",\n                \"role_code\": \"SIR2\",\n                \"role_name\": \"Representante Legal Mancomunado\",\n                \"rfc\": \"TAVJ7112268J57\",\n                \"nit\": \"TPVZJN711220091600\",\n                \"type_identification_code\": \"INE\",\n                \"type_identification_name\": \"IDENTIFICACION NACIONAL ELECTORAL\",\n                \"document\": null\n            }\n        ]\n    }\n}",
+              "createdAt": "2026-03-31T22:16:46.000Z",
+              "updatedAt": "2026-03-31T22:16:57.000Z",
+              "uid": "17667316-1db025df-eb26-4295-9c2d-efed436543b6"
+            }
+          ],
+          "createdAt": "2026-03-26T13:57:23.000Z",
+          "updatedAt": "2026-03-31T22:16:46.000Z",
+          "uid": "17667316-a6ce063c-687c-49f4-ae7b-41354f0ef559",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Catálogo incluye accionistas o documentos', function () {",
+                  "  pm.expect(j.data).to.have.property('status');",
+                  "  pm.expect(j.data.status === 'ADDITIONAL_INFO_REQUESTED' || j.data.shareholders).to.be.true;",
+                  "});",
+                  "if (j.data.shareholders && j.data.shareholders.length) {",
+                  "  var sh = j.data.shareholders;",
+                  "  pm.collectionVariables.set('flow_first_shareholder_id', String(sh[0].id_associate));",
+                  "  var ineTarget = sh.find(function (s) { return s.role_code === 'SIR' || s.role_code === 'SIR2'; }) || sh[0];",
+                  "  pm.collectionVariables.set('flow_shareholder_id_ine', String(ineTarget.id_associate));",
+                  "  pm.collectionVariables.set('flow_id_associate_aval', String(ineTarget.id_associate));",
+                  "  if (sh[1]) {",
+                  "    pm.collectionVariables.set('flow_second_shareholder_id', String(sh[1].id_associate));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Link documents shareholder",
+          "id": "1f9d2fbf-fbac-4094-b134-7c69549e7a51",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"code\": \"INE\",\n    \"custom_code\": {\n        \"creditrequest\": \"0\",\n        \"operation\": \"0\",\n        \"associate\": \"6842\"\n    },\n    \"file_id\": \"uuid\",\n    \"name\": \"Jose.pdf\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/link",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "link"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "e38b9953-b8e9-4f51-985d-977b85d65330",
+              "name": "Vincular documentos de Shareholders",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"code\": \"INE\",\n    \"custom_code\": {\n        \"creditrequest\": \"0\",\n        \"operation\": \"0\",\n        \"associate\": \"6842\"\n    },\n    \"file_id\": \"uuid\",\n    \"name\": \"Jose.pdf\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/documents/link",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "documents",
+                    "link"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:17:59 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "105"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"code\": \"INE\",\n        \"file_id\": \"uuid\",\n        \"file_name\": null,\n        \"status\": \"linked\"\n    }\n}",
+              "createdAt": "2026-03-31T22:18:06.000Z",
+              "updatedAt": "2026-03-31T22:18:19.000Z",
+              "uid": "17667316-e38b9953-b8e9-4f51-985d-977b85d65330"
+            }
+          ],
+          "createdAt": "2026-03-27T14:37:41.000Z",
+          "updatedAt": "2026-04-06T15:36:30.000Z",
+          "uid": "17667316-1f9d2fbf-fbac-4094-b134-7c69549e7a51",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();",
+                  "(function obV2InjectShareholderForIneLink() {",
+                  "  var raw = pm.request.body && pm.request.body.raw;",
+                  "  if (!raw) return;",
+                  "  try {",
+                  "    var sid =",
+                  "      pm.collectionVariables.get('flow_shareholder_id_ine') ||",
+                  "      pm.collectionVariables.get('flow_first_shareholder_id');",
+                  "    if (!sid) return;",
+                  "    var o = JSON.parse(raw);",
+                  "    o.custom_code = o.custom_code || {};",
+                  "    o.custom_code.associate = String(sid);",
+                  "    pm.request.body.raw = JSON.stringify(o, null, 4);",
+                  "  } catch (e) {",
+                  "    console.warn('[Flow] No se pudo inyectar id accionista en body:', e.message);",
+                  "  }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] Vínculo documento 200', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estado linked', function () {",
+                  "  pm.expect(j.data.status).to.eql('linked');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update shareholders",
+          "id": "de8b96fd-39f0-4915-86c3-771f60b0b4e7",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id_associate\": 6842,\n    \"email\": \"jose.rosales.2@finkargo.com\",\n    \"phone\": \"3006498240\",\n    \"calling_code\": \"MX\",\n    \"marital_status\": \"Soltero\",\n    \"birth_country\": \"CO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/shareholders/update",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "shareholders",
+                "update"
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-27T14:40:19.000Z",
+          "updatedAt": "2026-04-06T15:30:50.000Z",
+          "uid": "17667316-de8b96fd-39f0-4915-86c3-771f60b0b4e7",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] Actualización accionistas 2xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit documents + shareholders",
+          "id": "f52c03da-40bc-4902-8bb2-835c816c8d8a",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/shareholders/submit",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "shareholders",
+                "submit"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "3b727a75-4c08-44e2-8dc7-04dc1e38d4d7",
+              "name": "Procesando información adicional",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/shareholders/submit",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "shareholders",
+                    "submit"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:18:59 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "132"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"status\": \"PROCESSING_ADDITIONAL_INFO\",\n        \"message\": \"Documentos recibidos. Procesamiento en curso.\"\n    }\n}",
+              "createdAt": "2026-03-31T22:19:02.000Z",
+              "updatedAt": "2026-03-31T22:19:10.000Z",
+              "uid": "17667316-3b727a75-4c08-44e2-8dc7-04dc1e38d4d7"
+            }
+          ],
+          "createdAt": "2026-03-26T13:58:35.000Z",
+          "updatedAt": "2026-03-31T22:19:02.000Z",
+          "uid": "17667316-f52c03da-40bc-4902-8bb2-835c816c8d8a",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 transición', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Mensaje de proceso', function () {",
+                  "  pm.expect(j.data.message || '').to.include('Procesamiento');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status OB",
+          "id": "bb8917be-cb36-43c5-8afd-8155ba14a3aa",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/status",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "status"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "3bb007e3-b79b-4028-8b19-92866a5f37d2",
+              "name": "Información adicional procesada",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/status",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:19:16 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "585"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"company\": 2388,\n        \"credit_request\": 1450,\n        \"status\": \"ADDITIONAL_INFO_PROCESSED\",\n        \"status_label\": \"Información Adicional Procesada\",\n        \"current_phase\": 3,\n        \"requested_credit_amount\": 500,\n        \"credit_request_status\": \"FK004\",\n        \"credit_request_status_label\": \"EN REVISIÓN\",\n        \"credit_request_sub_status\": \"FK052\",\n        \"credit_request_sub_status_label\": \"EN REVISIÓN DEL KAM\",\n        \"hiring_documents\": {},\n        \"credit_summary\": {},\n        \"company_name\": null,\n        \"company_rfc\": null,\n        \"created_at\": \"2026-03-31T22:14:30.293812\",\n        \"updated_at\": \"2026-03-31T22:19:15.767606\"\n    }\n}",
+              "createdAt": "2026-03-31T22:19:21.000Z",
+              "updatedAt": "2026-03-31T22:19:31.000Z",
+              "uid": "17667316-3bb007e3-b79b-4028-8b19-92866a5f37d2"
+            }
+          ],
+          "createdAt": "2026-03-26T13:59:46.000Z",
+          "updatedAt": "2026-03-31T22:19:21.000Z",
+          "uid": "17667316-bb8917be-cb36-43c5-8afd-8155ba14a3aa",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 status onboarding', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estructura data mínima', function () {",
+                  "  pm.expect(j.data).to.include.keys('id_onboarding', 'status', 'current_phase');",
+                  "});",
+                  "pm.test('[' + req + '] Estado esperado (flujo)', function () {",
+                  "  pm.expect([\"ADDITIONAL_INFO_PROCESSED\"]).to.include(j.data.status);",
+                  "});",
+                  "pm.collectionVariables.set('flow_last_status', j.data.status);",
+                  "pm.collectionVariables.set('flow_last_phase', String(j.data.current_phase));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send to Commitee Review",
+          "id": "e484f982-a48f-48ff-8624-b4c46b7d1e62",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "2969",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sub_status\": \"FK007\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v3/creditrequests/{{id_credit_request}}",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v3",
+                "creditrequests",
+                "{{id_credit_request}}"
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-26T14:00:54.000Z",
+          "updatedAt": "2026-03-31T16:41:56.000Z",
+          "uid": "17667316-e484f982-a48f-48ff-8624-b4c46b7d1e62",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] Envío a comité 2xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Aval or Real Owner",
+          "id": "dcd85f1c-da2b-498c-af5b-ea4a7fe12b47",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"guarantee\": 1,\n    \"real_owner\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/associates/{{id_associate}}",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "associates",
+                "{{id_associate}}"
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-26T17:33:34.000Z",
+          "updatedAt": "2026-03-31T22:20:08.000Z",
+          "uid": "17667316-dcd85f1c-da2b-498c-af5b-ea4a7fe12b47",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();",
+                  "(function obV2SetAssociateForAval() {",
+                  "  var aid =",
+                  "    pm.collectionVariables.get('flow_id_associate_aval') ||",
+                  "    pm.collectionVariables.get('flow_first_shareholder_id');",
+                  "  if (aid) {",
+                  "    pm.collectionVariables.set('id_associate', String(aid));",
+                  "  }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Committee approval",
+          "id": "b7899c4f-09a4-4d79-ab2c-7330bf348bb4",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "1",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"credit_request\": {{id_credit_request}},\n    \"level_risk\": 63,\n    \"legal_attribution\": 1,\n    \"guarantee_fund\": 0,\n    \"rate\": 1.8,\n    \"amount_per_month\": 500000,\n    \"amount_approved\": 500000,\n    \"amount_requested\": 500000,\n    \"lean_value\": 70,\n    \"lean_value_global\": null,\n    \"description\": \"Descripcion con otros valores\",\n    \"special_rate\": null,\n    \"commission\": 0,\n    \"protege_rate\": 0.1,\n    \"product_type\": \"PAG\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/committees/",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "committees",
+                ""
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-26T14:41:42.000Z",
+          "updatedAt": "2026-03-26T16:29:24.000Z",
+          "uid": "17667316-b7899c4f-09a4-4d79-ab2c-7330bf348bb4",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] Aprobación comité 2xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "if (pm.response.text()) {",
+                  "  pm.response.to.have.jsonBody();",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status OB",
+          "id": "5ccdab2d-36de-4b3a-aeeb-3a6803803527",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/status",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "status"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "1d046203-188a-4769-963a-32d2b9013200",
+              "name": "Documentos Finales Solicitados",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/status",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 22:20:19 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "581"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 17,\n        \"company\": 2388,\n        \"credit_request\": 1450,\n        \"status\": \"FINAL_DOCUMENTS_REQUESTED\",\n        \"status_label\": \"Documentos Finales Solicitados\",\n        \"current_phase\": 4,\n        \"requested_credit_amount\": 500,\n        \"credit_request_status\": \"FK005\",\n        \"credit_request_status_label\": \"CRÉDITO APROBADO\",\n        \"credit_request_sub_status\": \"FK005\",\n        \"credit_request_sub_status_label\": \"CRÉDITO APROBADO\",\n        \"hiring_documents\": {},\n        \"credit_summary\": {},\n        \"company_name\": null,\n        \"company_rfc\": null,\n        \"created_at\": \"2026-03-31T22:14:30.293812\",\n        \"updated_at\": \"2026-03-31T22:20:12.517638\"\n    }\n}",
+              "createdAt": "2026-03-31T22:20:36.000Z",
+              "updatedAt": "2026-03-31T22:20:56.000Z",
+              "uid": "17667316-1d046203-188a-4769-963a-32d2b9013200"
+            }
+          ],
+          "createdAt": "2026-03-26T17:59:12.000Z",
+          "updatedAt": "2026-03-31T22:20:36.000Z",
+          "uid": "17667316-5ccdab2d-36de-4b3a-aeeb-3a6803803527",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 status onboarding', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estructura data mínima', function () {",
+                  "  pm.expect(j.data).to.include.keys('id_onboarding', 'status', 'current_phase');",
+                  "});",
+                  "pm.test('[' + req + '] Estado esperado (flujo)', function () {",
+                  "  pm.expect([\"FINAL_DOCUMENTS_REQUESTED\"]).to.include(j.data.status);",
+                  "});",
+                  "pm.collectionVariables.set('flow_last_status', j.data.status);",
+                  "pm.collectionVariables.set('flow_last_phase', String(j.data.current_phase));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Documents Catalog - Final Documents",
+          "id": "adbad688-a467-4331-a32f-f25dca7d55e2",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "catalog"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "6f9a8c9f-69d9-4483-83fd-6558860b7f6c",
+              "name": "Documents Catalog - Final Documents",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "2969",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "documents",
+                    "catalog"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Sat, 28 Mar 2026 17:32:41 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "1144"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 12,\n        \"current_phase\": 4,\n        \"status\": \"FINAL_DOCUMENTS_REQUESTED\",\n        \"documents\": [\n            {\n                \"code\": \"CSFI\",\n                \"name\": \"Constancia de situación fiscal de la empresa\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"CDO\",\n                \"name\": \"Comprobante de domicilio de la empresa\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"CSRC\",\n                \"name\": \"Comprobante de solicitud o renovación del certificado digital de firma electrónica\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"CSFI\",\n                \"name\": \"Constancia de situación fiscal - Alejandro Mazin Alcántara\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": \"6841\"\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"CSFI\",\n                \"name\": \"Constancia de situación fiscal - Juan Carlos Tapia Vazquez\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": \"6842\"\n                },\n                \"file_id\": null,\n                \"required\": true\n            }\n        ],\n        \"shareholders\": []\n    }\n}",
+              "createdAt": "2026-03-28T17:32:46.000Z",
+              "updatedAt": "2026-03-28T17:32:46.000Z",
+              "uid": "17667316-6f9a8c9f-69d9-4483-83fd-6558860b7f6c"
+            }
+          ],
+          "createdAt": "2026-03-26T18:06:44.000Z",
+          "updatedAt": "2026-03-31T16:47:16.000Z",
+          "uid": "17667316-adbad688-a467-4331-a32f-f25dca7d55e2",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Documentos finales solicitados', function () {",
+                  "  pm.expect(j.data.status).to.eql('FINAL_DOCUMENTS_REQUESTED');",
+                  "  pm.expect(j.data.documents).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Link final documents",
+          "id": "8a01f1de-dc27-4dfa-9e40-6188019da737",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"code\": \"CSFI\",\n    \"custom_code\": {\n        \"creditrequest\": \"0\",\n        \"operation\": \"0\"\n    },\n    \"file_id\": \"uuid\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/link",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "link"
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-27T15:46:09.000Z",
+          "updatedAt": "2026-03-31T16:47:43.000Z",
+          "uid": "17667316-8a01f1de-dc27-4dfa-9e40-6188019da737",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] Vínculo documento 200', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estado linked', function () {",
+                  "  pm.expect(j.data.status).to.eql('linked');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Documents Submit Final Documents",
+          "id": "dd80934c-cb4b-4892-bb0f-8951827f4869",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/submit",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "submit"
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-26T18:06:17.000Z",
+          "updatedAt": "2026-03-31T16:48:36.000Z",
+          "uid": "17667316-dd80934c-cb4b-4892-bb0f-8951827f4869",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 transición', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Mensaje de proceso', function () {",
+                  "  pm.expect(j.data.message || '').to.include('Procesamiento');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status OB",
+          "id": "3ec3fae5-5fcf-4b9c-ba9b-8070593b3886",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/status",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "status"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "f8c3ec96-5320-4e24-a0f9-c76319e64897",
+              "name": "Analizando documentos finales",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/status",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Tue, 31 Mar 2026 16:48:54 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "515"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 16,\n        \"company\": 2389,\n        \"credit_request\": 1449,\n        \"status\": \"ANALYZING_FINAL_DOCUMENTS\",\n        \"status_label\": \"Analizando Documentos Finales\",\n        \"current_phase\": 4,\n        \"requested_credit_amount\": 500,\n        \"credit_request_status\": \"FK005\",\n        \"credit_request_status_label\": \"CRÉDITO APROBADO\",\n        \"credit_request_sub_status\": \"FK005\",\n        \"credit_request_sub_status_label\": \"CRÉDITO APROBADO\",\n        \"hiring_documents\": {},\n        \"created_at\": \"2026-03-31T16:33:10.005646\",\n        \"updated_at\": \"2026-03-31T16:48:38.176721\"\n    }\n}",
+              "createdAt": "2026-03-31T16:49:00.000Z",
+              "updatedAt": "2026-03-31T16:49:06.000Z",
+              "uid": "17667316-f8c3ec96-5320-4e24-a0f9-c76319e64897"
+            }
+          ],
+          "createdAt": "2026-03-27T20:52:58.000Z",
+          "updatedAt": "2026-03-31T16:49:00.000Z",
+          "uid": "17667316-3ec3fae5-5fcf-4b9c-ba9b-8070593b3886",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 status onboarding', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estructura data mínima', function () {",
+                  "  pm.expect(j.data).to.include.keys('id_onboarding', 'status', 'current_phase');",
+                  "});",
+                  "pm.test('[' + req + '] Estado esperado (flujo)', function () {",
+                  "  pm.expect([\"ANALYZING_FINAL_DOCUMENTS\"]).to.include(j.data.status);",
+                  "});",
+                  "pm.collectionVariables.set('flow_last_status', j.data.status);",
+                  "pm.collectionVariables.set('flow_last_phase', String(j.data.current_phase));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send documents to signer",
+          "id": "30bfd746-a355-473b-ae8f-0de4505f5eee",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"credit_request_id\": {{id_credit_request}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/signers/send",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "signers",
+                "send"
+              ]
+            }
+          },
+          "response": [],
+          "createdAt": "2026-03-28T16:54:16.000Z",
+          "updatedAt": "2026-03-28T16:59:43.000Z",
+          "uid": "17667316-30bfd746-a355-473b-ae8f-0de4505f5eee",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] Envío a firmas 2xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status OB",
+          "id": "abca46ae-9403-49a9-9b43-059b389b8e79",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/status",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "status"
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "d0f7164e-ae48-491e-a319-a3f670ee03d8",
+              "name": "Formalización de documentos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "{{custom}}",
+                    "value": "{{user_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{api-monolito}}/v2/onboarding/status",
+                  "host": [
+                    "{{api-monolito}}"
+                  ],
+                  "path": [
+                    "v2",
+                    "onboarding",
+                    "status"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "gunicorn"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 06 Apr 2026 15:41:45 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "2067"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"data\": {\n        \"id_onboarding\": 18,\n        \"company\": 2388,\n        \"credit_request\": 1451,\n        \"status\": \"DOCUMENT_FORMALIZATION\",\n        \"status_label\": \"Formalización de Documentos\",\n        \"current_phase\": 5,\n        \"requested_credit_amount\": 500,\n        \"credit_request_status\": \"FK005\",\n        \"credit_request_status_label\": \"CRÉDITO APROBADO\",\n        \"credit_request_sub_status\": \"FK060\",\n        \"credit_request_sub_status_label\": \"DOCUMENTOS ENVIADOS\",\n        \"hiring_documents\": {\n            \"identity_verification\": [\n                {\n                    \"id_associate\": 6841,\n                    \"name\": \"Alejandro Mazin Alcántara\",\n                    \"email\": \"jose.rosales.2@finkargo.com\",\n                    \"status\": \"created\",\n                    \"status_label\": \"Pendiente\",\n                    \"role\": null,\n                    \"sended_at\": \"2026-04-06T15:41:04.074000\",\n                    \"checked_at\": null,\n                    \"manual\": false\n                }\n            ],\n            \"documents\": [\n                {\n                    \"name\": \"kyc\",\n                    \"real_name\": \"Kyc\",\n                    \"status\": \"FK019\",\n                    \"status_label\": \"Por firmar\",\n                    \"docType\": \"KYC\",\n                    \"required_sign\": true,\n                    \"id_file\": \"mock-file-id\",\n                    \"sign\": {\n                        \"signers\": [\n                            {\n                                \"name\": \"Alejandro Mazin Alcántara\",\n                                \"email\": \"jose.rosales.2@finkargo.com\",\n                                \"role\": \"SIR\",\n                                \"status\": \"created\",\n                                \"sign_at\": null\n                            }\n                        ],\n                        \"full_signed\": false\n                    }\n                },\n                {\n                    \"name\": \"actual_owner\",\n                    \"real_name\": \"Propietario actual\",\n                    \"status\": \"FK019\",\n                    \"status_label\": \"Por firmar\",\n                    \"docType\": \"AO\",\n                    \"required_sign\": true,\n                    \"id_file\": \"mock-file-id\",\n                    \"sign\": {\n                        \"signers\": [\n                            {\n                                \"name\": \"Alejandro Mazin Alcántara\",\n                                \"email\": \"jose.rosales.2@finkargo.com\",\n                                \"role\": \"REAL_OWNER_ASS\",\n                                \"status\": \"created\",\n                                \"sign_at\": null\n                            }\n                        ],\n                        \"full_signed\": false\n                    }\n                },\n                {\n                    \"name\": \"opening_contract\",\n                    \"real_name\": \"Contrato de apertura\",\n                    \"status\": \"FK019\",\n                    \"status_label\": \"Por firmar\",\n                    \"docType\": \"OPC\",\n                    \"required_sign\": true,\n                    \"id_file\": \"mock-file-id\",\n                    \"sign\": {\n                        \"signers\": [\n                            {\n                                \"name\": \"Alejandro Mazin Alcántara\",\n                                \"email\": \"jose.rosales.2@finkargo.com\",\n                                \"role\": \"SIR\",\n                                \"status\": \"created\",\n                                \"sign_at\": null\n                            }\n                        ],\n                        \"full_signed\": false\n                    }\n                }\n            ]\n        },\n        \"credit_summary\": {\n            \"credit_request_code\": \"MX:MAAA700316EP5:4\",\n            \"amount_approved\": 500000,\n            \"rate\": 1.8,\n            \"protege_rate\": 0.1\n        },\n        \"company_name\": \"JOSE ROSALES\",\n        \"company_rfc\": \"MAAA700316EP5\",\n        \"created_at\": \"2026-04-06T15:24:36.550591\",\n        \"updated_at\": \"2026-04-06T15:40:52.178970\"\n    }\n}",
+              "createdAt": "2026-04-06T15:41:55.000Z",
+              "updatedAt": "2026-04-06T15:42:09.000Z",
+              "uid": "17667316-d0f7164e-ae48-491e-a319-a3f670ee03d8"
+            }
+          ],
+          "createdAt": "2026-03-28T17:33:55.000Z",
+          "updatedAt": "2026-04-06T15:41:55.000Z",
+          "uid": "17667316-abca46ae-9403-49a9-9b43-059b389b8e79",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function obV2ResolveImpersonationHeaders() {",
+                  "  try {",
+                  "    var k = pm.variables.replaceIn('{{custom}}');",
+                  "    var v = pm.variables.replaceIn('{{user_id}}');",
+                  "    if (k && v) {",
+                  "      pm.request.headers.upsert({ key: k, value: v });",
+                  "    }",
+                  "  } catch (e1) { /* noop */ }",
+                  "})();",
+                  "(function obV2FlowCorrelation() {",
+                  "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+                  "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+                  "  }",
+                  "  pm.request.headers.upsert({",
+                  "    key: 'X-Flow-Correlation-Id',",
+                  "    value: pm.collectionVariables.get('flow_correlation_id')",
+                  "  });",
+                  "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('[Flow] SLA < 30s', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(30000);",
+                  "});",
+                  "pm.test('[Flow] Sin error 5xx', function () {",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "(function obV2SaveCoreIds() {",
+                  "  if (pm.response.code < 200 || pm.response.code >= 300) return;",
+                  "  if (!pm.response.text()) return;",
+                  "  try {",
+                  "    var j = pm.response.json();",
+                  "    var d = j.data;",
+                  "    if (!d) return;",
+                  "    if (d.credit_request != null) {",
+                  "      pm.collectionVariables.set('id_credit_request', String(d.credit_request));",
+                  "    }",
+                  "    if (d.id_onboarding != null) {",
+                  "      pm.collectionVariables.set('flow_id_onboarding', String(d.id_onboarding));",
+                  "    }",
+                  "    if (d.company != null) {",
+                  "      pm.collectionVariables.set('flow_company_id', String(d.company));",
+                  "    }",
+                  "  } catch (e) { /* noop */ }",
+                  "})();",
+                  "const req = pm.info.requestName;",
+                  "pm.test('[' + req + '] 200 status onboarding', function () { pm.response.to.have.status(200); });",
+                  "pm.response.to.have.jsonBody();",
+                  "const j = pm.response.json();",
+                  "pm.test('[' + req + '] Estructura data mínima', function () {",
+                  "  pm.expect(j.data).to.include.keys('id_onboarding', 'status', 'current_phase');",
+                  "});",
+                  "pm.test('[' + req + '] Estado esperado (flujo)', function () {",
+                  "  pm.expect([\"DOCUMENT_FORMALIZATION\",\"DOCUMENTS_SIGNED\"]).to.include(j.data.status);",
+                  "});",
+                  "pm.collectionVariables.set('flow_last_status', j.data.status);",
+                  "pm.collectionVariables.set('flow_last_phase', String(j.data.current_phase));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "id": "05ad1217-bf7a-47d2-8e5d-0d8aaac0c9ce",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "(function obV2ResolveImpersonationHeaders() {",
+              "  try {",
+              "    var k = pm.variables.replaceIn('{{custom}}');",
+              "    var v = pm.variables.replaceIn('{{user_id}}');",
+              "    if (k && v) {",
+              "      pm.request.headers.upsert({ key: k, value: v });",
+              "    }",
+              "  } catch (e1) { /* noop */ }",
+              "})();",
+              "(function obV2FlowCorrelation() {",
+              "  if (!pm.collectionVariables.get('flow_correlation_id')) {",
+              "    pm.collectionVariables.set('flow_correlation_id', pm.variables.replaceIn('{{$guid}}'));",
+              "  }",
+              "  pm.request.headers.upsert({",
+              "    key: 'X-Flow-Correlation-Id',",
+              "    value: pm.collectionVariables.get('flow_correlation_id')",
+              "  });",
+              "  console.log('[OBv2 Flow] ' + pm.info.requestName);",
+              "})();"
+            ]
+          }
+        }
+      ],
+      "createdAt": "2026-03-26T13:54:36.000Z",
+      "updatedAt": "2026-04-06T22:55:13.000Z",
+      "uid": "17667316-05ad1217-bf7a-47d2-8e5d-0d8aaac0c9ce"
+    },
+    {
+      "name": "Status Onboarding",
+      "id": "5746388a-fbc0-4657-bd78-007e9438fe2e",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "{{custom}}",
+            "value": "{{user_id}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{api-monolito}}/v2/onboarding/status",
+          "host": [
+            "{{api-monolito}}"
+          ],
+          "path": [
+            "v2",
+            "onboarding",
+            "status"
+          ]
+        }
+      },
+      "response": [],
+      "createdAt": "2026-03-24T22:14:19.000Z",
+      "updatedAt": "2026-03-31T22:24:02.000Z",
+      "uid": "17667316-5746388a-fbc0-4657-bd78-007e9438fe2e"
+    },
+    {
+      "name": "Create Onboarding",
+      "event": [
+        {
+          "script": {
+            "exec": [
+              "// Test 1: Validate successful creation",
+              "pm.test(\"Onboarding created successfully (200 or 201)\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              "",
+              "// Test 2: Validate response time for creation",
+              "pm.test(\"Creation response time is acceptable\", function () {",
+              "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+              "});",
+              "",
+              "// Parse response",
+              "const responseJson = pm.response.json();",
+              "",
+              "// Test 3: Validate new onboarding has ID",
+              "pm.test(\"New onboarding has ID assigned\", function () {",
+              "    pm.expect(responseJson.data).to.have.property('id_onboarding');",
+              "    pm.expect(responseJson.data.id_onboarding).to.be.a('number');",
+              "    pm.expect(responseJson.data.id_onboarding).to.be.greaterThan(0);",
+              "});",
+              "",
+              "// Test 4: Validate credit request was created",
+              "pm.test(\"Credit request was created\", function () {",
+              "    pm.expect(responseJson.data).to.have.property('credit_request');",
+              "    pm.expect(responseJson.data.credit_request).to.be.a('number');",
+              "});",
+              "",
+              "// Test 5: Validate company association",
+              "pm.test(\"Onboarding associated with company\", function () {",
+              "    pm.expect(responseJson.data).to.have.property('company');",
+              "    pm.expect(responseJson.data.company).to.be.a('number');",
+              "});",
+              "",
+              "// Test 6: Validate requested amount",
+              "pm.test(\"Requested amount is 100\", function () {",
+              "    pm.expect(responseJson.data.requested_credit_amount).to.equal(100);",
+              "});",
+              "",
+              "// Test 7: Validate initial status",
+              "pm.test(\"Initial status is set\", function () {",
+              "    pm.expect(responseJson.data.status).to.be.a('string');",
+              "    pm.expect(responseJson.data.status).to.not.be.empty;",
+              "});",
+              "",
+              "// Test 8: Save IDs for subsequent requests",
+              "if (responseJson.data) {",
+              "    pm.collectionVariables.set(\"id_credit_request\", responseJson.data.credit_request);",
+              "    pm.collectionVariables.set(\"id_associate\", responseJson.data.company);",
+              "    console.log(\"Saved IDs - Credit Request: \" + responseJson.data.credit_request + \", Company: \" + responseJson.data.company);",
+              "}"
+            ],
+            "type": "text/javascript"
+          },
+          "listen": "test"
+        },
+        {
+          "script": {
+            "exec": [
+              "// Pre-request: Log the request being sent",
+              "console.log(\"Creating new onboarding with amount: 100\");"
+            ],
+            "type": "text/javascript"
+          },
+          "listen": "prerequest"
+        }
+      ],
+      "id": "00ec2afb-0097-4451-bee0-b7c690239656",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "{{custom}}",
+            "value": "2969",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"requested_credit_amount\": 100\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api-monolito}}/v2/onboarding/status",
+          "host": [
+            "{{api-monolito}}"
+          ],
+          "path": [
+            "v2",
+            "onboarding",
+            "status"
+          ]
+        }
+      },
+      "response": [],
+      "createdAt": "2026-03-24T23:44:54.000Z",
+      "updatedAt": "2026-04-01T20:41:14.000Z",
+      "uid": "17667316-00ec2afb-0097-4451-bee0-b7c690239656"
+    },
+    {
+      "name": "Onboarding Documents Catalog",
+      "id": "31b3f053-a225-44b7-97b5-387af641f698",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "{{custom}}",
+            "value": "2969",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+          "host": [
+            "{{api-monolito}}"
+          ],
+          "path": [
+            "v2",
+            "onboarding",
+            "documents",
+            "catalog"
+          ]
+        }
+      },
+      "response": [
+        {
+          "id": "0729f336-b02d-481d-b6dc-8c30c261b1a5",
+          "name": "DOCUMENTOS INICIALES",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "2969",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "catalog"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Server",
+              "value": "gunicorn"
+            },
+            {
+              "key": "Date",
+              "value": "Wed, 25 Mar 2026 20:20:09 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Content-Length",
+              "value": "1213"
+            }
+          ],
+          "cookie": [],
+          "responseTime": null,
+          "body": "{\n    \"data\": {\n        \"id_onboarding\": 6,\n        \"current_phase\": 1,\n        \"status\": \"INITIAL_DOCUMENTS\",\n        \"documents\": [\n            {\n                \"code\": \"ACO\",\n                \"name\": \"Acta constitutiva c/ inscripción al registro público de comercio\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"PODN\",\n                \"name\": \"Acta de poder, asamblea o aumento\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": false\n            },\n            {\n                \"code\": \"ACRL\",\n                \"name\": \"Acta con últimos cambios de aumento de capital y/o cambio de estatutos\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": false\n            },\n            {\n                \"code\": \"EF2A\",\n                \"name\": \"Estados financieros 2024\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"EF1\",\n                \"name\": \"Estados financieros 2025\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": null\n                },\n                \"file_id\": null,\n                \"required\": true\n            },\n            {\n                \"code\": \"INE\",\n                \"name\": \"Identificación del Representante Legal\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": \"\"\n                },\n                \"file_id\": null,\n                \"required\": true\n            }\n        ]\n    }\n}",
+          "createdAt": "2026-03-25T20:20:16.000Z",
+          "updatedAt": "2026-03-25T20:20:26.000Z",
+          "uid": "17667316-0729f336-b02d-481d-b6dc-8c30c261b1a5"
+        },
+        {
+          "id": "5bc2afe4-0f88-4d4e-819d-dcd133b15cc8",
+          "name": "DOCUMENTOS + ACCIONISTAS",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "2969",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/catalog",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "catalog"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Server",
+              "value": "gunicorn"
+            },
+            {
+              "key": "Date",
+              "value": "Wed, 25 Mar 2026 21:15:55 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Content-Length",
+              "value": "573"
+            }
+          ],
+          "cookie": [],
+          "responseTime": null,
+          "body": "{\n    \"data\": {\n        \"id_onboarding\": 8,\n        \"current_phase\": 2,\n        \"status\": \"ADDITIONAL_INFO_REQUESTED\",\n        \"documents\": [],\n        \"shareholders\": [\n            {\n                \"id_associate\": 6838,\n                \"name\": \"Juan Carlos\",\n                \"last_name\": \"Tapia\",\n                \"second_last_name\": \"Vazquez\",\n                \"full_name\": \"Juan Carlos Tapia Vazquez\",\n                \"percentage\": 50,\n                \"email\": null,\n                \"phone\": null,\n                \"marital_status\": null,\n                \"birth_country\": null,\n                \"document\": {\n                    \"code\": \"INE\",\n                    \"name\": \"Identificación oficial - Juan Carlos Tapia Vazquez\",\n                    \"custom_code\": {\n                        \"creditrequest\": \"0\",\n                        \"operation\": \"0\",\n                        \"associate\": \"6838\"\n                    },\n                    \"file_id\": null,\n                    \"required\": true\n                }\n            }\n        ]\n    }\n}",
+          "createdAt": "2026-03-25T21:16:14.000Z",
+          "updatedAt": "2026-03-25T21:16:27.000Z",
+          "uid": "17667316-5bc2afe4-0f88-4d4e-819d-dcd133b15cc8"
+        }
+      ],
+      "createdAt": "2026-03-24T23:47:57.000Z",
+      "updatedAt": "2026-03-25T21:45:25.000Z",
+      "uid": "17667316-31b3f053-a225-44b7-97b5-387af641f698"
+    },
+    {
+      "name": "Onboarding Documents Submit",
+      "id": "d1d696ea-186a-4212-9213-4ab18ff1d003",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "{{custom}}",
+            "value": "2969",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"documents\": [\n        {\n            \"code\": \"ACO\",\n            \"file_id\": \"8e7eecf9-1abf-495e-a01e-873a33c05a63\",\n            \"custom_code\": {\n                \"creditrequest\": \"0\",\n                \"operation\": \"0\"\n            }\n        },\n        {\n            \"code\": \"ACRL\",\n            \"file_id\": \"bac82bad-3eeb-45c2-a5a5-ba958f66b109\",\n            \"custom_code\": {\n                \"creditrequest\": \"0\",\n                \"operation\": \"0\"\n            }\n        },\n         {\n            \"code\": \"PODN\",\n            \"file_id\": \"518d3a3b-43dc-4792-ba79-cd6ee7d785e8\",\n            \"custom_code\": {\n                \"creditrequest\": \"0\",\n                \"operation\": \"0\"\n            }\n        }\n    ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api-monolito}}/v2/onboarding/documents/submit",
+          "host": [
+            "{{api-monolito}}"
+          ],
+          "path": [
+            "v2",
+            "onboarding",
+            "documents",
+            "submit"
+          ]
+        }
+      },
+      "response": [
+        {
+          "id": "0b78f986-3172-4cda-8122-58c7475e4419",
+          "name": "Envio de documentos iniciales",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "{{custom}}",
+                "value": "2969",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"documents\": [\n        {\n            \"code\": \"ACO\",\n            \"file_id\": \"8e7eecf9-1abf-495e-a01e-873a33c05a63\",\n            \"custom_code\": {\n                \"creditrequest\": \"0\",\n                \"operation\": \"0\"\n            }\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{api-monolito}}/v2/onboarding/documents/submit",
+              "host": [
+                "{{api-monolito}}"
+              ],
+              "path": [
+                "v2",
+                "onboarding",
+                "documents",
+                "submit"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Server",
+              "value": "gunicorn"
+            },
+            {
+              "key": "Date",
+              "value": "Wed, 25 Mar 2026 21:15:10 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Content-Length",
+              "value": "124"
+            }
+          ],
+          "cookie": [],
+          "responseTime": null,
+          "body": "{\n    \"data\": {\n        \"id_onboarding\": 8,\n        \"status\": \"ANALYZING_DOCUMENTS\",\n        \"message\": \"Documentos recibidos. Procesamiento en curso.\"\n    }\n}",
+          "createdAt": "2026-03-25T21:17:26.000Z",
+          "updatedAt": "2026-03-25T21:17:37.000Z",
+          "uid": "17667316-0b78f986-3172-4cda-8122-58c7475e4419"
+        }
+      ],
+      "createdAt": "2026-03-24T23:51:09.000Z",
+      "updatedAt": "2026-03-25T21:17:26.000Z",
+      "uid": "17667316-d1d696ea-186a-4212-9213-4ab18ff1d003"
+    },
+    {
+      "name": "Onboarding Send Documents + Shareholders",
+      "id": "89e54ee4-ea3d-4244-b5fe-d499352bf39b",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "{{custom}}",
+            "value": "2969",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"shareholders\": [\n        {\n            \"id_associate\": 6840,\n            \"name\": \"Juan Carlos\",\n            \"last_name\": \"Tapia\",\n            \"second_last_name\": \"Vazquez\",\n            \"full_name\": \"Juan Carlos Tapia Vazquez\",\n            \"percentage\": 50.0,\n            \"email\": \"jose.rosales@hotmail.com\",\n            \"phone\": \"5519505953\",\n            \"marital_status\": \"Casado\",\n            \"birth_country\": \"MXN\",\n            \"document\": {\n                \"code\": \"INE\",\n                \"custom_code\": {\n                    \"creditrequest\": \"0\",\n                    \"operation\": \"0\",\n                    \"associate\": \"6840\"\n                },\n                \"file_id\": \"UUID\"\n            }\n        }\n    ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api-monolito}}/v2/onboarding/shareholders/submit",
+          "host": [
+            "{{api-monolito}}"
+          ],
+          "path": [
+            "v2",
+            "onboarding",
+            "shareholders",
+            "submit"
+          ]
+        }
+      },
+      "response": [],
+      "createdAt": "2026-03-25T21:19:45.000Z",
+      "updatedAt": "2026-03-25T22:03:49.000Z",
+      "uid": "17667316-89e54ee4-ea3d-4244-b5fe-d499352bf39b"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "id": "f41d469c-b280-49f3-8781-add332efe48b",
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "id": "c0494669-4f3c-4bf1-bfb5-57fbd8e52dcc",
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "id_credit_request",
+      "value": ""
+    },
+    {
+      "key": "id_associate",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "ob_current_scenario_id",
+      "value": ""
+    },
+    {
+      "key": "ob_current_scenario_desc",
+      "value": ""
+    },
+    {
+      "key": "ob_current_expected_status",
+      "value": ""
+    },
+    {
+      "key": "id_onboarding",
+      "value": ""
+    }
+  ]
+}
