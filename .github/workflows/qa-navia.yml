@@ -1,0 +1,61 @@
+name: qa-navia
+on:
+  workflow_dispatch:
+    inputs:
+      proyecto:
+        description: "Selecciona el Proyecto a auditar"
+        required: true
+        default: "ms-core-entities-k8s"
+        type: choice
+        options: [ms-core-entities-k8s]
+      pais:
+        description: "País a auditar (ALL ejecutará CO y MX)"
+        required: true
+        default: "CO"
+        type: choice
+        options: [CO, MX, ALL]
+      ambiente:
+        description: "Ambiente de ejecución"
+        required: true
+        default: "Testing"
+        type: choice
+        options: [Testing, Staging]
+      folder:
+        description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
+        required: false
+        default: ""
+permissions:
+  contents: read
+  actions: read
+jobs:
+  run-audit-pipeline:
+    name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Setup Permissions
+        run: chmod +x scripts/run_all.sh
+      - name: Execute QA Audit
+        shell: bash
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          cd ${{ github.workspace }}
+          ./scripts/run_all.sh \
+            "${{ github.event.inputs.proyecto }}" \
+            "${{ github.event.inputs.pais }}" \
+            "${{ github.event.inputs.ambiente }}" \
+            "${{ github.event.inputs.folder }}"
+      - name: Upload Local Artifacts
+        if: always()
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts
+          cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true
+          echo "📦 Artifacts guardados:"
+          ls -la ${{ github.workspace }}/artifacts/
