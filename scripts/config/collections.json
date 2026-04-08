@@ -64,6 +64,22 @@
       "SUPRA EPAYMENTS": "SUPRA EPAYMENTS",
       "SUPRA WALLET - EPAYMENTS": "SUPRA WALLET - EPAYMENTS"
     }
+  },
+
+  "ms-api-co": {
+    "collection_id": "17667316-b2840d32-de77-4305-8b68-c204d0cad0a3",
+    "folders": {
+      "v1":"v1",
+      "External":"External",
+      "Risks": "Risks"
   }
+ },
+
+"FDM-6197 Cross Accounts CLABE": {
+    "collection_id": "19198347-2aef1759-4edc-4291-ae12-5aae4d44cc6c",
+    "folders": {
+    
+  }
+ }
 }
 

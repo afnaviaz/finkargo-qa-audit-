@@ -1,14 +1,14 @@
-name: QA Audit Full Orchestrator
+name: QA Audit Cross Accounts CLABE
+
 on:
   workflow_dispatch:
     inputs:
       proyecto:
         description: "Selecciona el Proyecto a auditar"
         required: true
-        default: "ms-core-entities-k8s"
+        default: "CORE"
         type: choice
-        options: [CORE, FLOWS, ms-auth, ms-communicator, PAGOS, INTEGRATIONS, ms-api-co ]
-        options: [ms-core-entities-k8s, FLOWS, ms-auth, ms-accounts, ms-payments, ms-kyc, ms-notifications, ms-reports]
+        options: [FDM-6197 Cross Accounts CLABE]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
@@ -21,13 +21,11 @@ on:
         default: "Testing"
         type: choice
         options: [Testing, Staging]
-      folder:
-        description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
-        required: false
-        default: ""
+
 permissions:
   contents: read
   actions: read
+
 jobs:
   run-audit-pipeline:
     name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
@@ -37,22 +35,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
       - name: Setup Permissions
         run: chmod +x scripts/run_all.sh
+
       - name: Execute QA Audit
-        shell: bash
+        shell: bash # Forzamos bash para evitar inconsistencias en el runner
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
+          # 1. Asegurar que estamos en la raíz del repo descargado
           cd ${{ github.workspace }}
+          
+          # 2. Ejecutar usando la ruta relativa limpia
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
             "${{ github.event.inputs.pais }}" \
-            "${{ github.event.inputs.ambiente }}" \
-            "${{ github.event.inputs.folder }}"
+            "${{ github.event.inputs.ambiente }}"
+
       - name: Upload Local Artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,8 +66,3 @@ jobs:
             scripts/*.json
             scripts/*.txt
           retention-days: 7
-        run: |
-          mkdir -p ${{ github.workspace }}/artifacts
-          cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true
-          echo "📦 Artifacts guardados:"
-          ls -la ${{ github.workspace }}/artifacts/
