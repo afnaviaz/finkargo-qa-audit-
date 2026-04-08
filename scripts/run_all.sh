@@ -131,7 +131,7 @@ import json, subprocess, os, re
 
 def call_claude(api_key, prompt):
     payload = {
-        "model": "claude-3-5-sonnet-20240620",
+        "model": "claude-sonnet-4-6",
         "max_tokens": 4000,
         "messages": [{"role": "user", "content": prompt}]
     }
