@@ -1,34 +1,68 @@
-name: QA Audit - Onboarding V2 (Flow)
+name: OB v2 - MX (FLOW)
 
 on:
-  workflow_dispatch: # Habilita el botón manual en la interfaz de GitHub
+  workflow_dispatch:
+    inputs:
+      proyecto:
+        description: "Selecciona el Proyecto a auditar"
+        required: true
+        default: " OB v2 - MX"
+        type: choice
+        options: [OB v2 - MX]
+      pais:
+        description: "País a auditar (ALL ejecutará CO y MX)"
+        required: true
+        default: "CO"
+        type: choice
+        options: [CO, MX, ALL]
+      ambiente:
+        description: "Ambiente de ejecución"
+        required: true
+        default: "Testing"
+        type: choice
+        options: [Testing, Staging]
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
-  run-postman-tests:
-    runs-on: self-hosted # Ejecuta en los servidores de Finkargo para alcanzar las APIs internas
-
+  run-audit-pipeline:
+    name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
+    runs-on: self-hosted
     steps:
-      - name: 📥 Checkout del Repositorio
+      - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: ⚙️ Setup Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          fetch-depth: 1
 
-      - name: 📦 Instalar Newman y HTML Extra
+      - name: Setup Permissions
+        run: chmod +x scripts/run_all.sh
+
+      - name: Execute QA Audit
+        shell: bash # Forzamos bash para evitar inconsistencias en el runner
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          npm install -g newman
-          npm install -g newman-reporter-htmlextra
+          # 1. Asegurar que estamos en la raíz del repo descargado
+          cd ${{ github.workspace }}
+          
+          # 2. Ejecutar usando la ruta relativa limpia
+          ./scripts/run_all.sh \
+            "${{ github.event.inputs.proyecto }}" \
+            "${{ github.event.inputs.pais }}" \
+            "${{ github.event.inputs.ambiente }}"
 
-      - name: 🚀 Ejecutar Carpeta Flow en Newman
-        run: |
-          newman run scripts/postman/exports/OB-v2-MX-Flow-with-tests.postman_collection.json --folder "Flow" -r cli,htmlextra --reporter-htmlextra-export newman/report-ob-v2.html --insecure
-
-      - name: 📊 Subir Reporte HTML como Artefacto
+      - name: Upload Local Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
-        if: always() # Obliga a subir el reporte incluso si alguna prueba falla
         with:
-          name: Newman-HTML-Report-OBv2
-          path: newman/report-ob-v2.html
+          name: reports-${{ github.event.inputs.proyecto }}-${{ github.run_id }}
+          path: |
+            scripts/*.html
+            scripts/*.json
+            scripts/*.txt
           retention-days: 7

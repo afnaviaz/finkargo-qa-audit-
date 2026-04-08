@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "QA audit automation with Newman and Confluence reporting",
   "scripts": {
-    "test": "bash scripts/run_all.sh"
+    "test": "bash scripts/run_all.sh",
+    "postman:inject-flow": "node scripts/postman/inject-flow-automation.js",
+    "postman:apply-flow-tests": "node scripts/postman/apply-ob-v2-flow-tests.js"
   },
   "dependencies": {
     "newman": "^2.1.2",
