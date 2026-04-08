@@ -1,11 +1,12 @@
 {
- "CORE": {
-    "collection_id": "45103176-fc8836e1-6797-444a-a378-d43987d95165",
+ "ms-core-entities-k8s": {
+    "collection_id": "28918329-df9dcacc-1630-417a-89c4-c42ffb5e24f7",
     "folders": {
       "CO": "🇨🇴 Colombia",
       "MX": "🇲🇽 Mexico",
       "CROSS": "🇨🇴-🇲🇽 Cross",
-      "VERIF": "Verification"
+      "Legal": "02-Legal info CO",
+      "Suppliers": "Suppliers"
     }
   },
   "FLOWS": {
@@ -38,6 +39,13 @@
     "collection_id": "19456853-edd1958b-5396-4417-b212-62f73edec165",
     "folders": {
       "Send mail": "Send mail"
+  }
+},
+
+"V1": {
+    "collection_id": "17667316-212887a2-938d-4e66-b62b-d64fc97d6799",
+    "folders": {
+      "Risks": "Risks"
   }
 },
 

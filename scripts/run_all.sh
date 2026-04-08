@@ -3,20 +3,16 @@
 # ==========================================
 # 1. LÓGICA DE EJECUCIÓN Y PARÁMETROS
 # ==========================================
-PROYECTO=$1        
-PAIS_INPUT=$2      
-AMBIENTE=$3  
+PROYECTO=$1
+PAIS_INPUT=$2
+AMBIENTE=$3
+FOLDER_OVERRIDE=$4
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
-
-# Ruta al nuevo archivo de escenarios (Data-Driven)
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "❌ ERROR: No se encontró $CONFIG_PATH"
-    exit 1
-fi
+[ ! -f "$CONFIG_PATH" ] && { echo "❌ ERROR: No se encontró $CONFIG_PATH"; exit 1; }
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-1}"
 NOW=$(date +'%Y-%m-%d %H:%M:%S')
@@ -30,34 +26,32 @@ import json, sys
 try:
     with open('$CONFIG_PATH', encoding='utf-8') as f:
         data = json.load(f)
-    if '$3' == 'id':
-        print(data['$1']['collection_id'])
-    elif '$3' == 'all_folders':
-        print('\n'.join(data['$1']['folders'].values()))
-    elif '$3' == 'multi_folder':
-        print('true' if data['$1'].get('multi_folder', False) else 'false')
+    if '$3' == 'id': print(data['$1']['collection_id'])
+    elif '$3' == 'all_folders': print('\n'.join(data['$1']['folders'].values()))
+    elif '$3' == 'multi_folder': print('true' if data['$1'].get('multi_folder', False) else 'false')
     elif '$3' == 'first_folder':
         folders = data['$1']['folders']
         print(list(folders.values())[0] if folders else '')
-    else:
-        print(data['$1']['folders'].get('$2', ''))
-except Exception:
-    sys.exit(1)
+    else: print(data['$1']['folders'].get('$2', ''))
+except: sys.exit(1)
 "
 }
 
 COLLECTION_UID=$(get_config "$PROYECTO" "$PAIS_INPUT" "id")
 
-if [ -z "$COLLECTION_UID" ]; then
-    echo "❌ ERROR: No se encontró la Collection ID para: $PROYECTO"
-    exit 1
-fi
-
-# IDs de Entornos
-if [ "$PAIS_INPUT" == "CO" ]; then
-    [[ "$AMBIENTE" == "Staging" ]] && ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf" || ENV_UID="19103266-4be86e2c-b894-4577-95c4-f4b827281933"
+# IDs de Entornos (Se mantiene tu ID de Testing CO: 19103266-4be86e2c-b894-4577-95c4-f4b827281933)
+if [ "$PAIS_INPUT" == "CO" ] || [ "$PAIS_INPUT" == "Suppliers" ]; then
+    if [ "$AMBIENTE" == "Staging" ]; then
+        ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf"
+    else
+        ENV_UID="19103266-4be86e2c-b894-4577-95c4-f4b827281933"
+    fi
 else
-    [[ "$AMBIENTE" == "Staging" ]] && ENV_UID="19103266-8187ac0e-07bd-497d-a228-fefdeec90492" || ENV_UID="19456853-52efb174-794f-4837-a1bf-fc913c9b0f10"
+    if [ "$AMBIENTE" == "Staging" ]; then
+        ENV_UID="19103266-8187ac0e-07bd-497d-a228-fefdeec90492"
+    else
+        ENV_UID="19456853-52efb174-794f-4837-a1bf-fc913c9b0f10"
+    fi
 fi
 
 # Configuración Confluence
@@ -65,211 +59,181 @@ CONF_USER="andres.navia@finkargo.com"
 CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA" 
 
-LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
+# ==========================================
+# 3. EJECUCIÓN NEWMAN (CON HTMLEXTRA Y FIX VARIABLES)
+# ==========================================
+rm -f "$SCRIPTS_DIR"/results_*.json "$SCRIPTS_DIR"/newman_report_*.html claude_report.html
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
-TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
+HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
+LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
 
-# ==========================================
-# 3. EJECUCIÓN NEWMAN (CON DATA-DRIVEN)
-# ==========================================
-rm -f "$SCRIPTS_DIR/results_*.json"
-rm -f "claude_report.html"
-
-# Configurar parámetro de datos si el archivo existe
 DATA_PARAM=""
-if [ -f "$DATA_FILE" ]; then
-    echo "📊 Escenarios detectados en: $DATA_FILE"
-    DATA_PARAM="-d $DATA_FILE"
+[ -f "$DATA_FILE" ] && DATA_PARAM="-d $DATA_FILE"
+
+# Lógica para detectar el folder correcto (Prioridad absoluta a Suppliers si viene en el input)
+if [ "$PAIS_INPUT" == "Suppliers" ] || [ "$FOLDER_OVERRIDE" == "Suppliers" ]; then
+    FOLDER_NAME="Suppliers"
 else
-    echo "ℹ️ Ejecutando sin archivo de datos (Modo estándar)"
+    FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "")
 fi
 
-# ✅ Leer dinámicamente si el proyecto tiene múltiples folders
-IS_MULTI=$(get_config "$PROYECTO" "" "multi_folder")
-
-if [ "$IS_MULTI" == "true" ]; then
-    # Proyectos con múltiples folders — ejecutar cada uno por separado
-    echo "🗂️ Auditoría multi-folder: $PROYECTO"
-    while IFS= read -r folder; do
-        [ -z "$folder" ] && continue
-        echo "🚀 Ejecutando folder: $folder"
-        newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
-          -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-          --folder "$folder" $DATA_PARAM --insecure -r cli,json \
-          --reporter-json-export "$SCRIPTS_DIR/results_${folder// /_}.json" | tee -a "$LOG_FILE"
-    done < <(get_config "$PROYECTO" "" "all_folders")
+# Construir flags --folder para Newman
+if [ "$PAIS_INPUT" == "ALL" ]; then
+    FOLDER_CO=$(get_config "$PROYECTO" "CO" "")
+    FOLDER_MX=$(get_config "$PROYECTO" "MX" "")
+    FOLDER_FLAGS="--folder \"$FOLDER_CO\" --folder \"$FOLDER_MX\""
+    echo "🚀 Iniciando Newman para Folders: $FOLDER_CO + $FOLDER_MX con Env UID: $ENV_UID"
 else
-    # Proyectos con un solo folder — buscar por PAIS_INPUT o usar el primero disponible
-    FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "folder")
-
-    if [ -z "$FOLDER_NAME" ]; then
-        FOLDER_NAME=$(get_config "$PROYECTO" "" "first_folder")
-        echo "ℹ️ Proyecto sin separación por país — usando folder: $FOLDER_NAME"
-    fi
-
-    if [ -z "$FOLDER_NAME" ]; then
-        echo "❌ ERROR: No se encontró el folder para: $PROYECTO"
-        exit 1
-    fi
-
-    echo "🚀 Ejecutando folder: $FOLDER_NAME"
-    newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
-      -e "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
-      --folder "$FOLDER_NAME" $DATA_PARAM --insecure -r cli,json \
-      --reporter-json-export "$JSON_REPORT" | tee "$LOG_FILE"
+    FOLDER_FLAGS="--folder \"$FOLDER_NAME\""
+    echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
 fi
 
-# Unificar reportes JSON para Claude
-python3 -c "
-import json, os, glob
-files = glob.glob('$SCRIPTS_DIR/results_*.json')
-final_data = {'run': {'failures': []}}
-for f in files:
-    with open(f, 'r') as j:
-        data = json.load(j)
-        final_data['run']['failures'].extend(data.get('run', {}).get('failures', []))
-with open('$JSON_REPORT', 'w') as f:
-    json.dump(final_data, f)
-"
+# Usamos la URL completa del environment para forzar la descarga y resolución de {{api_version}}
+eval newman run "\"https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY\"" \
+  --environment "\"https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY\"" \
+  $FOLDER_FLAGS $DATA_PARAM --insecure -r cli,json,htmlextra \
+  --reporter-json-export "\"$JSON_REPORT\"" \
+  --reporter-htmlextra-export "\"$HTML_NEWMAN\"" \
+  --suppress-exit-code | tee "$LOG_FILE"
+
+#!/bin/bash
+
+# ... [Secciones 1, 2 y 3 se mantienen iguales] ...
 
 # ==========================================
-# 4. ANÁLISIS AGÉNTICO CON CLAUDE (AUDITORÍA DINÁMICA)
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE
 # ==========================================
-echo "🤖 Generando Informe de Auditoría Inteligente..."
+echo "🤖 Analizando resultados con Claude 3.5 Sonnet..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
+CLAUDE_REPORT_FILE="claude_report.html"
 
-python3 -c "import json, os; 
-if os.path.exists('$JSON_REPORT'):
-    d=json.load(open('$JSON_REPORT')); failures = d.get('run', {}).get('failures', [])
-    with open('$FAILED_DATA_FILE', 'w') as f: json.dump(failures, f)
+# 1. Extraer los fallos del JSON de Newman
+python3 -c "
+import json, os
+try:
+    if os.path.exists('$JSON_REPORT'):
+        with open('$JSON_REPORT', 'r') as f:
+            data = json.load(f)
+        # Newman guarda los fallos en run.failures
+        failures = data.get('run', {}).get('failures', [])
+        with open('$FAILED_DATA_FILE', 'w') as f:
+            json.dump(failures, f)
+        print(f'✅ Se encontraron {len(failures)} fallos para analizar.')
+    else:
+        print('⚠️ No se encontró el archivo de resultados JSON.')
+except Exception as e:
+    print(f'❌ Error procesando JSON: {e}')
 "
 
-if [ -s "$FAILED_DATA_FILE" ] && [ "$(cat $FAILED_DATA_FILE)" != "[]" ]; then
-    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
+# 2. Llamar a la IA solo si hay fallos o para generar resumen positivo
+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" FAILED_DATA_PATH="$FAILED_DATA_FILE" python3 << 'PYEOF'
 import json, subprocess, os, re
 
-def call_claude(api_key, model_id, prompt):
+def call_claude(api_key, prompt):
     payload = {
-        "model": model_id,
+        "model": "claude-3-5-sonnet-20240620",
         "max_tokens": 4000,
         "messages": [{"role": "user", "content": prompt}]
     }
     res = subprocess.run([
         "curl", "-s", "https://api.anthropic.com/v1/messages",
-        "-H", f"x-api-key: {api_key}", 
+        "-H", f"x-api-key: {api_key}",
         "-H", "anthropic-version: 2023-06-01",
-        "-H", "content-type: application/json", 
+        "-H", "content-type: application/json",
         "-d", json.dumps(payload)
     ], capture_output=True, text=True)
-    try: return json.loads(res.stdout)
-    except: return {"error": {"message": "Invalid API Response"}}
+    return res.stdout
 
-api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-failed_data_path = os.environ.get("FAILED_DATA_PATH")
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+failed_path = os.environ.get("FAILED_DATA_PATH")
 
 try:
-    with open(failed_data_path, "r") as f: 
-        failed_data = json.load(f)
-    
-    fallos_puros = []
-    for f in failed_data:
-        assertion_text = f.get('at', 'N/A')
-        trace_match = re.search(r'ID: ([a-z0-9-]+)', assertion_text)
-        fallos_puros.append({
-            "request_name": f.get('source', {}).get('name', 'N/A'),
-            "error_detail": f.get('error', {}).get('message', 'N/A'),
-            "evidence_id": trace_match.group(1) if trace_match else "N/A"
-        })
+    with open(failed_path, "r") as f:
+        failures = json.load(f)
 
-    prompt = f"""
-    Actúa como un Auditor Senior de QA y Ciberseguridad. Tu tarea es analizar un set de fallos técnicos y generar un INFORME DE HALLAZGOS para Confluence.
+    if not failures:
+        html = "<p style='color: #27ae60;'><b>✅ Auditoría Exitosa:</b> No se detectaron fallos técnicos en los escenarios evaluados.</p>"
+    else:
+        # Simplificar datos para Claude
+        clean_failures = []
+        for f in failures:
+            clean_failures.append({
+                "escenario": f.get('source', {}).get('name', 'N/A'),
+                "error_tecnico": f.get('error', {}).get('message', 'N/A'),
+                "request_url": f.get('source', {}).get('request', {}).get('url', {}).get('raw', 'N/A')
+            })
 
-    DATOS DE FALLOS (JSON): {json.dumps(fallos_puros)}
+        prompt = f"""
+        Actúa como un Auditor Senior de QA. Analiza estos fallos de API en Finkargo:
+        {json.dumps(clean_failures)}
+        
+        Instrucciones:
+        1. Genera un reporte técnico en HTML (solo el contenido de un div).
+        2. Crea una tabla con: Escenario, Hallazgo, Impacto (Alto/Medio/Bajo) y Acción Recomendada.
+        3. Usa estilos inline: header de tabla color #2c3e50 y texto blanco.
+        4. Si ves errores '400', infiere si es por datos duplicados o validación de campos.
+        """
+        
+        response_raw = call_claude(api_key, prompt)
+        response_json = json.loads(response_raw)
+        
+        if "content" in response_json:
+            html = response_json["content"][0]["text"]
+            html = re.sub(r'```html|```', '', html).strip()
+        else:
+            error_msg = response_json.get('error', {}).get('message', 'Unknown Error')
+            html = f"<p style='color: red;'>⚠️ Error de Claude: {error_msg}</p>"
 
-    INSTRUCCIONES DE ANÁLISIS:
-    1. Identifica patrones en los errores y AGRÚPALOS por categorías lógicas (ej: 'Seguridad', 'Estabilidad', 'Contrato de API', 'Reglas de Negocio', etc.). 
-    No uses categorías fijas, créalas según lo que veas en los datos.
-    2. Para cada categoría, genera una tabla HTML que resuma los casos afectados.
-    3. Para cada fallo, deduce e infiere el 'Hallazgo' y la 'Acción Recomendada' basándote en el nombre del escenario y el error técnico.
-    4. El informe debe ser claro, conciso y orientado a la acción, dirigido a un equipo de desarrollo con conocimientos técnicos.
-    5. Prioriza los hallazgos según su impacto potencial (ej: seguridad > estabilidad > otros).
-    6. Evita información redundante y enfócate en insights accionables.
-    7. El resultado final debe ser un bloque de HTML listo para pegar en Confluence, con tablas bien formateadas y un resumen ejecutivo al inicio.
-    8. Debes permitir evidenciar e identificar los datos de prueba con los que falla el test, para que el equipo de desarrollo pueda reproducirlo fácilmente.
-
-    REGLAS DE FORMATO (HTML):
-    - Título principal: <h2>Informe de Auditoría Técnica</h2>
-    - Resumen ejecutivo: <p><b>Fallas analizadas:</b> {len(fallos_puros)}</p>
-    - Estilo de tablas: width="100%", border="1", cellpadding="8", estilos inline.
-    - Headers de tabla: fondo #2c3e50, color blanco.
-    - NO uses Markdown (etiquetas ```).
-    - NO incluyas información de SLA.
-    """
-
-    models = ["claude-sonnet-4-5"]
-    final_html = ""
-    for m in models:
-        resp = call_claude(api_key, m, prompt)
-        if "content" in resp:
-            final_html = resp["content"][0]["text"]
-            break
-    
-    if final_html:
-        clean_html = re.sub(r'```html|```', '', final_html).strip()
-        with open("claude_report.html", "w") as f: f.write(clean_html.replace("\n", " "))
-    else: raise Exception("Claude no respondió.")
+    with open("claude_report.html", "w") as f:
+        f.write(html)
 
 except Exception as e:
-    with open("claude_report.html", "w") as f: f.write(f"<p>⚠️ Error: {str(e)}</p>")
+    with open("claude_report.html", "w") as f:
+        f.write(f"<p>❌ Error Crítico en Script: {str(e)}</p>")
 PYEOF
-fi
 
 # ==========================================
-# 5. PUBLICACIÓN ORGANIZADA EN CONFLUENCE
+# 5. PUBLICACIÓN EN CONFLUENCE
 # ==========================================
-echo "📂 Organizando jerarquía para ambiente: $AMBIENTE..."
-
-if [ "$AMBIENTE" == "Staging" ]; then
-    AMBIENTE_PARENT_ID="2217115649" 
-else
-    AMBIENTE_PARENT_ID="2216984577" 
-fi
-
+echo "📤 Publicando página en Confluence..."
+[[ "$AMBIENTE" == "Staging" ]] && AMBIENTE_PARENT_ID="2217115649" || AMBIENTE_PARENT_ID="2216984577"
 FOLDER_TITLE="Auditorías $AMBIENTE - $PROYECTO"
+TITLE="[$PROYECTO][#$EXEC_NUM] Audit [$AMBIENTE] - $NOW"
 
-# Buscar carpeta del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
 SEARCH_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL")
 PROJECT_FOLDER_ID=$(echo "$SEARCH_RES" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['results'][0]['id'] if data['results'] else '')")
 
-# Crear carpeta si no existe
-if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ] || [ "$PROJECT_FOLDER_ID" == "" ]; then
-    echo "📁 Creando nueva carpeta: $FOLDER_TITLE"
-    FOLDER_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
-        'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
-        'ancestors': [{'id': sys.argv[3]}], 
-        'body': {'storage': {'value': '<p>Reportes de $PROYECTO en $AMBIENTE</p><ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}
-    }))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
-    
-    CREATE_FOLDER_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FOLDER_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
-    PROJECT_FOLDER_ID=$(echo "$CREATE_FOLDER_RES" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
-fi
-
-# ✅ Fallback si el resumen CLI está vacío — mostrar el log completo
-SUMMARY_CLI=$(sed -n '/┌/,/┘/p' "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
-
-if [ -z "$SUMMARY_CLI" ]; then
-    SUMMARY_CLI=$(cat "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+if [ -z "$PROJECT_FOLDER_ID" ] || [ "$PROJECT_FOLDER_ID" == "None" ]; then
+    PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 'ancestors': [{'id': sys.argv[3]}], 'body': {'storage': {'value': '<ac:structured-macro ac:name=\"children\" />', 'representation': 'storage'}}}))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
+    PROJECT_FOLDER_ID=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$CONF_BASE_URL/rest/api/content" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
 fi
 
 CLEAN_AI_RCA=$( [ -f "claude_report.html" ] && cat claude_report.html || echo "<p>✅ Sin fallos detectados.</p>" )
-HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
+SUMMARY_CLI=$(cat "$LOG_FILE" | tr -d '\r' | sed 's/"/\\"/g' | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+HTML_BODY="<h2>📊 Reporte Auditoría</h2>$CLEAN_AI_RCA<br/><h3>💻 Resumen CLI</h3><ac:structured-macro ac:name='code'><ac:plain-text-body><![CDATA[$SUMMARY_CLI]]></ac:plain-text-body></ac:structured-macro>"
 
-FINAL_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({
-    'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 
-    'ancestors': [{'id': sys.argv[3]}], 
-    'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}
-}))" "$TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$HTML_BODY")
+FINAL_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'type': 'page', 'title': sys.argv[1], 'space': {'key': sys.argv[2]}, 'ancestors': [{'id': sys.argv[3]}], 'body': {'storage': {'value': sys.argv[4], 'representation': 'storage'}}}))" "$TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$HTML_BODY")
+RESPONSE_PUB=$(curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content")
 
-echo "📤 Publicando reporte..."
-curl -s -u "$CONF_USER:$CONF_TOKEN" -X POST -H 'Content-Type: application/json' -d "$FINAL_PAYLOAD" "$CONF_BASE_URL/rest/api/content" | python3 -m json.tool
+# CAPTURAR ID DE LA NUEVA PÁGINA PARA ADJUNTAR EL HTML
+NEW_PAGE_ID=$(echo "$RESPONSE_PUB" | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))")
+
+# ==========================================
+# 6. ADJUNTAR REPORTE VISUAL (HTMLEXTRA)
+# ==========================================
+if [ -n "$NEW_PAGE_ID" ] && [ "$NEW_PAGE_ID" != "None" ] && [ -f "$HTML_NEWMAN" ]; then
+    echo "📎 Adjuntando reporte htmlextra a la página ID: $NEW_PAGE_ID"
+    
+    # Subir el archivo como adjunto a la página de Confluence
+    curl -s -u "$CONF_USER:$CONF_TOKEN" \
+         -X POST \
+         -H "X-Atlassian-Token: nocheck" \
+         -F "file=@$HTML_NEWMAN" \
+         -F "comment=Reporte detallado Newman generado automáticamente" \
+         "$CONF_BASE_URL/rest/api/content/$NEW_PAGE_ID/attachments" | python3 -m json.tool
+    
+    echo "✅ Todo finalizado. Revisa Confluence para ver el reporte y el adjunto."
+else
+    echo "⚠️ No se pudo adjuntar el reporte (Página no encontrada o archivo faltante)."
+fi

@@ -1,4 +1,4 @@
-name: QA Audit Full Orchestrator
+name: qa-navia
 on:
   workflow_dispatch:
     inputs:
@@ -7,8 +7,7 @@ on:
         required: true
         default: "ms-core-entities-k8s"
         type: choice
-        options: [CORE, FLOWS, ms-auth, ms-communicator, PAGOS, INTEGRATIONS, ms-api-co ]
-        options: [ms-core-entities-k8s, FLOWS, ms-auth, ms-accounts, ms-payments, ms-kyc, ms-notifications, ms-reports]
+        options: [ms-core-entities-k8s]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
@@ -55,14 +54,6 @@ jobs:
             "${{ github.event.inputs.folder }}"
       - name: Upload Local Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports-${{ github.event.inputs.proyecto }}-${{ github.run_id }}
-          path: |
-            scripts/*.html
-            scripts/*.json
-            scripts/*.txt
-          retention-days: 7
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
           cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true

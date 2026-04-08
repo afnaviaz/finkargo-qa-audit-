@@ -1,0 +1,71 @@
+name: QA Audit - ms-core-entities
+
+on:
+  workflow_dispatch:
+    inputs:
+      folder:
+        description: "Módulo o País a auditar"
+        required: true
+        default: "Suppliers"
+        type: choice
+        options:
+          - "CO"
+          - "MX"
+          - "Cross"
+          - "Verification"
+          - "LegalInfo"
+          - "Suppliers"
+      ambiente:
+        description: "Ambiente de ejecución"
+        required: true
+        default: "Testing"
+        type: choice
+        options: [Testing, Staging]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Para evitar el warning de Node 20
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run-audit-pipeline:
+    name: "Audit: ms-core-entities / ${{ github.event.inputs.folder }}"
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Permissions
+        run: chmod +x scripts/run_all.sh
+
+      - name: Execute QA Audit
+        shell: bash
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          # Ejecución pasando los parámetros del workflow
+          ./scripts/run_all.sh \
+            "ms-core-entities" \
+            "${{ github.event.inputs.folder }}" \
+            "${{ github.event.inputs.ambiente }}"
+
+      - name: Prepare Artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+          cp scripts/*.html scripts/*.json scripts/*.txt artifacts/ 2>/dev/null || true
+
+      - name: Upload Results to GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ github.event.inputs.folder }}-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 5
