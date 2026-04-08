@@ -65,6 +65,13 @@
       "External":"External",
       "Risks": "Risks"
   }
+ },
+
+"FDM-6197 Cross Accounts CLABE": {
+    "collection_id": "19198347-2aef1759-4edc-4291-ae12-5aae4d44cc6c",
+    "folders": {
+    
+  }
  }
 }
 

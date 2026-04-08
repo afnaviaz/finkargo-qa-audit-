@@ -1,4 +1,4 @@
-name: QA Audit - OB v2 - MX-stern.yml
+name: QA Audit Cross Accounts CLABE
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         default: "CORE"
         type: choice
-        options: [CORE, FLOWS, ms-auth, ms-communicator, PAGOS, INTEGRATIONS, ms-api-co]
+        options: [FDM-6197 Cross Accounts CLABE]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
