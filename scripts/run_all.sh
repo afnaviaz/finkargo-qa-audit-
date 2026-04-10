@@ -3,19 +3,28 @@
 # ==========================================
 # 1. LÓGICA DE EJECUCIÓN Y PARÁMETROS
 # ==========================================
-PROYECTO=$1
-FOLDER_OVERRIDE=$2  # El input de GitHub: "01-Register Company", "Suppliers", etc.
-PAIS_INPUT=$3        # CO, MX, ALL
+PROYECTO=$1         # ms-core-entities
+FOLDER_INPUT=$2     # 01-Register Company (Viene del input de GitHub)
+PAIS_INPUT=$3       # CO, MX, ALL
 AMBIENTE=$4         # Testing, Staging
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 
+# Verificación de archivos base
 [ ! -f "$CONFIG_PATH" ] && { echo "❌ ERROR: No se encontró $CONFIG_PATH"; exit 1; }
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-1}"
 NOW=$(date +'%Y-%m-%d %H:%M:%S')
+
+# Definición de rutas de reporte (Rutas absolutas para evitar errores de tee)
+JSON_REPORT="$SCRIPTS_DIR/results_final.json"
+HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
+LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
+
+# Limpieza de archivos previos
+rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "claude_report.html"
 
 # ==========================================
 # 2. CONFIGURACIÓN DINÁMICA (PYTHON HELPERS)
@@ -29,15 +38,14 @@ try:
     if '$3' == 'id': print(data['$1']['collection_id'])
     elif '$3' == 'all_folders': print('\n'.join(data['$1']['folders'].values()))
     else: print(data['$1']['folders'].get('$2', ''))
-except Exception as e:
-    sys.exit(1)
+except: sys.exit(1)
 "
 }
 
 COLLECTION_UID=$(get_config "$PROYECTO" "$PAIS_INPUT" "id")
 
 # IDs de Entornos (Mapping de Finkargo)
-if [ "$PAIS_INPUT" == "CO" ] || [ "$FOLDER_OVERRIDE" == "Suppliers" ]; then
+if [ "$PAIS_INPUT" == "CO" ] || [ "$FOLDER_INPUT" == "Suppliers" ]; then
     if [ "$AMBIENTE" == "Staging" ]; then
         ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf"
     else
@@ -59,12 +67,17 @@ SPACE_KEY="QA"
 # ==========================================
 # 3. EJECUCIÓN NEWMAN (FIX HTMLEXTRA MATCH)
 # ==========================================
-# 1. Construir flags de carpeta (Sin escapar comillas internas aquí)
+DATA_PARAM=""
+[ -f "$DATA_FILE" ] && DATA_PARAM="-d $DATA_FILE"
+
+# Lógica de Carpeta: Si el input de GitHub trae nombre, lo usamos directamente
+FOLDER_NAME="$FOLDER_INPUT"
+
 if [ "$PAIS_INPUT" == "ALL" ]; then
     FOLDER_CO=$(get_config "$PROYECTO" "CO" "")
     FOLDER_MX=$(get_config "$PROYECTO" "MX" "")
     echo "🚀 Iniciando Newman (ALL): $FOLDER_CO + $FOLDER_MX"
-    # Ejecución para ALL (usando un array para manejar argumentos complejos de forma segura)
+    
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
       --folder "$FOLDER_CO" \
@@ -76,7 +89,7 @@ if [ "$PAIS_INPUT" == "ALL" ]; then
       --suppress-exit-code | tee "$LOG_FILE"
 else
     echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
-    # Ejecución Estándar (Sin 'eval' y con variables bien citadas)
+    
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
       --folder "$FOLDER_NAME" \
@@ -92,9 +105,8 @@ fi
 # ==========================================
 echo "🤖 Analizando resultados con Claude 3.5 Sonnet..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
-CLAUDE_REPORT_FILE="$SCRIPTS_DIR/claude_report.html"
+CLAUDE_REPORT_FILE="claude_report.html"
 
-# Extraer fallos del JSON
 python3 -c "
 import json, os
 try:
@@ -111,7 +123,6 @@ except Exception as e:
     print(f'❌ Error procesando JSON: {e}')
 "
 
-# Llamada a Claude vía Python
 export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
 export FAILED_DATA_PATH="$FAILED_DATA_FILE"
 
@@ -180,7 +191,6 @@ echo "📤 Publicando en Confluence..."
 FOLDER_TITLE="Auditorías $AMBIENTE - $PROYECTO"
 TITLE="[$PROYECTO] Audit [$FOLDER_NAME] - Run $EXEC_NUM"
 
-# Lógica de búsqueda de carpeta padre...
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
 SEARCH_RES=$(curl -s -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL")
 PROJECT_FOLDER_ID=$(echo "$SEARCH_RES" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['results'][0]['id'] if data['results'] else '')")
