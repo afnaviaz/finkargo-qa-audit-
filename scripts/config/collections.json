@@ -1,69 +1,23 @@
 {
- "ms-core-entities-k8s": {
-    "collection_id": "28918329-df9dcacc-1630-417a-89c4-c42ffb5e24f7",
+  "ms-core-entities-k8s": {
+    "collection_id": "28918329-0c40a473-fcd2-4042-a731-c684819aa5cc",
     "folders": {
-      "CO": "🇨🇴 Colombia",
-      "MX": "🇲🇽 Mexico",
-      "CROSS": "🇨🇴-🇲🇽 Cross",
-      "Legal": "02-Legal info CO",
-      "Suppliers": "Suppliers"
+      "CO": "colombia",
+      "MX": "mexico",
+      "CROSS": "cross"
     }
   },
-  "FLOWS": {
-    "collection_id": "19456853-2e2dad1c-9a9c-4427-8d42-07bd1df04ddd",
-    "folders": {
-      "CO": "Folder Flows CO",
-      "MX": "Folder Flows MX"
-    }
-  },
-
-
- 
-"ms-auth": {
-    "collection_id": "22777311-cef8b055-4bcd-4789-b7f5-3c9524cd970d",
-    "folders": {
-      "Session": "Session",
-      "Users": "Users",
-      "Groups": "Groups",
-      "Modules": "Modules",
-      "Password": "Password",
-      "Scopes": "Scopes",
-      "Me": "Me",
-      "Marketplace products": "Marketplace products",
-      "Marketplace catalogues": "Marketplace catalogues",
-      "Roles": "Roles"
-  }
-},
-
-"ms-communicator": {
-    "collection_id": "19456853-edd1958b-5396-4417-b212-62f73edec165",
-    "folders": {
-      "Send mail": "Send mail"
-  }
-},
-
-"V1": {
-    "collection_id": "17667316-212887a2-938d-4e66-b62b-d64fc97d6799",
-    "folders": {
-      "Risks": "Risks"
-  }
-},
-
-"PAGOS": {
-    "collection_id": "19456853-f14dfded-ed86-4f73-b5da-0534315775ea",
-    "folders": {
-      "Happy path": "Happy path"
-  }
-},
-
-"INTEGRATIONS": {
-    "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
-    "multi_folder": true,
-    "folders": {
-      "SUPRA INTEGRATION": "SUPRA INTEGRATION",
-      "SUPRA EPAYMENTS": "SUPRA EPAYMENTS",
-      "SUPRA WALLET - EPAYMENTS": "SUPRA WALLET - EPAYMENTS"
+  "countries_config": {
+    "colombia": {
+      "collection_id": "28918329-298f5763-a617-4496-a48d-2e67305d7ea9",
+      "folders": {
+        "01-Register Company": "01-Register Company",
+        "02-Legal info CO": "02-Legal info CO",
+        "03-Update company": "03-Update company",
+        "Suppliers": "Suppliers",
+        "Economic Activities": "Economic Activities",
+        "Contactos de Proveedores": "Contactos de Proveedores"
+      }
     }
   }
 }
-
