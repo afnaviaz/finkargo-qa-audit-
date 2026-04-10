@@ -4,26 +4,32 @@ on:
   workflow_dispatch:
     inputs:
       folder:
-        description: "Módulo o País a auditar"
+        description: "Selecciona la subcarpeta específica a auditar"
         required: true
-        default: "Suppliers"
+        default: "01-Register Company"
         type: choice
-        options:
-          - "CO"
-          - "MX"
-          - "Cross"
-          - "Verification"
-          - "LegalInfo"
+        options: 
+          - "01-Register Company"
+          - "02-Legal info CO"
+          - "03-Update company"
           - "Suppliers"
+          - "Economic Activities"
+          - "Contactos de Proveedores"
+      pais:
+        description: "País contexto de ejecución (ALL ejecutará CO y MX)"
+        required: true
+        default: "CO"
+        type: choice
+        options: [CO, MX, ALL]
       ambiente:
-        description: "Ambiente de ejecución"
+        description: "Ambiente de ejecución (Testing o Staging)"
         required: true
         default: "Testing"
         type: choice
         options: [Testing, Staging]
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Para evitar el warning de Node 20
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
 
 permissions:
   contents: read
@@ -31,7 +37,7 @@ permissions:
 
 jobs:
   run-audit-pipeline:
-    name: "Audit: ms-core-entities / ${{ github.event.inputs.folder }}"
+    name: "Audit: ms-core-entities / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
     runs-on: self-hosted
     steps:
       - name: Checkout Repository
@@ -50,10 +56,15 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          # Ejecución pasando los parámetros del workflow
+          # Se pasan los argumentos en el orden exacto que requiere tu script:
+          # 1. Proyecto estático: ms-core-entities
+          # 2. Folder: Subcarpeta seleccionada
+          # 3. Pais: Contexto de ejecución
+          # 4. Ambiente: Testing/Staging
           ./scripts/run_all.sh \
             "ms-core-entities" \
             "${{ github.event.inputs.folder }}" \
+            "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
 
       - name: Prepare Artifacts

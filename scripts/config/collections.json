@@ -1,30 +1,19 @@
 {
   "countries_config": {
-    "🇨🇴 Colombia": {
-      "collection_id": "28918329-298f5763-a617-4496-a48d-2e67305d7ea9",
+    "ms-core-entities-k8s": {
+      "collection_id": "28918329-0c40a473-fcd2-4042-a731-c684819aa5cc",
       "folders": {
-        "01-Register Company": "01-Register Company",
-        "02-Legal info CO": "02-Legal info CO",
-        "03-Update company": "03-Update company",
-        "Suppliers": "Suppliers",
-        "Economic Activities": "Economic Activities",
-        "Contactos de Proveedores": "Contactos de Proveedores"
+        "🇨🇴 Colombia": {
+          "subfolders": {
+            "01-Register Company": "01-Register Company",
+            "02-Legal info CO": "02-Legal info CO",
+            "03-Update company": "03-Update company",
+            "Suppliers": "Suppliers",
+            "Economic Activities": "Economic Activities",
+            "Contactos de Proveedores": "Contactos de Proveedores"
+          }
+        }
       }
     }
-  },
-
-  "ms-api-co": {
-    "collection_id": "17667316-b2840d32-de77-4305-8b68-c204d0cad0a3",
-    "folders": {
-      "v1":"v1",
-      "External":"External",
-      "Risks": "Risks"
-  }
- },
-
-"FDM-6197 Cross Accounts CLABE": {
-    "collection_id": "19198347-2aef1759-4edc-4291-ae12-5aae4d44cc6c",
-    "folders": {
-    
   }
 }
