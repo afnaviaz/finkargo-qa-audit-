@@ -1,4 +1,4 @@
-name: QA Audit Full Orchestrator
+name: Regression QA Audit - ms-core-entities-k8s
 on:
   workflow_dispatch:
     inputs:
@@ -23,10 +23,14 @@ on:
       folder:
         description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
         required: false
-        default: ""
+        default: "01-Register Company"
+        type: choice
+        options: ["01-Register Company", "02-Legal info CO", "03-Update company", "Suppliers", "Economic Activities", "Contactos de Proveedores"]
+
 permissions:
   contents: read
   actions: read
+
 jobs:
   run-audit-pipeline:
     name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
