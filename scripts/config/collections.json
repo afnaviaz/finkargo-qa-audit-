@@ -1,11 +1,14 @@
 {
   "ms-core-entities": {
     "collection_id": "28918329-0c40a473-fcd2-4042-a731-c684819aa5cc",
+    "description": "Microservicio de Entidades Core - K8s",
     "folders": {
-      "01-Register Company": "01-Register Company",
-      "Suppliers": "Suppliers",
-      "02-Legal info CO": "02-Legal info CO",
-      "03-Update company": "03-Update company"
+      "01-Register Company": "28918329-a6b30e81-073e-474e-b3bf-782fcd8dcd4c",
+      "02-Legal info CO": "28918329-b2dd76fb-bc94-47c5-8f33-988e6462e5b0",
+      "03-Update company": "28918329-85f971d0-dc62-4888-b48b-f2227d51be15",
+      "Suppliers": "28918329-b8c67f26-b4d4-4af3-99c4-ca06f9ee53a0",
+      "Contactos de Proveedores": "28918329-c207e5bf-10e3-4e5d-a931-68f402a0816a",
+      "Colombia_Full": "28918329-298f5763-a617-4496-a48d-2e67305d7ea9"
     }
   }
 }
