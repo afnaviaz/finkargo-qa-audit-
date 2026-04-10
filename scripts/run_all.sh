@@ -59,41 +59,33 @@ SPACE_KEY="QA"
 # ==========================================
 # 3. EJECUCIÓN NEWMAN (FIX HTMLEXTRA MATCH)
 # ==========================================
-rm -f "$SCRIPTS_DIR"/results_final.json "$SCRIPTS_DIR"/reporte_visual_newman.html
-JSON_REPORT="$SCRIPTS_DIR/results_final.json"
-HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
-LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
-
-DATA_PARAM=""
-[ -f "$DATA_FILE" ] && DATA_PARAM="-d \"$DATA_FILE\""
-
-# Lógica de Carpeta (Si no hay override, busca en config)
-if [ -n "$FOLDER_OVERRIDE" ]; then
-    FOLDER_NAME="$FOLDER_OVERRIDE"
-else
-    FOLDER_NAME=$(get_config "$PROYECTO" "$PAIS_INPUT" "")
-fi
-
-# Construir flags de carpeta
+# 1. Construir flags de carpeta (Sin escapar comillas internas aquí)
 if [ "$PAIS_INPUT" == "ALL" ]; then
     FOLDER_CO=$(get_config "$PROYECTO" "CO" "")
     FOLDER_MX=$(get_config "$PROYECTO" "MX" "")
-    FOLDER_FLAGS="--folder \"$FOLDER_CO\" --folder \"$FOLDER_MX\""
     echo "🚀 Iniciando Newman (ALL): $FOLDER_CO + $FOLDER_MX"
+    # Ejecución para ALL (usando un array para manejar argumentos complejos de forma segura)
+    newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
+      --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
+      --folder "$FOLDER_CO" \
+      --folder "$FOLDER_MX" \
+      $DATA_PARAM --insecure -r cli,json,htmlextra \
+      --reporter-json-export "$JSON_REPORT" \
+      --reporter-htmlextra-export "$HTML_NEWMAN" \
+      --reporter-htmlextra-title "Audit Report - ALL - $NOW" \
+      --suppress-exit-code | tee "$LOG_FILE"
 else
-    FOLDER_FLAGS="--folder \"$FOLDER_NAME\""
     echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
+    # Ejecución Estándar (Sin 'eval' y con variables bien citadas)
+    newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
+      --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
+      --folder "$FOLDER_NAME" \
+      $DATA_PARAM --insecure -r cli,json,htmlextra \
+      --reporter-json-export "$JSON_REPORT" \
+      --reporter-htmlextra-export "$HTML_NEWMAN" \
+      --reporter-htmlextra-title "Audit Report - $FOLDER_NAME - $NOW" \
+      --suppress-exit-code | tee "$LOG_FILE"
 fi
-
-# EJECUCIÓN NEWMAN
-# --reporter-htmlextra-title previene el error 'match' de htmlextra
-eval newman run "\"https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY\"" \
-  --environment "\"https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY\"" \
-  $FOLDER_FLAGS $DATA_PARAM --insecure -r cli,json,htmlextra \
-  --reporter-json-export "\"$JSON_REPORT\"" \
-  --reporter-htmlextra-export "\"$HTML_NEWMAN\"" \
-  --reporter-htmlextra-title "\"Audit Report - $FOLDER_NAME - $NOW\"" \
-  --suppress-exit-code | tee "$LOG_FILE"
 
 # ==========================================
 # 4. ANÁLISIS AGÉNTICO CON CLAUDE
