@@ -66,6 +66,8 @@ jobs:
             scripts/*.html
             scripts/*.json
             scripts/*.txt
+            scripts/*.png
+            scripts/playwright-videos/
           retention-days: 7
         run: |
           mkdir -p ${{ github.workspace }}/artifacts

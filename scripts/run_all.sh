@@ -22,9 +22,10 @@ NOW=$(date +'%Y-%m-%d %H:%M:%S')
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
 LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
+ENV_EXPORT="$SCRIPTS_DIR/environment_export.json"
 
 # Limpieza de archivos previos
-rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "claude_report.html"
+rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "claude_report.html" "$ENV_EXPORT"
 
 # ==========================================
 # 2. CONFIGURACIÓN DINÁMICA (PYTHON HELPERS)
@@ -86,10 +87,11 @@ if [ "$PAIS_INPUT" == "ALL" ]; then
       --reporter-json-export "$JSON_REPORT" \
       --reporter-htmlextra-export "$HTML_NEWMAN" \
       --reporter-htmlextra-title "Audit Report - ALL - $NOW" \
+      --export-environment "$ENV_EXPORT" \
       --suppress-exit-code | tee "$LOG_FILE"
 else
     echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
-    
+
     newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
       --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
       --folder "$FOLDER_NAME" \
@@ -97,7 +99,32 @@ else
       --reporter-json-export "$JSON_REPORT" \
       --reporter-htmlextra-export "$HTML_NEWMAN" \
       --reporter-htmlextra-title "Audit Report - $FOLDER_NAME - $NOW" \
+      --export-environment "$ENV_EXPORT" \
       --suppress-exit-code | tee "$LOG_FILE"
+fi
+
+# ==========================================
+# 3.5 EJECUCIÓN PLAYWRIGHT (si hay payment_link)
+# ==========================================
+PAYMENT_LINK=$(python3 -c "
+import json, sys
+try:
+    with open('$ENV_EXPORT') as f:
+        env = json.load(f)
+    values = env.get('values', [])
+    match = next((v['value'] for v in values if v['key'] == 'payment_link' and v['value']), None)
+    print(match or '')
+except:
+    print('')
+" 2>/dev/null)
+
+if [ -n "$PAYMENT_LINK" ]; then
+    echo "🎭 payment_link detectado. Iniciando Playwright..."
+    export PAYMENT_LINK="$PAYMENT_LINK"
+    export SCRIPTS_DIR="$SCRIPTS_DIR"
+    node "$SCRIPTS_DIR/playwright/payment_flow.js" "$PAYMENT_LINK" || echo "⚠️ Playwright terminó con errores (no bloquea el pipeline)"
+else
+    echo "ℹ️ No se encontró payment_link en el entorno exportado. Saltando Playwright."
 fi
 
 # ==========================================
