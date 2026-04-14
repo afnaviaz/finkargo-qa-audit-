@@ -38,8 +38,11 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
     await page.goto(PAYMENT_LINK, { waitUntil: 'networkidle' });
 
     // --- Llenar Nombre del Pagador ---
-    await page.waitForSelector('input[placeholder*="Nombre"], input[name*="name"], input[id*="name"]');
-    await page.fill('input[placeholder*="Nombre"], input[name*="name"]', TEST_DATA.nombre);
+    //await page.waitForSelector('input[placeholder*="Nombre"], input[name*="name"], input[id*="name"]');
+    //await page.fill('input[placeholder*="Nombre"], input[name*="name"]', TEST_DATA.nombre);
+    await page.waitForSelector('#mat-input-0')
+    await page.fill('#mat-input-0')
+
 
     // --- Llenar Correo Electrónico ---
     await page.fill('input[type="email"], input[placeholder*="correo"], input[placeholder*="email"]', TEST_DATA.correo);
