@@ -110,7 +110,39 @@ esac
 log "Environment UID : $ENV_UID"
 
 # ----------------------------------------------------------
-# 5. CONSTRUCCION DE ARGUMENTOS NEWMAN
+# 5. DIAGNOSTICO POSTMAN API (antes de Newman)
+# ----------------------------------------------------------
+log "Verificando acceso a Postman API..."
+HTTP_STATUS=$(curl -s     -o /tmp/postman_api_test.json     -w "%{http_code}"     "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}")
+
+POSTMAN_RESPONSE=$(cat /tmp/postman_api_test.json 2>/dev/null | head -c 400)
+log "HTTP Status    : $HTTP_STATUS"
+log "API Response   : $POSTMAN_RESPONSE"
+
+if [[ "$HTTP_STATUS" == "200" ]]; then
+    log_ok "Postman API: acceso OK a la coleccion"
+elif [[ "$HTTP_STATUS" == "401" ]]; then
+    log_err "401 UNAUTHORIZED — POSTMAN_API_KEY invalida o expirada"
+    log_err "Regenera la key en: https://web.postman.co/settings/me/api-keys"
+    log_err "Luego actualiza el secret en: GitHub → Settings → Secrets → POSTMAN_API_KEY"
+    exit 1
+elif [[ "$HTTP_STATUS" == "403" ]]; then
+    log_err "403 FORBIDDEN — La key no tiene permisos sobre esta coleccion"
+    log_err "Verifica que la key es del mismo workspace que la coleccion 28918329-..."
+    exit 1
+elif [[ "$HTTP_STATUS" == "404" ]]; then
+    log_err "404 NOT FOUND — Collection UID no encontrado"
+    log_err "La POSTMAN_API_KEY puede ser valida pero de otro workspace sin acceso a esta coleccion"
+    log_err "Collection UID: $COLLECTION_UID"
+    exit 1
+else
+    log_err "Postman API respuesta inesperada: HTTP $HTTP_STATUS"
+    log_err "Respuesta: $POSTMAN_RESPONSE"
+    exit 1
+fi
+
+# ----------------------------------------------------------
+# 6. CONSTRUCCION DE ARGUMENTOS NEWMAN
 # ----------------------------------------------------------
 NEWMAN_BASE_ARGS=(
     "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
@@ -132,15 +164,25 @@ else
 fi
 
 # ----------------------------------------------------------
-# 6. EJECUCION NEWMAN
+# 7. EJECUCION NEWMAN
 # ----------------------------------------------------------
 NEWMAN_EXIT=0
 set +e  # Desactivar pipefail para capturar exit de newman correctamente
 
+# Resolver el folder a ejecutar según país e input
+# CO → carpeta padre "🇨🇴 Colombia" (ejecuta todo el subárbol Colombia)
+# MX → carpeta padre "🇲🇽 Mexico"
+# Folder específico → se usa directamente (viene del workflow dispatch)
+if [[ "$PAIS_INPUT" == "CO" && "$FOLDER_NAME" == "$PAIS_INPUT" ]]; then
+    FOLDER_NAME="🇨🇴 Colombia"
+elif [[ "$PAIS_INPUT" == "MX" && "$FOLDER_NAME" == "$PAIS_INPUT" ]]; then
+    FOLDER_NAME="🇲🇽 Mexico"
+fi
+
 if [[ "$PAIS_INPUT" == "ALL" ]]; then
-    FOLDER_CO=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "CO" "folder_id")
-    FOLDER_MX=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "MX" "folder_id")
-    log "Iniciando Newman (ALL): '$FOLDER_CO' + '$FOLDER_MX'"
+    FOLDER_CO="🇨🇴 Colombia"
+    FOLDER_MX="🇲🇽 Mexico"
+    log "Iniciando Newman (ALL): Colombia + Mexico"
 
     newman run "${NEWMAN_BASE_ARGS[@]}" \
         --folder "$FOLDER_CO" \
@@ -149,7 +191,7 @@ if [[ "$PAIS_INPUT" == "ALL" ]]; then
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
 else
-    log "Iniciando Newman | Folder: '$FOLDER_NAME'"
+    log "Iniciando Newman | Folder: '$FOLDER_NAME' | Pais: $PAIS_INPUT"
 
     newman run "${NEWMAN_BASE_ARGS[@]}" \
         --folder "$FOLDER_NAME" \
@@ -174,14 +216,14 @@ fi
 log_ok "Newman finalizado. Reporte JSON generado."
 
 # ----------------------------------------------------------
-# 7. EXTRACCION DE METRICAS
+# 8. EXTRACCION DE METRICAS
 # ----------------------------------------------------------
 log "Extrayendo metricas del reporte..."
 python3 "$HELPERS_DIR/extract_metrics.py" "$JSON_REPORT" "$METRICS_FILE"
 log_ok "Metricas extraidas -> $METRICS_FILE"
 
 # ----------------------------------------------------------
-# 8. ANALISIS CON CLAUDE AI
+# 9. ANALISIS CON CLAUDE AI
 # ----------------------------------------------------------
 log "Analizando con Claude AI..."
 python3 "$HELPERS_DIR/claude_analysis.py" \
@@ -190,7 +232,7 @@ python3 "$HELPERS_DIR/claude_analysis.py" \
 log_ok "Reporte Claude -> $CLAUDE_REPORT"
 
 # ----------------------------------------------------------
-# 9. PUBLICACION EN CONFLUENCE
+# 10. PUBLICACION EN CONFLUENCE
 # ----------------------------------------------------------
 log "Publicando en Confluence..."
 
@@ -278,7 +320,7 @@ NEW_PAGE_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('id
 log_ok "Pagina publicada. ID: $NEW_PAGE_ID"
 
 # ----------------------------------------------------------
-# 10. ADJUNTAR ARCHIVOS
+# 11. ADJUNTAR ARCHIVOS
 # ----------------------------------------------------------
 if [[ -f "$HTML_NEWMAN" ]]; then
     curl -sf -u "$CONF_USER:$CONF_TOKEN" \
@@ -299,7 +341,7 @@ if [[ -f "$METRICS_FILE" ]]; then
 fi
 
 # ----------------------------------------------------------
-# 11. RESUMEN FINAL
+# 12. RESUMEN FINAL
 # ----------------------------------------------------------
 FINAL_FAILURES=$(python3 -c "
 import json
