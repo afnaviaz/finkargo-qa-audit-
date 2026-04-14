@@ -1,7 +1,7 @@
 {
   "ms-core-entities": {
     "collection_id": "28918329-df9dcacc-1630-417a-89c4-c42ffb5e24f7",
-    "description": "Microservicio de Entidades Core - K8s (Finkargo2)",
+    "description": "Finkargo2 — ms-core-entities-k8s",
     "folders": {
       "CO": "🇨🇴 Colombia",
       "MX": "🇲🇽 Mexico",

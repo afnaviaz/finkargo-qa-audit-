@@ -112,64 +112,17 @@ log "Environment UID : $ENV_UID"
 # ----------------------------------------------------------
 # 5. DIAGNOSTICO POSTMAN API (antes de Newman)
 # ----------------------------------------------------------
-log "Verificando acceso a Postman API..."
-
-# Probar primero conectividad basica
-log "DNS resolution api.getpostman.com..."
-nslookup api.getpostman.com 2>&1 | head -4 || true
-
-# curl con verbose para capturar exactamente donde falla
-HTTP_STATUS=$(curl -sv --max-time 15 \
-    -o /tmp/postman_api_test.json \
-    -w "%{http_code}" \
-    "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}" \
-    2>/tmp/curl_verbose.txt)
-CURL_EXIT=$?
-
-POSTMAN_RESPONSE=$(cat /tmp/postman_api_test.json 2>/dev/null | head -c 400)
-CURL_VERBOSE=$(grep -E "Connected to|SSL|HTTP/|curl:|Could not|Failed" /tmp/curl_verbose.txt 2>/dev/null | head -8 || true)
-
-log "curl exit      : $CURL_EXIT (0=ok, 6=dns, 7=refused, 28=timeout, 35=ssl)"
-log "HTTP Status    : $HTTP_STATUS"
-log "curl verbose   : $CURL_VERBOSE"
-log "API Response   : $POSTMAN_RESPONSE"
-
-if [[ $CURL_EXIT -ne 0 ]]; then
-    log_err "curl fallo (exit $CURL_EXIT) — sin conectividad a api.getpostman.com"
-    case $CURL_EXIT in
-        6)  log_err "DNS FAIL — no se puede resolver api.getpostman.com" ;;
-        7)  log_err "CONNECTION REFUSED — host rechaza la conexion" ;;
-        28) log_err "TIMEOUT — la conexion tardo mas de 15s" ;;
-        35) log_err "SSL ERROR — problema con certificado TLS" ;;
-        *)  log_err "Error de red desconocido: exit $CURL_EXIT" ;;
-    esac
-    exit 1
-fi
-
-if [[ "$HTTP_STATUS" == "200" ]]; then
-    log_ok "Postman API: acceso OK"
-elif [[ "$HTTP_STATUS" == "401" ]]; then
-    log_err "401 UNAUTHORIZED — POSTMAN_API_KEY invalida o expirada"
-    log_err "Regenera en: https://web.postman.co/settings/me/api-keys"
-    exit 1
-elif [[ "$HTTP_STATUS" == "403" ]]; then
-    log_err "403 FORBIDDEN — key sin permisos sobre esta coleccion"
-    exit 1
-elif [[ "$HTTP_STATUS" == "404" ]]; then
-    log_err "404 NOT FOUND — Collection UID no encontrado: $COLLECTION_UID"
-    exit 1
-else
-    log_err "Postman API: HTTP $HTTP_STATUS inesperado"
-    log_err "Respuesta: $POSTMAN_RESPONSE"
-    exit 1
-fi
-
 # ----------------------------------------------------------
-# 6. CONSTRUCCION DE ARGUMENTOS NEWMAN
+# 5. CONSTRUCCION DE ARGUMENTOS NEWMAN
 # ----------------------------------------------------------
+# Usamos eval para que la POSTMAN_API_KEY se expanda correctamente
+# en el contexto de GitHub Actions (igual que el script original)
+COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
+ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
+
 NEWMAN_BASE_ARGS=(
-    "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
-    --environment "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
+    "$COLLECTION_URL"
+    --environment "$ENV_URL"
     --insecure
     -r cli,json,htmlextra
     --reporter-json-export      "$JSON_REPORT"
