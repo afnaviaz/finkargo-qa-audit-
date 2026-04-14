@@ -43,9 +43,14 @@ if [[ "$AMBIENTE" != "Testing" && "$AMBIENTE" != "Staging" ]]; then
 fi
 
 # Validar credenciales requeridas
-[[ -z "${POSTMAN_API_KEY:-}" ]]   && { log_err "POSTMAN_API_KEY no está definida.";   exit 1; }
-[[ -z "${CONF_TOKEN:-}"      ]]   && { log_err "CONF_TOKEN no está definida.";        exit 1; }
+[[ -z "${POSTMAN_API_KEY:-}" ]]   && { log_err "POSTMAN_API_KEY no definida. Agrégala en Settings → Secrets → POSTMAN_API_KEY"; exit 1; }
+[[ -z "${CONF_TOKEN:-}"      ]]   && { log_err "CONF_TOKEN no definida. Agrégala en Settings → Secrets → CONF_TOKEN"; exit 1; }
 [[ -z "${ANTHROPIC_API_KEY:-}" ]] && { log_warn "ANTHROPIC_API_KEY no definida. El análisis de IA será omitido."; }
+
+# Debug de credenciales (enmascarado — muestra solo primeros 8 chars para verificar que llegan)
+log "🔑 POSTMAN_API_KEY : ${POSTMAN_API_KEY:0:8}... (${#POSTMAN_API_KEY} chars)"
+log "🔑 CONF_TOKEN      : ${CONF_TOKEN:0:8}... (${#CONF_TOKEN} chars)"
+[[ -n "${ANTHROPIC_API_KEY:-}" ]] && log "🔑 ANTHROPIC_KEY   : ${ANTHROPIC_API_KEY:0:8}... (${#ANTHROPIC_API_KEY} chars)"
 
 # ----------------------------------------------------------
 # 2. RUTAS Y CONFIGURACIÓN
@@ -135,14 +140,7 @@ log "Environment UID : $ENV_UID"
 # ----------------------------------------------------------
 # 5. EJECUCIÓN NEWMAN
 # ----------------------------------------------------------
-DATA_PARAM=""
-if [[ -f "$DATA_FILE" ]]; then
-    DATA_PARAM="-d $DATA_FILE"
-    log "Data-driven: usando $DATA_FILE"
-else
-    log_warn "scenarios.json no encontrado. Ejecutando sin data-driven."
-fi
-
+# Construir args base de Newman (array — evita word-splitting con rutas con espacios)
 NEWMAN_BASE_ARGS=(
     "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
     --environment "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
@@ -155,9 +153,19 @@ NEWMAN_BASE_ARGS=(
     --timeout-script  10000
 )
 
-[[ -n "$DATA_PARAM" ]] && NEWMAN_BASE_ARGS+=($DATA_PARAM)
+# Fix: agregar -d como dos elementos separados para evitar word-splitting con rutas con espacios
+if [[ -f "$DATA_FILE" ]]; then
+    NEWMAN_BASE_ARGS+=("-d" "$DATA_FILE")
+    log "Data-driven: usando $DATA_FILE"
+else
+    log_warn "scenarios.json no encontrado. Ejecutando sin data-driven."
+fi
 
+# Fix: deshabilitar pipefail temporalmente para capturar exit de newman via PIPESTATUS
+# Con pipefail activo, "newman | tee" aborta el script si newman sale con != 0
 NEWMAN_EXIT=0
+set +e  # Desactivar temporalmente para el bloque newman | tee
+
 if [[ "$PAIS_INPUT" == "ALL" ]]; then
     FOLDER_CO=$(get_config "$PROYECTO" "CO" "")
     FOLDER_MX=$(get_config "$PROYECTO" "MX" "")
@@ -167,15 +175,20 @@ if [[ "$PAIS_INPUT" == "ALL" ]]; then
         --folder "$FOLDER_CO" \
         --folder "$FOLDER_MX" \
         --reporter-htmlextra-title "QA Audit · ALL · $AMBIENTE · $NOW" \
-        2>&1 | tee "$LOG_FILE" || NEWMAN_EXIT=$?
+        2>&1 | tee "$LOG_FILE"
+    NEWMAN_EXIT=${PIPESTATUS[0]}
 else
     log "🚀 Iniciando Newman → Folder: '$FOLDER_NAME'"
 
     newman run "${NEWMAN_BASE_ARGS[@]}" \
         --folder "$FOLDER_NAME" \
         --reporter-htmlextra-title "QA Audit · $FOLDER_NAME · $PAIS_INPUT · $AMBIENTE · $NOW" \
-        2>&1 | tee "$LOG_FILE" || NEWMAN_EXIT=$?
+        2>&1 | tee "$LOG_FILE"
+    NEWMAN_EXIT=${PIPESTATUS[0]}
 fi
+set -e  # Reactivar pipefail
+
+log "Newman exit code: $NEWMAN_EXIT (0=ok, 1=infra-error, 2=test-failures)"
 
 # Verificar que el reporte JSON fue generado
 if [[ ! -f "$JSON_REPORT" ]]; then
