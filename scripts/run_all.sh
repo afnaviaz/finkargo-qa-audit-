@@ -64,17 +64,10 @@ FOLDER_NAME="$FOLDER_INPUT"
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
 LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
-FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
-CLAUDE_REPORT_FILE="$SCRIPTS_DIR/claude_report.html"
-METRICS_FILE="$SCRIPTS_DIR/metrics_summary.json"
+ENV_EXPORT="$SCRIPTS_DIR/environment_export.json"
 
 # Limpieza de archivos previos
-rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$FAILED_DATA_FILE" "$CLAUDE_REPORT_FILE" "$METRICS_FILE"
-
-# Configuración Confluence
-CONF_USER="${CONF_USER:-andres.navia@finkargo.com}"
-CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
-SPACE_KEY="QA"
+rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "claude_report.html" "$ENV_EXPORT"
 
 log "${BOLD}════════════════════════════════════════════${RESET}"
 log "${BOLD} FINKARGO QA AUDIT v2.0${RESET}"
@@ -161,38 +154,62 @@ NEWMAN_EXIT=0
 if [[ "$PAIS_INPUT" == "ALL" ]]; then
     FOLDER_CO=$(get_config "$PROYECTO" "CO" "")
     FOLDER_MX=$(get_config "$PROYECTO" "MX" "")
-    log "🚀 Iniciando Newman (ALL): '$FOLDER_CO' + '$FOLDER_MX'"
-
-    newman run "${NEWMAN_BASE_ARGS[@]}" \
-        --folder "$FOLDER_CO" \
-        --folder "$FOLDER_MX" \
-        --reporter-htmlextra-title "QA Audit · ALL · $AMBIENTE · $NOW" \
-        2>&1 | tee "$LOG_FILE" || NEWMAN_EXIT=$?
+    echo "🚀 Iniciando Newman (ALL): $FOLDER_CO + $FOLDER_MX"
+    
+    newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
+      --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
+      --folder "$FOLDER_CO" \
+      --folder "$FOLDER_MX" \
+      $DATA_PARAM --insecure -r cli,json,htmlextra \
+      --reporter-json-export "$JSON_REPORT" \
+      --reporter-htmlextra-export "$HTML_NEWMAN" \
+      --reporter-htmlextra-title "Audit Report - ALL - $NOW" \
+      --export-environment "$ENV_EXPORT" \
+      --suppress-exit-code | tee "$LOG_FILE"
 else
-    log "🚀 Iniciando Newman → Folder: '$FOLDER_NAME'"
+    echo "🚀 Iniciando Newman para Folder: $FOLDER_NAME con Env UID: $ENV_UID"
 
-    newman run "${NEWMAN_BASE_ARGS[@]}" \
-        --folder "$FOLDER_NAME" \
-        --reporter-htmlextra-title "QA Audit · $FOLDER_NAME · $PAIS_INPUT · $AMBIENTE · $NOW" \
-        2>&1 | tee "$LOG_FILE" || NEWMAN_EXIT=$?
+    newman run "https://api.getpostman.com/collections/$COLLECTION_UID?apikey=$POSTMAN_API_KEY" \
+      --environment "https://api.getpostman.com/environments/$ENV_UID?apikey=$POSTMAN_API_KEY" \
+      --folder "$FOLDER_NAME" \
+      $DATA_PARAM --insecure -r cli,json,htmlextra \
+      --reporter-json-export "$JSON_REPORT" \
+      --reporter-htmlextra-export "$HTML_NEWMAN" \
+      --reporter-htmlextra-title "Audit Report - $FOLDER_NAME - $NOW" \
+      --export-environment "$ENV_EXPORT" \
+      --suppress-exit-code | tee "$LOG_FILE"
 fi
 
-# Verificar que el reporte JSON fue generado
-if [[ ! -f "$JSON_REPORT" ]]; then
-    log_err "Newman no generó el reporte JSON. Revisa la API Key de Postman y el UID de la colección."
-    exit 1
-fi
-log_ok "Newman finalizado (exit: $NEWMAN_EXIT). Reporte JSON generado."
-
-# ----------------------------------------------------------
-# 6. EXTRACCIÓN DE MÉTRICAS DESDE EL JSON DE NEWMAN
-# ----------------------------------------------------------
-log "📊 Extrayendo métricas del reporte..."
-
-python3 - "$JSON_REPORT" "$METRICS_FILE" <<'PYEOF'
+# ==========================================
+# 3.5 EJECUCIÓN PLAYWRIGHT (si hay payment_link)
+# ==========================================
+PAYMENT_LINK=$(python3 -c "
 import json, sys
+try:
+    with open('$ENV_EXPORT') as f:
+        env = json.load(f)
+    values = env.get('values', [])
+    match = next((v['value'] for v in values if v['key'] == 'payment_link' and v['value']), None)
+    print(match or '')
+except:
+    print('')
+" 2>/dev/null)
 
-report_path, metrics_path = sys.argv[1], sys.argv[2]
+if [ -n "$PAYMENT_LINK" ]; then
+    echo "🎭 payment_link detectado. Iniciando Playwright..."
+    export PAYMENT_LINK="$PAYMENT_LINK"
+    export SCRIPTS_DIR="$SCRIPTS_DIR"
+    node "$SCRIPTS_DIR/playwright/payment_flow.js" "$PAYMENT_LINK" || echo "⚠️ Playwright terminó con errores (no bloquea el pipeline)"
+else
+    echo "ℹ️ No se encontró payment_link en el entorno exportado. Saltando Playwright."
+fi
+
+# ==========================================
+# 4. ANÁLISIS AGÉNTICO CON CLAUDE
+# ==========================================
+echo "🤖 Analizando resultados con Claude 3.5 Sonnet..."
+FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
+CLAUDE_REPORT_FILE="claude_report.html"
 
 try:
     with open(report_path, 'r', encoding='utf-8') as f:

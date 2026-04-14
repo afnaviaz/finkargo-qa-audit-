@@ -7,8 +7,7 @@ on:
         required: true
         default: "ms-core-entities-k8s"
         type: choice
-        options: [CORE, FLOWS, ms-auth, ms-communicator, PAGOS, INTEGRATIONS, ms-api-co ]
-        options: [ms-core-entities-k8s, FLOWS, ms-auth, ms-accounts, ms-payments, ms-kyc, ms-notifications, ms-reports]
+        options: [ms-core-entities-k8s, FLOWS, ms-auth, ms-accounts, ms-payments, ms-kyc, ms-notifications, ms-reports,ms-auth,ms-communicator, INTEGRATIONS]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
@@ -26,7 +25,7 @@ on:
         required: false
         default: "01-Register Company"
         type: choice
-        options: ["01-Register Company", "02-Legal info CO", "03-Update company", "Suppliers", "Economic Activities", "Contactos de Proveedores"]
+        options: ["01-Register Company", "02-Legal info CO", "03-Update company", "Suppliers", "Economic Activities", "Contactos de Proveedores", "INTEGRATIONS", "PAGOS", "SUPRA INTEGRATION", "Happy path integration", "SUPRA EPAYMENTS", "Happy path epayments", "Recaudo", "Consultas", "SUPRA WALLET - EPAYMENTS"]
 
 permissions:
   contents: read
@@ -66,9 +65,6 @@ jobs:
             scripts/*.html
             scripts/*.json
             scripts/*.txt
+            scripts/*.png
+            scripts/playwright-videos/
           retention-days: 7
-        run: |
-          mkdir -p ${{ github.workspace }}/artifacts
-          cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true
-          echo "📦 Artifacts guardados:"
-          ls -la ${{ github.workspace }}/artifacts/
