@@ -108,8 +108,8 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
     // Click en PSE (por alt de imagen)
     await page.locator('img[alt="PSE"]').click();
 
-    // Botón continuar
-    await page.getByRole('button', { name: /continuar/i }).click();
+    // Botón continuar (español o inglés)
+    await page.getByRole('button', { name: /continuar|continue/i }).click();
 
     console.log('⏳ Formulario enviado. Esperando siguiente paso...');
     await page.waitForTimeout(3000);
@@ -118,8 +118,8 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
 
     // Seleccionar banco
     await page.getByText('BANCO DE BOGOTA', { exact: false }).first().click();
-    // Botón final
-    await page.getByRole('button', { name: /ir a banco de bogota/i }).click();
+    // Botón final (español o inglés)
+    await page.getByRole('button', { name: /ir a banco|go to bank|bogota/i }).click();
     await page.waitForTimeout(1000);
     await context.close(); // cierra contexto para que el video se guarde
     await browser.close();
