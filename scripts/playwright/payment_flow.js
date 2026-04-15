@@ -53,7 +53,9 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
 
     // --- Seleccionar Tipo de Documento ---
     await page.locator('.mat-mdc-select-trigger').click();
-    await page.getByText('NIT', { exact: true }).click()
+    // Esperar a que el panel del dropdown esté visible antes de hacer click
+    await page.waitForSelector('mat-option', { state: 'visible' });
+    await page.locator('mat-option').filter({ hasText: /^NIT$/ }).click({ force: true });
     
     /*await page.selectOption('select', TEST_DATA.tipoDocumento)
         .catch(async () => {
@@ -93,7 +95,7 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
 
 
     // Seleccionar banco
-    await page.getByText('BANCO DE BOGOTA', { exact: false }).click();
+    await page.getByText('BANCO DE BOGOTA', { exact: false }).first().click();
     // Botón final
     await page.getByRole('button', { name: /ir a banco de bogota/i }).click();
     await page.waitForTimeout(1000);
