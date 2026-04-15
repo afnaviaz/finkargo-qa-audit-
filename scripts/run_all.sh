@@ -209,9 +209,14 @@ fi
 # ==========================================
 echo "🤖 Analizando resultados con Claude 3.5 Sonnet..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
+METRICS_FILE="$FAILED_DATA_FILE"
 CLAUDE_REPORT_FILE="claude_report.html"
 
-python3 << 'PYEOF'
+python3 - "$JSON_REPORT" "$METRICS_FILE" << 'PYEOF'
+import sys, json
+
+report_path  = sys.argv[1]
+metrics_path = sys.argv[2]
 try:
     with open(report_path, 'r', encoding='utf-8') as f:
         data = json.load(f)

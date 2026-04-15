@@ -80,7 +80,9 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
     // =====================
 
     // Botón: Selecciona método de pago
-    await page.getByRole('button', { name: /selecciona un método de pago/i }).click();
+    const paymentBtn = page.getByRole('button', { name: /selecciona un método de pago/i });
+    await paymentBtn.scrollIntoViewIfNeeded();
+    await paymentBtn.click();
     //await page.click('button:has-text("Selecciona un método de pago")');
 
     // Click en PSE (por alt de imagen)
