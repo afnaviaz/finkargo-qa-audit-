@@ -129,11 +129,9 @@ log "Environment UID : $ENV_UID"
 # 5. EJECUCIÓN NEWMAN
 # ----------------------------------------------------------
 DATA_PARAM=""
-if [[ -f "$DATA_FILE" ]]; then
+if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
     DATA_PARAM="-d $DATA_FILE"
     log "Data-driven: usando $DATA_FILE"
-else
-    log_warn "scenarios.json no encontrado. Ejecutando sin data-driven."
 fi
 
 NEWMAN_BASE_ARGS=(
