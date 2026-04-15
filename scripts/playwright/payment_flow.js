@@ -21,7 +21,14 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
 
 (async () => {
     const browser = await chromium.launch({
-        headless: isCI
+        headless: isCI,
+        args: isCI ? [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--window-size=1280,720'
+        ] : []
     });
 
     const contextOptions = {
@@ -68,17 +75,33 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
     await page.locator('input[formcontrolname="payerCellphone"]').fill(TEST_DATA.telefono);
     await page.locator('input[formcontrolname="payerCellphone"]').press('Tab');
 
-    // --- Screenshot antes de enviar ---
+    // Espera a que Angular procese el formulario
+    await page.waitForTimeout(2000);
+
+    // --- Screenshot antes de enviar (debug headless) ---
     await page.screenshot({ path: path.join(outputDir, 'before_submit.png') });
-    //await page.screenshot({ path: path.join(outputDir, 'before_submit.png') });
 
     // =====================
     // 💳 FLUJO DE PAGO
     // =====================
 
+    // Debug: listar botones visibles en la página
+    const allButtons = await page.locator('button').allTextContents();
+    console.log('🔍 Botones en página:', allButtons);
+
+    // Si el link ya fue usado, la página muestra "Actualizar" en vez del formulario
+    const isExpired = allButtons.some(t => /actualizar/i.test(t));
+    if (isExpired) {
+        console.log('⚠️ El payment link ya fue usado o expiró. Saltando flujo de pago.');
+        await page.screenshot({ path: path.join(outputDir, 'expired_link.png') });
+        await context.close();
+        await browser.close();
+        process.exit(0);
+    }
+
     // Botón: Selecciona método de pago
-    const paymentBtn = page.getByRole('button', { name: /selecciona un método de pago/i });
-    await paymentBtn.scrollIntoViewIfNeeded();
+    const paymentBtn = page.locator('button').filter({ hasText: /método de pago/i }).first();
+    await paymentBtn.waitFor({ state: 'visible', timeout: 15000 });
     await paymentBtn.click();
     //await page.click('button:has-text("Selecciona un método de pago")');
 
