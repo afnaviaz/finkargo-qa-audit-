@@ -419,6 +419,9 @@ fi
 # ----------------------------------------------------------
 # 8. PUBLICACIÓN EN CONFLUENCE (REPORTE ENRIQUECIDO)
 # ----------------------------------------------------------
+if [[ -z "${CONF_BASE_URL:-}" || -z "${CONF_USER:-}" || -z "${CONF_TOKEN:-}" ]]; then
+    log_warn "Saltando publicación en Confluence (CONF_BASE_URL, CONF_USER o CONF_TOKEN no definidos)."
+else
 log "📤 Publicando en Confluence..."
 
 # Parent ID según ambiente
@@ -686,6 +689,8 @@ if [[ -f "$METRICS_FILE" ]]; then
         && log_ok "JSON de métricas adjuntado." \
         || log_warn "No se pudo adjuntar metrics_summary.json."
 fi
+
+fi # fin bloque Confluence
 
 # ----------------------------------------------------------
 # 10. RESUMEN FINAL

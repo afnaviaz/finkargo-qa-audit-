@@ -24,13 +24,16 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
         headless: isCI
     });
 
-    // En CI graba video; localmente no hace falta
-    const context = await browser.newContext(isCI ? {
-        recordVideo: {
-            dir: path.join(outputDir, 'playwright-videos'),
-            size: { width: 1280, height: 720 }
-        }
-    } : {});
+    const contextOptions = {
+        viewport: { width: 1280, height: 720 },
+        ...(isCI ? {
+            recordVideo: {
+                dir: path.join(outputDir, 'playwright-videos'),
+                size: { width: 1280, height: 720 }
+            }
+        } : {})
+    };
+    const context = await browser.newContext(contextOptions);
 
     const page = await context.newPage();
 
@@ -45,31 +48,25 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
     
     // --- Llenar Nombre del Pagador ---
     await page.locator('input[formcontrolname="payerName"]').fill(TEST_DATA.nombre);
-
+    await page.locator('input[formcontrolname="payerName"]').press('Tab');
 
     // --- Llenar Correo Electrónico ---
     await page.locator('input[formcontrolname="payerEmail"]').fill(TEST_DATA.correo);
-    //await page.fill('input[type="email"], input[placeholder*="correo"], input[placeholder*="email"]', TEST_DATA.correo);
+    await page.locator('input[formcontrolname="payerEmail"]').press('Tab');
 
     // --- Seleccionar Tipo de Documento ---
     await page.locator('.mat-mdc-select-trigger').click();
     // Esperar a que el panel del dropdown esté visible antes de hacer click
     await page.waitForSelector('mat-option', { state: 'visible' });
     await page.locator('mat-option').filter({ hasText: /^NIT$/ }).click({ force: true });
-    
-    /*await page.selectOption('select', TEST_DATA.tipoDocumento)
-        .catch(async () => {
-            await page.click('[class*="select"], [class*="dropdown"]');
-            await page.click(`text=${TEST_DATA.tipoDocumento}`);
-        });*/
 
     // --- Llenar ID del Documento ---
     await page.locator('input[formcontrolname="payerDocumentId"]').fill(TEST_DATA.idDocumento);
-    //await page.fill('input[placeholder*="identificaci"], input[placeholder*="documento"]', TEST_DATA.idDocumento);
+    await page.locator('input[formcontrolname="payerDocumentId"]').press('Tab');
 
     // --- Llenar Teléfono ---
     await page.locator('input[formcontrolname="payerCellphone"]').fill(TEST_DATA.telefono);
-    //await page.fill('input[placeholder*="tel"], input[type="tel"], input[placeholder*="Cel"]', TEST_DATA.telefono);
+    await page.locator('input[formcontrolname="payerCellphone"]').press('Tab');
 
     // --- Screenshot antes de enviar ---
     await page.screenshot({ path: path.join(outputDir, 'before_submit.png') });
