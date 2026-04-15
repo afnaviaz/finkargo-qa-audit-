@@ -40,9 +40,11 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
     // --- Llenar Nombre del Pagador ---
     //await page.waitForSelector('input[placeholder*="Nombre"], input[name*="name"], input[id*="name"]');
     //await page.fill('input[placeholder*="Nombre"], input[name*="name"]', TEST_DATA.nombre);
-    await page.waitForSelector('#mat-input-0')
-    await page.fill('#mat-input-0')
-
+    //await page.fill('#mat-input-0', TEST_DATA.nombre);   
+    //await page.fill('#mat-input-0')
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000); // debug temporal
+    await page.fill('#mat-input-0', TEST_DATA.nombre);
 
     // --- Llenar Correo Electrónico ---
     await page.fill('input[type="email"], input[placeholder*="correo"], input[placeholder*="email"]', TEST_DATA.correo);
