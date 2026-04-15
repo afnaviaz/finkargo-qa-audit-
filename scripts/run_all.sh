@@ -702,7 +702,9 @@ echo ""
 log "${BOLD}════════════════════════════════════════════${RESET}"
 log_ok "PIPELINE COMPLETADO"
 log "  Estado final   : $FINAL_STATUS"
-log "  Confluence     : $CONF_BASE_URL/spaces/$SPACE_KEY/pages/$NEW_PAGE_ID"
+if [[ -n "${CONF_BASE_URL:-}" && -n "${NEW_PAGE_ID:-}" ]]; then
+    log "  Confluence     : ${CONF_BASE_URL}/spaces/${SPACE_KEY}/pages/${NEW_PAGE_ID}"
+fi
 log "  Reporte HTML   : $HTML_NEWMAN"
 log "  Log completo   : $LOG_FILE"
 log "${BOLD}════════════════════════════════════════════${RESET}"

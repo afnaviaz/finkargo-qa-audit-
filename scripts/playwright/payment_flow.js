@@ -99,8 +99,8 @@ const outputDir = process.env.SCRIPTS_DIR || '.';
         process.exit(0);
     }
 
-    // Botón: Selecciona método de pago
-    const paymentBtn = page.locator('button').filter({ hasText: /método de pago/i }).first();
+    // Botón: Selecciona método de pago (español o inglés según locale del runner)
+    const paymentBtn = page.locator('button').filter({ hasText: /método de pago|payment method/i }).first();
     await paymentBtn.waitFor({ state: 'visible', timeout: 15000 });
     await paymentBtn.click();
     //await page.click('button:has-text("Selecciona un método de pago")');
