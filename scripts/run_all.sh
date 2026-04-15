@@ -211,6 +211,7 @@ echo "🤖 Analizando resultados con Claude 3.5 Sonnet..."
 FAILED_DATA_FILE="$SCRIPTS_DIR/failed_data_debug.json"
 CLAUDE_REPORT_FILE="claude_report.html"
 
+python3 << 'PYEOF'
 try:
     with open(report_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
