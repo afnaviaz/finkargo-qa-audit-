@@ -285,7 +285,7 @@ log_ok "HTML de Confluence construido."
 # Publicar pagina
 FINAL_PAYLOAD=$(python3 -c "
 import json, sys
-body = open(sys.argv[4]).read()
+body = open(sys.argv[4], encoding='utf-8').read()
 print(json.dumps({
     'type': 'page',
     'title': sys.argv[1],

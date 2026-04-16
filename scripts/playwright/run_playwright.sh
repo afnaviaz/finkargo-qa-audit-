@@ -13,17 +13,19 @@ if [[ -z "$ENV_EXPORT" || -z "$SCRIPTS_DIR" ]]; then
 fi
 
 # Extraer payment_link del environment exportado por Newman
+# NOTA: pasar ENV_EXPORT como sys.argv[1] para que Git Bash traduzca el path Windows
 PAYMENT_LINK=$(python3 -c "
 import json, sys
 try:
-    with open('$ENV_EXPORT') as f:
+    with open(sys.argv[1], encoding='utf-8') as f:
         env = json.load(f)
     values = env.get('values', [])
     match = next((v['value'] for v in values if v['key'] == 'payment_link' and v['value']), None)
     print(match or '')
-except:
+except Exception as e:
+    sys.stderr.write('run_playwright: ' + str(e) + '\n')
     print('')
-" 2>/dev/null)
+" "$ENV_EXPORT" 2>/dev/null)
 
 if [ -n "$PAYMENT_LINK" ]; then
     echo "[$(date +'%H:%M:%S')] 🎭 payment_link detectado. Iniciando Playwright..."
