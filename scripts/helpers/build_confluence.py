@@ -7,6 +7,44 @@ Imprime el HTML resultante por stdout.
 """
 import json, sys, html as htmllib
 
+def build_db_section(db_data):
+    if not db_data or not db_data.get('ran') or not db_data.get('results'):
+        return ''
+
+    result_colors = {
+        'OK':   ('#e8f5e9', '#2e7d32', '✅'),
+        'WARN': ('#fff8e1', '#f57f17', '⚠️'),
+        'FAIL': ('#ffebee', '#c62828', '❌'),
+    }
+
+    rows = ''
+    for r in db_data['results']:
+        bg, color, icon = result_colors.get(r['result'], ('#f5f5f5', '#333', '❓'))
+        rows += f"""
+        <tr style="background:{bg};">
+          <td style="padding:10px 14px; font-weight:600; color:#37474f;">{r['table']}</td>
+          <td style="padding:10px 14px; font-family:monospace; font-size:12px;">{r['external_id']}</td>
+          <td style="padding:10px 14px; font-weight:700; color:{color};">{r['status']}</td>
+          <td style="padding:10px 14px; color:#666;">{r['expected']}</td>
+          <td style="padding:10px 14px; font-weight:700; color:{color}; text-align:center;">{icon} {r['result']}</td>
+        </tr>"""
+
+    return f"""<div style="margin-bottom:24px;">
+    <h2 style="font-size:16px; color:#1b5e20; border-bottom:2px solid #1b5e20; padding-bottom:8px; margin-bottom:12px;">
+      🗄️ Validación de Estados — Base de Datos ({db_data.get('ambiente','')}/{db_data.get('pais','')})
+    </h2>
+    <table style="width:100%; border-collapse:collapse; border-radius:8px; overflow:hidden; font-size:13px;">
+      <tr style="background:#1b5e20; color:#fff;">
+        <th style="padding:10px 14px; text-align:left;">Tabla</th>
+        <th style="padding:10px 14px; text-align:left;">external_id</th>
+        <th style="padding:10px 14px; text-align:left;">Status BD</th>
+        <th style="padding:10px 14px; text-align:left;">Esperado</th>
+        <th style="padding:10px 14px; text-align:center;">Resultado</th>
+      </tr>
+      {rows}
+    </table>
+  </div>"""
+
 def main():
     if len(sys.argv) < 10:
         print(f"Uso: {sys.argv[0]} <metrics_json> <claude_html> <log_txt> "
@@ -22,6 +60,7 @@ def main():
     ambiente     = sys.argv[7]
     timestamp    = sys.argv[8]
     exec_num     = sys.argv[9]
+    db_path      = sys.argv[10] if len(sys.argv) > 10 else None
 
     # --- Cargar datos ---
     try:
@@ -37,6 +76,14 @@ def main():
             rca_html = f.read()
     except Exception:
         rca_html = "<p>Análisis de IA no disponible.</p>"
+
+    db_data = None
+    if db_path:
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                db_data = json.load(f)
+        except Exception:
+            db_data = None
 
     try:
         with open(log_path, 'r', encoding='utf-8') as f:
@@ -124,6 +171,9 @@ def main():
       </td>
     </tr>
   </table>
+
+  <!-- VALIDACIÓN BASE DE DATOS -->
+  {build_db_section(db_data)}
 
   <!-- ANÁLISIS CLAUDE AI -->
   <div style="margin-bottom:24px;">

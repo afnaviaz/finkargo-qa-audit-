@@ -69,8 +69,9 @@ LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
 CLAUDE_REPORT="$SCRIPTS_DIR/claude_report.html"
 METRICS_FILE="$SCRIPTS_DIR/metrics_summary.json"
 CONFLUENCE_BODY="$SCRIPTS_DIR/confluence_body.html"
+DB_VALIDATION_FILE="$SCRIPTS_DIR/db_validation.json"
 
-rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$CLAUDE_REPORT" "$METRICS_FILE" "$CONFLUENCE_BODY"
+rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$CLAUDE_REPORT" "$METRICS_FILE" "$CONFLUENCE_BODY" "$DB_VALIDATION_FILE"
 
 CONF_USER="${CONF_USER:-}"
 CONF_USER=$(echo "$CONF_USER" | tr -d '\n\r')
@@ -203,7 +204,7 @@ bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" ||
 # 7.6 VALIDACION DE ESTADOS EN BD
 # ----------------------------------------------------------
 log "Validando estados en base de datos..."
-python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" || true
+python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" "$DB_VALIDATION_FILE" || true
 
 # ----------------------------------------------------------
 # 8. EXTRACCION DE METRICAS
@@ -284,6 +285,7 @@ fi
 python3 "$HELPERS_DIR/build_confluence.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" "$LOG_FILE" \
     "$PROYECTO" "$FOLDER_NAME" "$PAIS_INPUT" "$AMBIENTE" "$NOW" "$EXEC_NUM" \
+    "$DB_VALIDATION_FILE" \
     > "$CONFLUENCE_BODY"
 
 log_ok "HTML de Confluence construido."

@@ -30,34 +30,46 @@ def get_env_var(env_export_path, key):
         sys.stderr.write(f'validate_db: error leyendo env export: {e}\n')
         return None
 
+def write_result(output_path, ran, pais, ambiente, results):
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump({'ran': ran, 'pais': pais, 'ambiente': ambiente, 'results': results}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        sys.stderr.write(f'validate_db: error escribiendo resultado: {e}\n')
+
 def main():
-    if len(sys.argv) < 4:
-        print('Uso: validate_db_states.py <env_export> <pais> <ambiente>')
+    if len(sys.argv) < 5:
+        print('Uso: validate_db_states.py <env_export> <pais> <ambiente> <output_json>')
         sys.exit(1)
 
-    env_export = sys.argv[1]
-    pais       = sys.argv[2]
-    ambiente   = sys.argv[3]
+    env_export  = sys.argv[1]
+    pais        = sys.argv[2]
+    ambiente    = sys.argv[3]
+    output_path = sys.argv[4]
 
     supra_quote_id = get_env_var(env_export, 'supra_quote_id')
     payin_id       = get_env_var(env_export, 'payin_id')
 
     if not supra_quote_id and not payin_id:
         print('INFO No se encontraron IDs de SUPRA en el environment. Saltando validacion DB.')
+        write_result(output_path, False, pais, ambiente, [])
         sys.exit(0)
 
     db_config = get_db_config(pais, ambiente)
     if not db_config['host']:
         print(f'INFO No hay configuracion DB para {pais}/{ambiente}. Saltando validacion.')
+        write_result(output_path, False, pais, ambiente, [])
         sys.exit(0)
 
     try:
         import psycopg2
     except ImportError:
         print('WARN psycopg2 no instalado. Saltando validacion DB.')
+        write_result(output_path, False, pais, ambiente, [])
         sys.exit(0)
 
-    errors = 0
+    errors  = 0
+    results = []
 
     try:
         conn = psycopg2.connect(**db_config)
@@ -80,12 +92,14 @@ def main():
                 status   = row[1]
                 expected = 'CREATED'
                 ok       = status == expected
-                icon     = 'OK' if ok else 'FAIL'
-                print(f'[{icon}] exchange_quote | external_id: {supra_quote_id[:12]}... | status: {status} (esperado: {expected})')
+                result   = 'OK' if ok else 'FAIL'
+                print(f'[{result}] exchange_quote | external_id: {supra_quote_id[:12]}... | status: {status} (esperado: {expected})')
+                results.append({'table': 'exchange_quote', 'external_id': supra_quote_id, 'status': status, 'expected': expected, 'result': result})
                 if not ok:
                     errors += 1
             else:
                 print(f'[FAIL] exchange_quote | external_id: {supra_quote_id[:12]}... | NO ENCONTRADO en BD')
+                results.append({'table': 'exchange_quote', 'external_id': supra_quote_id, 'status': 'NOT FOUND', 'expected': 'CREATED', 'result': 'FAIL'})
                 errors += 1
 
         # --- 2. transaction ---
@@ -97,17 +111,18 @@ def main():
             row = cur.fetchone()
             if row:
                 status  = row[1]
-                # PAID = exito, CREATED/in_progress = pendiente (no falla), EXPIRED/REJECTED = falla
                 if status == 'PAID':
-                    icon = 'OK'
+                    result = 'OK'
                 elif status in ('CREATED', 'in_progress'):
-                    icon = 'WARN'
+                    result = 'WARN'
                 else:
-                    icon = 'FAIL'
+                    result = 'FAIL'
                     errors += 1
-                print(f'[{icon}] transaction    | external_id: {payin_id[:12]}...    | status: {status} (esperado: PAID)')
+                print(f'[{result}] transaction    | external_id: {payin_id[:12]}...    | status: {status} (esperado: PAID)')
+                results.append({'table': 'transaction', 'external_id': payin_id, 'status': status, 'expected': 'PAID', 'result': result})
             else:
                 print(f'[FAIL] transaction | external_id: {payin_id[:12]}... | NO ENCONTRADO en BD')
+                results.append({'table': 'transaction', 'external_id': payin_id, 'status': 'NOT FOUND', 'expected': 'PAID', 'result': 'FAIL'})
                 errors += 1
 
         print('=' * 55)
@@ -116,7 +131,10 @@ def main():
 
     except Exception as e:
         print(f'WARN Error conectando a BD ({pais}/{ambiente}): {e}')
-        sys.exit(0)  # No bloquear el pipeline por errores de BD
+        write_result(output_path, False, pais, ambiente, [])
+        sys.exit(0)
+
+    write_result(output_path, True, pais, ambiente, results)
 
     if errors > 0:
         print(f'WARN {errors} validacion(es) de BD fallaron.')
