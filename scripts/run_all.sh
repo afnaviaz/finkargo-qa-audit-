@@ -61,7 +61,7 @@ DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
 NOW="$(date +'%Y-%m-%d %H:%M:%S')"
-FOLDER_NAME="$FOLDER_INPUT"
+FOLDER_NAME=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')  # Quitar prefijo visual del dropdown
 
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
@@ -198,6 +198,12 @@ log_ok "Newman finalizado. Reporte JSON generado."
 # 7.5 EJECUCIÓN PLAYWRIGHT
 # ----------------------------------------------------------
 bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
+
+# ----------------------------------------------------------
+# 7.6 VALIDACION DE ESTADOS EN BD
+# ----------------------------------------------------------
+log "Validando estados en base de datos..."
+python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" || true
 
 # ----------------------------------------------------------
 # 8. EXTRACCION DE METRICAS

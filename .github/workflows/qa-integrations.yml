@@ -45,7 +45,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install Python dependencies
-        run: pip install requests
+        run: pip install requests psycopg2-binary
 
       - name: Create python3 alias for Git Bash
         shell: powershell
@@ -78,6 +78,26 @@ jobs:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           CI: "true"
           PYTHONIOENCODING: "utf-8"
+          DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
+          DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
+          DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
+          DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
+          DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
+          DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
+          DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
+          DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
+          DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
+          DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
+          DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
+          DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
+          DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
+          DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
+          DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
+          DB_HOST_STAGING_MX: ${{ secrets.DB_HOST_STAGING_MX }}
+          DB_PORT_STAGING_MX: ${{ secrets.DB_PORT_STAGING_MX }}
+          DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
+          DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
+          DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
         run: |
           $bash = "C:\Program Files\Git\bin\bash.exe"
           & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'INTEGRATIONS' '${{ github.event.inputs.folder }}' '${{ github.event.inputs.pais }}' '${{ github.event.inputs.ambiente }}'"
