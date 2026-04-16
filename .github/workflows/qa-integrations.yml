@@ -43,6 +43,18 @@ jobs:
       - name: Install Python dependencies
         run: pip install requests
 
+      - name: Create python3 alias for Git Bash
+        shell: powershell
+        run: |
+          $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+          if ($pythonExe) {
+            $dir = Split-Path $pythonExe
+            Copy-Item $pythonExe "$dir\python3.exe" -Force
+            Write-Host "python3.exe creado en: $dir"
+          } else {
+            Write-Error "Python no encontrado en PATH"
+          }
+
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
