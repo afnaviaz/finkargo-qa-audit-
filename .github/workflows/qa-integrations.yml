@@ -35,11 +35,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Add Git Bash to PATH
+        shell: pwsh
+        run: echo "C:\Program Files\Git\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
       - name: Execute QA Integrations
-        shell: '"C:\Program Files\Git\bin\bash.exe" {0}'
+        shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
