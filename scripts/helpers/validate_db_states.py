@@ -105,8 +105,8 @@ def main():
         # --- 2. transaction (polling hasta PAID o timeout) ---
         if payin_id:
             import time
-            POLL_INTERVAL = 10   # segundos entre intentos
-            POLL_TIMEOUT  = 90   # segundos máximo de espera
+            POLL_INTERVAL = 15   # segundos entre intentos
+            POLL_TIMEOUT  = 120  # segundos máximo de espera (estado final depende de callback PSE)
             elapsed       = 0
             status        = None
 
