@@ -39,7 +39,7 @@ jobs:
         run: npx playwright install chromium
 
       - name: Execute QA Integrations
-        shell: bash
+        shell: '"C:\Program Files\Git\bin\bash.exe" {0}'
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
