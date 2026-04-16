@@ -73,6 +73,7 @@ CONFLUENCE_BODY="$SCRIPTS_DIR/confluence_body.html"
 rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$CLAUDE_REPORT" "$METRICS_FILE" "$CONFLUENCE_BODY"
 
 CONF_USER="${CONF_USER:-}"
+CONF_USER=$(echo "$CONF_USER" | tr -d '\n\r')
 [[ -z "$CONF_USER" ]] && { log_err "CONF_USER no definida en Secrets."; exit 1; }
 CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA"
