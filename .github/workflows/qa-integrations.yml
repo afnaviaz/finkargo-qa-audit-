@@ -70,6 +70,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           CI: "true"
+          PYTHONIOENCODING: "utf-8"
         run: |
           $bash = "C:\Program Files\Git\bin\bash.exe"
           & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'INTEGRATIONS' '${{ github.event.inputs.folder }}' '${{ github.event.inputs.pais }}' '${{ github.event.inputs.ambiente }}'"
