@@ -14,13 +14,15 @@
   "INTEGRATIONS": {
     "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
     "folders": {
-     "PAGOS": "19456853-f14dfded-ed86-4f73-b5da-0534315775ea",
-     "SUPRA INTEGRATION": "19456853-4853463b-d712-4a0e-89ac-45217888d50f",
-     "SUPRA EPAYMENTS": "19456853-2afbaf67-7c6c-4710-8ef2-6c79cfeffe58",
-     "SUPRA WALLET - EPAYMENTS": "19456853-6e302ae0-e0f6-44b0-bc88-f627e51c1dea",
      "Happy path integration": "19456853-0fd0250c-bf05-4ea7-a0a8-249198a27a78",
-     "Recaudo": "19456853-8168e5a1-a634-4abe-b6e1-bf53852a333f",
      "Happy path epayments": "19456853-aad60ed7-dfef-4bb8-80cc-067c232b4c1f",
+     "PAGOS": "19456853-f14dfded-ed86-4f73-b5da-0534315775ea",
+     "SUPRA": "19456853-a7be8f88-3f37-4cd8-885e-f1ca1429f83b",
+     "SUPRA INTEGRATION": "19456853-4853463b-d712-4a0e-89ac-45217888d50f",
+     "SUPRA WALLET - EPAYMENTS": "19456853-6e302ae0-e0f6-44b0-bc88-f627e51c1dea",
+     "SUPRA EPAYMENTS": "19456853-2afbaf67-7c6c-4710-8ef2-6c79cfeffe58",
+     "Post payment": "19456853-1beff241-fff8-4b2a-819f-1254da78841d",
+     "Recaudo": "19456853-8168e5a1-a634-4abe-b6e1-bf53852a333f",
      "Consultas": "19456853-76e77293-bff3-4b04-9d12-417a1e5beb8b"
 
   }

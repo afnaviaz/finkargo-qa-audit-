@@ -201,7 +201,36 @@ log_ok "Newman finalizado. Reporte JSON generado."
 bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
 
 # ----------------------------------------------------------
-# 7.6 VALIDACION DE ESTADOS EN BD
+# 7.6 NEWMAN FASE 2 — Post payment (solo si hubo payment_link)
+# ----------------------------------------------------------
+PAYMENT_LINK_FOUND=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        env = json.load(f)
+    values = env.get('values', [])
+    match = next((v['value'] for v in values if v['key'] == 'payment_link' and v['value']), None)
+    print('yes' if match else 'no')
+except:
+    print('no')
+" "$ENV_EXPORT" 2>/dev/null)
+
+if [[ "$PAYMENT_LINK_FOUND" == "yes" ]]; then
+    log "Iniciando Newman Fase 2 | Folder: 'Post payment'"
+    set +e
+    newman run "${NEWMAN_BASE_ARGS[@]}" \
+        --folder "Post payment" \
+        --reporter-htmlextra-title "QA Audit | Post payment | $PAIS_INPUT | $AMBIENTE | $NOW" \
+        2>&1 | tee -a "$LOG_FILE"
+    NEWMAN_POST_EXIT=${PIPESTATUS[0]}
+    set -e
+    log "Newman Fase 2 exit code: $NEWMAN_POST_EXIT"
+else
+    log "Sin payment_link — saltando Newman Fase 2."
+fi
+
+# ----------------------------------------------------------
+# 7.8 VALIDACION DE ESTADOS EN BD
 # ----------------------------------------------------------
 log "Validando estados en base de datos..."
 python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" "$DB_VALIDATION_FILE" || true
