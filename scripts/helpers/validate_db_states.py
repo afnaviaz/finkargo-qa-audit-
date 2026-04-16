@@ -102,28 +102,44 @@ def main():
                 results.append({'table': 'exchange_quote', 'external_id': supra_quote_id, 'status': 'NOT FOUND', 'expected': 'CREATED', 'result': 'FAIL'})
                 errors += 1
 
-        # --- 2. transaction ---
+        # --- 2. transaction (polling hasta PAID o timeout) ---
         if payin_id:
-            cur.execute(
-                'SELECT external_id, status FROM supra."transaction" WHERE external_id = %s',
-                (payin_id,)
-            )
-            row = cur.fetchone()
-            if row:
-                status  = row[1]
-                if status == 'PAID':
-                    result = 'OK'
-                elif status in ('CREATED', 'in_progress'):
-                    result = 'WARN'
+            import time
+            POLL_INTERVAL = 10   # segundos entre intentos
+            POLL_TIMEOUT  = 90   # segundos máximo de espera
+            elapsed       = 0
+            status        = None
+
+            print(f'INFO Esperando status PAID en transaction (timeout: {POLL_TIMEOUT}s)...')
+            while elapsed <= POLL_TIMEOUT:
+                cur.execute(
+                    'SELECT external_id, status FROM supra."transaction" WHERE external_id = %s',
+                    (payin_id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    status = row[1]
+                    print(f'  [{elapsed}s] transaction status: {status}')
+                    if status == 'PAID':
+                        break
+                    if status in ('EXPIRED', 'REJECTED'):
+                        break
                 else:
-                    result = 'FAIL'
-                    errors += 1
-                print(f'[{result}] transaction    | external_id: {payin_id[:12]}...    | status: {status} (esperado: PAID)')
-                results.append({'table': 'transaction', 'external_id': payin_id, 'status': status, 'expected': 'PAID', 'result': result})
+                    status = 'NOT FOUND'
+                    break
+                time.sleep(POLL_INTERVAL)
+                elapsed += POLL_INTERVAL
+
+            if status == 'PAID':
+                result = 'OK'
+            elif status in ('CREATED', 'in_progress'):
+                result = 'WARN'  # Timeout alcanzado, aún pendiente
             else:
-                print(f'[FAIL] transaction | external_id: {payin_id[:12]}... | NO ENCONTRADO en BD')
-                results.append({'table': 'transaction', 'external_id': payin_id, 'status': 'NOT FOUND', 'expected': 'PAID', 'result': 'FAIL'})
+                result = 'FAIL'
                 errors += 1
+
+            print(f'[{result}] transaction    | external_id: {payin_id[:12]}...    | status: {status} (esperado: PAID)')
+            results.append({'table': 'transaction', 'external_id': payin_id, 'status': status, 'expected': 'PAID', 'result': result})
 
         print('=' * 55)
         cur.close()
