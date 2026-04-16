@@ -217,8 +217,20 @@ except:
 
 if [[ "$PAYMENT_LINK_FOUND" == "yes" ]]; then
     log "Iniciando Newman Fase 2 | Folder: 'Post payment'"
+    ENV_EXPORT_P2="$SCRIPTS_DIR/environment_export_phase2.json"
+    JSON_REPORT_P2="$SCRIPTS_DIR/results_phase2.json"
+    HTML_NEWMAN_P2="$SCRIPTS_DIR/reporte_visual_phase2.html"
     set +e
-    newman run "${NEWMAN_BASE_ARGS[@]}" \
+    newman run "$COLLECTION_URL" \
+        --environment "$ENV_EXPORT" \
+        --insecure \
+        -r cli,json,htmlextra \
+        --reporter-json-export      "$JSON_REPORT_P2" \
+        --reporter-htmlextra-export "$HTML_NEWMAN_P2" \
+        --export-environment        "$ENV_EXPORT_P2" \
+        --suppress-exit-code \
+        --timeout-request 30000 \
+        --timeout-script  10000 \
         --folder "Post payment" \
         --reporter-htmlextra-title "QA Audit | Post payment | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee -a "$LOG_FILE"
