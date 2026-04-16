@@ -55,6 +55,9 @@ jobs:
             Write-Error "Python no encontrado en PATH"
           }
 
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
