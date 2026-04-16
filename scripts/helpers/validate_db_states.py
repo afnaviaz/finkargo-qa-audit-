@@ -13,7 +13,7 @@ def get_db_config(pais, ambiente):
     suffix = f"{ambiente.upper()}_{pais.upper()}"
     return {
         'host':     os.environ.get(f'DB_HOST_{suffix}', ''),
-        'port':     int(os.environ.get(f'DB_PORT_{suffix}', '5432')),
+        'port':     int(os.environ.get(f'DB_PORT_{suffix}', '').strip() or '5432'),
         'dbname':   os.environ.get(f'DB_NAME_{suffix}', ''),
         'user':     os.environ.get(f'DB_USER_{suffix}', ''),
         'password': os.environ.get(f'DB_PASSWORD_{suffix}', ''),
