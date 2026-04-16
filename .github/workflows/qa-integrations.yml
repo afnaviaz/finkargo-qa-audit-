@@ -5,9 +5,13 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "Happy path integration"
+        default: "SUPRA INTEGRATION"
         type: choice
-        options: ["INTEGRATIONS", "PAGOS", "SUPRA INTEGRATION", "Happy path integration", "SUPRA EPAYMENTS", "Happy path epayments", "Recaudo", "Consultas", "SUPRA WALLET - EPAYMENTS"]
+        options: [
+          "SUPRA INTEGRATION",
+          "SUPRA WALLET - EPAYMENTS",
+          "SUPRA EPAYMENTS"
+        ]
       pais:
         description: "País"
         required: true
