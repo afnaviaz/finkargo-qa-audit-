@@ -28,7 +28,7 @@ permissions:
 jobs:
   run-integrations-pipeline:
     name: "Integrations: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
-    runs-on: self-hosted
+    runs-on: [self-hosted, TROCHACOL]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -36,7 +36,7 @@ jobs:
           fetch-depth: 1
 
       - name: Setup Permissions
-        run: chmod +x scripts/run_all.sh
+        run: chmod +x scripts/run_all.sh scripts/playwright/run_playwright.sh
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
@@ -46,6 +46,7 @@ jobs:
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           CI: "true"
