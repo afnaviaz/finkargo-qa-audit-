@@ -230,8 +230,11 @@ PAGE_TITLE="[$PROYECTO] [$PAIS_INPUT] $FOLDER_NAME - Run #$EXEC_NUM"
 
 # Buscar carpeta padre del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
-SEARCH_RES=$(curl -sf -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
-    log_err "Error conectando a Confluence. Verifica CONF_USER y CONF_TOKEN."
+SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
+    CURL_CODE=$?
+    log_err "Error conectando a Confluence (curl exit: $CURL_CODE)."
+    log_err "URL intentada: $SEARCH_URL"
+    log_err "Verifica CONF_USER ('${CONF_USER}') y CONF_TOKEN (${#CONF_TOKEN} chars)."
     exit 1
 }
 
@@ -259,7 +262,7 @@ print(json.dumps({
     }}
 }))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
 
-    PROJECT_FOLDER_ID=$(curl -sf -u "$CONF_USER:$CONF_TOKEN" \
+    PROJECT_FOLDER_ID=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H 'Content-Type: application/json' \
         -d "$CREATE_PAYLOAD" \
         "$CONF_BASE_URL/rest/api/content" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
@@ -290,7 +293,7 @@ print(json.dumps({
     'body': {'storage': {'value': body, 'representation': 'storage'}}
 }))" "$PAGE_TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$CONFLUENCE_BODY")
 
-RESPONSE_PUB=$(curl -sf -u "$CONF_USER:$CONF_TOKEN" \
+RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
     -d "$FINAL_PAYLOAD" \
     "$CONF_BASE_URL/rest/api/content") || {
@@ -308,7 +311,7 @@ log_ok "Pagina publicada. ID: $NEW_PAGE_ID"
 if [[ -f "$HTML_NEWMAN" ]]; then
     curl -sf -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H "X-Atlassian-Token: nocheck" \
-        -F "file=@${HTML_NEWMAN};type=text/html" \
+        --insecure -F "file=@${HTML_NEWMAN};type=text/html" \
         "$CONF_BASE_URL/rest/api/content/$NEW_PAGE_ID/attachments" > /dev/null \
         && log_ok "Reporte htmlextra adjuntado." \
         || log_warn "No se pudo adjuntar reporte htmlextra."
@@ -317,7 +320,7 @@ fi
 if [[ -f "$METRICS_FILE" ]]; then
     curl -sf -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H "X-Atlassian-Token: nocheck" \
-        -F "file=@${METRICS_FILE};type=application/json" \
+        --insecure -F "file=@${METRICS_FILE};type=application/json" \
         "$CONF_BASE_URL/rest/api/content/$NEW_PAGE_ID/attachments" > /dev/null \
         && log_ok "JSON de metricas adjuntado." \
         || log_warn "No se pudo adjuntar metrics_summary.json."
