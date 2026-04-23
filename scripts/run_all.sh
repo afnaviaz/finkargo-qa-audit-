@@ -63,6 +63,19 @@ EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
 NOW="$(date +'%Y-%m-%d %H:%M:%S')"
 FOLDER_NAME=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')  # Quitar prefijo visual del dropdown
 
+# Detectar escenario según nombre de carpeta
+SCENARIO="happy_path"
+NEWMAN_FOLDER="$FOLDER_NAME"
+if [[ "$FOLDER_NAME" == *"REJECTED"* ]]; then
+    SCENARIO="rejected"
+    NEWMAN_FOLDER=$(echo "$FOLDER_NAME" | sed 's/ - REJECTED//')
+    log "Escenario: REJECTED — se abrirá el link sin completar el formulario"
+elif [[ "$FOLDER_NAME" == *"EXPIRED"* ]]; then
+    SCENARIO="expired"
+    NEWMAN_FOLDER=$(echo "$FOLDER_NAME" | sed 's/ - EXPIRED//')
+    log "Escenario: EXPIRED — se simulará expiración de 25 horas en BD"
+fi
+
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
 LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
@@ -171,10 +184,10 @@ if [[ "$PAIS_INPUT" == "ALL" ]]; then
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
 else
-    log "Iniciando Newman | Folder: '$FOLDER_NAME' | Pais: $PAIS_INPUT"
+    log "Iniciando Newman | Folder: '$NEWMAN_FOLDER' | Pais: $PAIS_INPUT"
 
     newman run "${NEWMAN_BASE_ARGS[@]}" \
-        --folder "$FOLDER_NAME" \
+        --folder "$NEWMAN_FOLDER" \
         --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
@@ -198,7 +211,11 @@ log_ok "Newman finalizado. Reporte JSON generado."
 # ----------------------------------------------------------
 # 7.5 EJECUCIÓN PLAYWRIGHT
 # ----------------------------------------------------------
-bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
+if [[ "$SCENARIO" == "rejected" ]]; then
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
+else
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
+fi
 
 # ----------------------------------------------------------
 # 7.6 NEWMAN FASE 2 — Post payment (solo si hubo payment_link)
@@ -214,6 +231,43 @@ try:
 except:
     print('no')
 " "$ENV_EXPORT" 2>/dev/null)
+
+# Escenario EXPIRED: actualizar updated_at en BD para simular 25 horas
+if [[ "$SCENARIO" == "expired" && "$PAYMENT_LINK_FOUND" == "yes" ]]; then
+    log "Simulando expiración: actualizando updated_at a -25 horas en transaction..."
+    PAYIN_ID=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        env = json.load(f)
+    values = env.get('values', [])
+    match = next((v['value'] for v in values if v['key'] == 'payin_id' and v['value']), None)
+    print(match or '')
+except:
+    print('')
+" "$ENV_EXPORT" 2>/dev/null)
+
+    if [[ -n "$PAYIN_ID" ]]; then
+        DB_SUFFIX="${AMBIENTE^^}_${PAIS_INPUT^^}"
+        python3 -c "
+import psycopg2, os, sys
+conn = psycopg2.connect(
+    host=os.environ['DB_HOST_${DB_SUFFIX}'],
+    dbname=os.environ['DB_NAME_${DB_SUFFIX}'],
+    user=os.environ['DB_USER_${DB_SUFFIX}'],
+    password=os.environ['DB_PASSWORD_${DB_SUFFIX}'],
+    port=int(os.environ.get('DB_PORT_${DB_SUFFIX}', '5432') or '5432')
+)
+cur = conn.cursor()
+cur.execute(\"UPDATE supra.\\\"transaction\\\" SET updated_at = now() - interval '25 hours' WHERE external_id = %s\", (sys.argv[1],))
+conn.commit()
+print(f'OK updated_at actualizado para external_id: {sys.argv[1][:12]}...')
+cur.close(); conn.close()
+" "$PAYIN_ID" || log_warn "No se pudo actualizar updated_at en BD."
+    else
+        log_warn "No se encontró payin_id para simular expiración."
+    fi
+fi
 
 if [[ "$PAYMENT_LINK_FOUND" == "yes" ]]; then
     log "Iniciando Newman Fase 2 | Folder: 'Post payment'"

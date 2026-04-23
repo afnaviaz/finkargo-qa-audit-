@@ -9,6 +9,8 @@ on:
         type: choice
         options: [
           "SUPRA INTEGRATION",
+          "SUPRA INTEGRATION - REJECTED",
+          "SUPRA INTEGRATION - EXPIRED",
           "SUPRA WALLET - EPAYMENTS",
           "SUPRA EPAYMENTS"
         ]

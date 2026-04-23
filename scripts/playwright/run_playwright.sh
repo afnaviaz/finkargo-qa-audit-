@@ -6,9 +6,10 @@
 
 ENV_EXPORT="${1:-}"
 SCRIPTS_DIR="${2:-}"
+MODE="${3:-happy_path}"
 
 if [[ -z "$ENV_EXPORT" || -z "$SCRIPTS_DIR" ]]; then
-    echo "⚠️ Uso: run_playwright.sh <ENV_EXPORT> <SCRIPTS_DIR>"
+    echo "⚠️ Uso: run_playwright.sh <ENV_EXPORT> <SCRIPTS_DIR> [mode]"
     exit 0
 fi
 
@@ -28,12 +29,18 @@ except Exception as e:
 " "$ENV_EXPORT" 2>/dev/null)
 
 if [ -n "$PAYMENT_LINK" ]; then
-    echo "[$(date +'%H:%M:%S')] 🎭 payment_link detectado. Iniciando Playwright..."
     export PAYMENT_LINK="$PAYMENT_LINK"
     export SCRIPTS_DIR="$SCRIPTS_DIR"
     export CI="true"
-    node "$SCRIPTS_DIR/playwright/payment_flow.js" "$PAYMENT_LINK" \
-        || echo "[$(date +'%H:%M:%S')] ⚠️ Playwright terminó con errores (no bloquea el pipeline)"
+    if [[ "$MODE" == "rejected" ]]; then
+        echo "[$(date +'%H:%M:%S')] 🎭 Playwright REJECTED: abriendo link sin completar..."
+        node "$SCRIPTS_DIR/playwright/payment_flow_rejected.js" "$PAYMENT_LINK" \
+            || echo "[$(date +'%H:%M:%S')] ⚠️ Playwright REJECTED terminó con errores (no bloquea el pipeline)"
+    else
+        echo "[$(date +'%H:%M:%S')] 🎭 payment_link detectado. Iniciando Playwright..."
+        node "$SCRIPTS_DIR/playwright/payment_flow.js" "$PAYMENT_LINK" \
+            || echo "[$(date +'%H:%M:%S')] ⚠️ Playwright terminó con errores (no bloquea el pipeline)"
+    fi
 else
     echo "[$(date +'%H:%M:%S')] ℹ️ No se encontró payment_link. Saltando Playwright."
 fi
