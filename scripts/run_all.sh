@@ -271,6 +271,14 @@ fi
 
 if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
     log "Iniciando Newman Fase 2 | Folder: 'Post payment'"
+    # Resolver UID de la carpeta "Post payment" desde collections.json
+    POST_PAYMENT_FOLDER_ID=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "Post payment" "folder_id" 2>/dev/null || echo "")
+    if [[ -z "$POST_PAYMENT_FOLDER_ID" ]]; then
+        log_warn "No se encontró UID para 'Post payment' en collections.json. Usando nombre como fallback."
+        POST_PAYMENT_FOLDER_ID="Post payment"
+    else
+        log "Post payment folder UID: $POST_PAYMENT_FOLDER_ID"
+    fi
     ENV_EXPORT_P2="$SCRIPTS_DIR/environment_export_phase2.json"
     JSON_REPORT_P2="$SCRIPTS_DIR/results_phase2.json"
     HTML_NEWMAN_P2="$SCRIPTS_DIR/reporte_visual_phase2.html"
@@ -285,7 +293,7 @@ if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
         --suppress-exit-code \
         --timeout-request 30000 \
         --timeout-script  10000 \
-        --folder "Post payment" \
+        --folder "$POST_PAYMENT_FOLDER_ID" \
         --reporter-htmlextra-title "QA Audit | Post payment | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee -a "$LOG_FILE"
     NEWMAN_POST_EXIT=${PIPESTATUS[0]}
