@@ -5,12 +5,12 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "SUPRA INTEGRATION"
+        default: "Happy path integration"
         type: choice
         options: [
-          "SUPRA INTEGRATION",
-          "SUPRA INTEGRATION - REJECTED",
-          "SUPRA INTEGRATION - EXPIRED",
+          "Happy path integration",
+          "Rejected flow",
+          "Expired flow",
           "SUPRA WALLET - EPAYMENTS",
           "SUPRA EPAYMENTS"
         ]

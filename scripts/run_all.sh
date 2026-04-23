@@ -66,13 +66,11 @@ FOLDER_NAME=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')  # Quitar prefijo visual 
 # Detectar escenario según nombre de carpeta
 SCENARIO="happy_path"
 NEWMAN_FOLDER="$FOLDER_NAME"
-if [[ "$FOLDER_NAME" == *"REJECTED"* ]]; then
+if [[ "$FOLDER_NAME" == "Rejected flow" ]]; then
     SCENARIO="rejected"
-    NEWMAN_FOLDER=$(echo "$FOLDER_NAME" | sed 's/ - REJECTED//')
     log "Escenario: REJECTED — se abrirá el link sin completar el formulario"
-elif [[ "$FOLDER_NAME" == *"EXPIRED"* ]]; then
+elif [[ "$FOLDER_NAME" == "Expired flow" ]]; then
     SCENARIO="expired"
-    NEWMAN_FOLDER=$(echo "$FOLDER_NAME" | sed 's/ - EXPIRED//')
     log "Escenario: EXPIRED — se simulará expiración de 25 horas en BD"
 fi
 
@@ -269,7 +267,7 @@ cur.close(); conn.close()
     fi
 fi
 
-if [[ "$PAYMENT_LINK_FOUND" == "yes" ]]; then
+if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
     log "Iniciando Newman Fase 2 | Folder: 'Post payment'"
     ENV_EXPORT_P2="$SCRIPTS_DIR/environment_export_phase2.json"
     JSON_REPORT_P2="$SCRIPTS_DIR/results_phase2.json"
@@ -299,7 +297,7 @@ fi
 # 7.8 VALIDACION DE ESTADOS EN BD
 # ----------------------------------------------------------
 log "Validando estados en base de datos..."
-python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" "$DB_VALIDATION_FILE" || true
+python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" "$DB_VALIDATION_FILE" "$SCENARIO" || true
 
 # ----------------------------------------------------------
 # 8. EXTRACCION DE METRICAS
