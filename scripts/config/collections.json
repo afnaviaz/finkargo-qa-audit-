@@ -1,85 +1,41 @@
 {
- "ms-core-entities-k8s": {
+  "ms-core-entities": {
     "collection_id": "28918329-df9dcacc-1630-417a-89c4-c42ffb5e24f7",
+    "description": "Finkargo2 — ms-core-entities-k8s",
     "folders": {
       "CO": "🇨🇴 Colombia",
       "MX": "🇲🇽 Mexico",
-      "CROSS": "🇨🇴-🇲🇽 Cross",
-      "Legal": "02-Legal info CO",
-      "Suppliers": "Suppliers"
+      "ALL": "ms-core-entities-k8s",
+      "01-Register Company": "01-Register Company",
+      "02-Legal info CO": "02-Legal info CO",
+      "03-Update company": "03-Update company",
+      "Suppliers": "Suppliers",
+      "Economic Activities": "Economic Activities",
+      "Contactos de Proveedores": "Contactos de Proveedores",
+      "Companies MX": "Companies MX",
+      "Company Legal MX": "Company Legal MX",
+      "Verifications": "Verifications",
+      "Companies - Linking": "Companies - Linking"
     }
   },
-  "FLOWS": {
-    "collection_id": "19456853-2e2dad1c-9a9c-4427-8d42-07bd1df04ddd",
+  "INTEGRATIONS": {
+    "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
     "folders": {
-      "CO": "Folder Flows CO",
-      "MX": "Folder Flows MX"
-    }
-  },
+     "PAGOS": "19456853-f14dfded-ed86-4f73-b5da-0534315775ea",
+     "SUPRA INTEGRATION": "19456853-4853463b-d712-4a0e-89ac-45217888d50f",
+     "SUPRA EPAYMENTS": "19456853-2afbaf67-7c6c-4710-8ef2-6c79cfeffe58",
+     "SUPRA WALLET - EPAYMENTS": "19456853-6e302ae0-e0f6-44b0-bc88-f627e51c1dea",
+     "Happy path integration": "19456853-0fd0250c-bf05-4ea7-a0a8-249198a27a78",
+     "Recaudo": "19456853-8168e5a1-a634-4abe-b6e1-bf53852a333f",
+     "Happy path epayments": "19456853-aad60ed7-dfef-4bb8-80cc-067c232b4c1f",
+     "Consultas": "19456853-76e77293-bff3-4b04-9d12-417a1e5beb8b"
 
-
- 
-"ms-auth": {
-    "collection_id": "22777311-cef8b055-4bcd-4789-b7f5-3c9524cd970d",
-    "folders": {
-      "Session": "Session",
-      "Users": "Users",
-      "Groups": "Groups",
-      "Modules": "Modules",
-      "Password": "Password",
-      "Scopes": "Scopes",
-      "Me": "Me",
-      "Marketplace products": "Marketplace products",
-      "Marketplace catalogues": "Marketplace catalogues",
-      "Roles": "Roles"
   }
 },
-
 "ms-communicator": {
     "collection_id": "19456853-edd1958b-5396-4417-b212-62f73edec165",
     "folders": {
       "Send mail": "Send mail"
   }
-},
-
-"V1": {
-    "collection_id": "17667316-212887a2-938d-4e66-b62b-d64fc97d6799",
-    "folders": {
-      "Risks": "Risks"
-  }
-},
-
-"PAGOS": {
-    "collection_id": "19456853-f14dfded-ed86-4f73-b5da-0534315775ea",
-    "folders": {
-      "Happy path": "Happy path"
-  }
-},
-
-"INTEGRATIONS": {
-    "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
-    "multi_folder": true,
-    "folders": {
-      "SUPRA INTEGRATION": "SUPRA INTEGRATION",
-      "SUPRA EPAYMENTS": "SUPRA EPAYMENTS",
-      "SUPRA WALLET - EPAYMENTS": "SUPRA WALLET - EPAYMENTS"
-    }
-  },
-
-  "ms-api-co": {
-    "collection_id": "17667316-b2840d32-de77-4305-8b68-c204d0cad0a3",
-    "folders": {
-      "v1":"v1",
-      "External":"External",
-      "Risks": "Risks"
-  }
- },
-
-"FDM-6197 Cross Accounts CLABE": {
-    "collection_id": "19198347-2aef1759-4edc-4291-ae12-5aae4d44cc6c",
-    "folders": {
-    
-  }
- }
 }
-
+}
