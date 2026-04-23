@@ -209,7 +209,9 @@ log_ok "Newman finalizado. Reporte JSON generado."
 # ----------------------------------------------------------
 # 7.5 EJECUCIÓN PLAYWRIGHT
 # ----------------------------------------------------------
-if [[ "$SCENARIO" == "rejected" ]]; then
+if [[ "$SCENARIO" == "expired" ]]; then
+    log "Escenario EXPIRED — saltando Playwright."
+elif [[ "$SCENARIO" == "rejected" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
 else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
