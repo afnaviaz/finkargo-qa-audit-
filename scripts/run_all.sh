@@ -277,7 +277,9 @@ if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
         log_warn "No se encontró UID para 'Post payment' en collections.json. Usando nombre como fallback."
         POST_PAYMENT_FOLDER_ID="Post payment"
     else
-        log "Post payment folder UID: $POST_PAYMENT_FOLDER_ID"
+        # Quitar prefijo de workspace (formato: {workspace_id}-{uuid}) → dejar solo el UUID
+        POST_PAYMENT_FOLDER_ID=$(echo "$POST_PAYMENT_FOLDER_ID" | sed 's/^[0-9]*-//')
+        log "Post payment folder ID: $POST_PAYMENT_FOLDER_ID"
     fi
     ENV_EXPORT_P2="$SCRIPTS_DIR/environment_export_phase2.json"
     JSON_REPORT_P2="$SCRIPTS_DIR/results_phase2.json"
