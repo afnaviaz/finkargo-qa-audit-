@@ -9,6 +9,10 @@ on:
         default: "OB v2 - MX"
         type: choice
         options: ["Flow"]
+      folder:
+        description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
+        required: false
+        default: ""
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
@@ -21,10 +25,6 @@ on:
         default: "Testing"
         type: choice
         options: [Testing, Staging]
-      folder:
-        description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -57,9 +57,10 @@ jobs:
           # 2. Ejecutar usando la ruta relativa limpia
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
+            "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
-            "${{ github.event.inputs.ambiente }}" \
-            "${{ github.event.inputs.folder }}"
+            "${{ github.event.inputs.ambiente }}" 
+            
 
       - name: Upload Local Artifacts
         if: always()
