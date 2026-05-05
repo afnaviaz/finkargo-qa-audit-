@@ -103,11 +103,19 @@ jobs:
           $bash = "C:\Program Files\Git\bin\bash.exe"
           & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'INTEGRATIONS' '${{ github.event.inputs.folder }}' '${{ github.event.inputs.pais }}' '${{ github.event.inputs.ambiente }}'"
 
+      - name: Set artifact name
+        if: always()
+        id: artifact-name
+        shell: bash
+        run: |
+          SAFE=$(echo "${{ github.event.inputs.folder }}" | sed 's/ \/ /-/g; s/[^a-zA-Z0-9._-]/-/g')
+          echo "value=integrations-${SAFE}-${{ github.run_id }}" >> $GITHUB_OUTPUT
+
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integrations-${{ github.event.inputs.folder }}-${{ github.run_id }}
+          name: ${{ steps.artifact-name.outputs.value }}
           path: |
             scripts/*.html
             scripts/*.json
