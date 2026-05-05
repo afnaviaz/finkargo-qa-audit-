@@ -21,6 +21,10 @@ on:
         default: "Testing"
         type: choice
         options: [Testing, Staging]
+      folder:
+        description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
