@@ -106,10 +106,10 @@ jobs:
       - name: Set artifact name
         if: always()
         id: artifact-name
-        shell: bash
+        shell: powershell
         run: |
-          SAFE=$(echo "${{ github.event.inputs.folder }}" | sed 's/ \/ /-/g; s/[^a-zA-Z0-9._-]/-/g')
-          echo "value=integrations-${SAFE}-${{ github.run_id }}" >> $GITHUB_OUTPUT
+          $safe = "${{ github.event.inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
+          echo "value=integrations-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
 
       - name: Upload Artifacts
         if: always()
