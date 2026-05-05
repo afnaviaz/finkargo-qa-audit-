@@ -11,8 +11,9 @@ on:
           "Happy path integration",
           "Rejected flow",
           "Expired flow",
-          "SUPRA WALLET - EPAYMENTS",
-          "SUPRA EPAYMENTS"
+          "SUPRA / SUPRA INTEGRATION",
+          "SUPRA / SUPRA WALLET - EPAYMENTS",
+          "SUPRA / SUPRA EPAYMENTS"
         ]
       pais:
         description: "País"

@@ -52,6 +52,7 @@ SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
 CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
+FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
 [[ ! -f "$CONFIG_PATH"             ]] && { log_err "No se encontro: $CONFIG_PATH";              exit 1; }
 [[ ! -f "$HELPERS_DIR/get_config.py"      ]] && { log_err "No se encontro: $HELPERS_DIR/get_config.py";      exit 1; }
@@ -61,11 +62,22 @@ DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
 NOW="$(date +'%Y-%m-%d %H:%M:%S')"
-FOLDER_NAME=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')  # Quitar prefijo visual del dropdown
+
+# Soporte para opciones con formato "PROVEEDOR / SUBCARPETA"
+# FOLDER_NAME se usa para display/Confluence; NEWMAN_FOLDER es el nombre real del folder en Postman
+FOLDER_INPUT_CLEAN=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')
+if [[ "$FOLDER_INPUT_CLEAN" == *" / "* ]]; then
+    PROVIDER_PREFIX=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/ \/ .*//')
+    NEWMAN_FOLDER=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/.* \/ //')
+    FOLDER_NAME="$FOLDER_INPUT_CLEAN"
+else
+    PROVIDER_PREFIX=""
+    NEWMAN_FOLDER="$FOLDER_INPUT_CLEAN"
+    FOLDER_NAME="$FOLDER_INPUT_CLEAN"
+fi
 
 # Detectar escenario según nombre de carpeta
 SCENARIO="happy_path"
-NEWMAN_FOLDER="$FOLDER_NAME"
 if [[ "$FOLDER_NAME" == "Rejected flow" ]]; then
     SCENARIO="rejected"
     log "Escenario: REJECTED — se abrirá el link sin completar el formulario"
@@ -73,6 +85,7 @@ elif [[ "$FOLDER_NAME" == "Expired flow" ]]; then
     SCENARIO="expired"
     log "Escenario: EXPIRED — se simulará expiración de 25 horas en BD"
 fi
+[[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
@@ -147,6 +160,7 @@ NEWMAN_BASE_ARGS=(
     --suppress-exit-code
     --timeout-request 30000
     --timeout-script  10000
+    --working-directory         "$FIXTURES_DIR"
 )
 
 if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then

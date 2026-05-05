@@ -88,9 +88,9 @@ def main():
     try:
         with open(log_path, 'r', encoding='utf-8') as f:
             log_raw = f.read()
-        # Limitar a 8000 chars y escapar para Confluence
         truncated = len(log_raw) > 8000
-        log_clean = htmllib.escape(log_raw[:8000])
+        # CDATA no necesita HTML escape; solo proteger el cierre accidental de CDATA
+        log_clean = log_raw[:8000].replace(']]>', ']] >')
         if truncated:
             log_clean += "\n\n... [log truncado — ver artefacto completo en GitHub Actions]"
     except Exception:
