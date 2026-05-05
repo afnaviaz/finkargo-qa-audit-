@@ -37,10 +37,7 @@ jobs:
           fetch-depth: 1
 
       - name: Setup Permissions
-        run: chmod +x scripts/run_all.sh scripts/playwright/run_playwright.sh
-
-      - name: Install Playwright browsers
-        run: npx playwright install chromium
+        run: chmod +x scripts/run_all.sh
 
       - name: Execute QA Audit
         shell: bash # Forzamos bash para evitar inconsistencias en el runner
