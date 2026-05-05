@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       proyecto:
-        description: "Selecciona el Proyecto a auditar"
+        description: "Workspace a auditar flujos OB"
         required: true
-        default: "CORE"
+        default: "OB v2 - MX"
         type: choice
-        options: [FDM-6197 Cross Accounts CLABE]
+        options: [Flow]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
@@ -37,7 +37,10 @@ jobs:
           fetch-depth: 1
 
       - name: Setup Permissions
-        run: chmod +x scripts/run_all.sh
+        run: chmod +x scripts/run_all.sh scripts/playwright/run_playwright.sh
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
 
       - name: Execute QA Audit
         shell: bash # Forzamos bash para evitar inconsistencias en el runner
