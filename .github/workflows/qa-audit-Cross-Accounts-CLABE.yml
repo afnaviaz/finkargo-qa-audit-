@@ -39,9 +39,6 @@ jobs:
       - name: Setup Permissions
         run: chmod +x scripts/run_all.sh
 
-      - name: Install Playwright browsers
-        run: npx playwright install chromium
-
       - name: Execute QA Audit
         shell: bash # Forzamos bash para evitar inconsistencias en el runner
         env:
