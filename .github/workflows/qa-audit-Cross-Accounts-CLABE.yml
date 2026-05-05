@@ -8,7 +8,7 @@ on:
         required: true
         default: "OB v2 - MX"
         type: choice
-        options: [Flow]
+        options: ["Flow"]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
