@@ -53,6 +53,7 @@ jobs:
           # 2. Ejecutar usando la ruta relativa limpia
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
+            "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
 
