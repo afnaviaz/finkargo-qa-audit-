@@ -2,13 +2,13 @@ name: QA Audit Cross Accounts CLABE
 
 on:
   workflow_dispatch:
-    inputs:
+    inputs :
       proyecto:
         description: "Workspace a auditar flujos OB"
         required: true
         default: "OB v2 - MX"
         type: choice
-        options: [Flow]
+        options: ["Flow"]
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
