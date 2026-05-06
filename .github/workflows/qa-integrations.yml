@@ -9,6 +9,9 @@ on:
         type: choice
         options: [
           "SUPRA / SUPRA INTEGRATION",
+          "SUPRA / SUPRA INTEGRATION / Happy path integration",
+          "SUPRA / SUPRA INTEGRATION / Rejected flow",
+          "SUPRA / SUPRA INTEGRATION / Expired flow",
           "SUPRA / SUPRA WALLET - EPAYMENTS",
           "SUPRA / SUPRA EPAYMENTS",
           "COBRE / COBRE INTEGRATIONS"

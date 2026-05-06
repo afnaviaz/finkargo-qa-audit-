@@ -76,12 +76,12 @@ else
     FOLDER_NAME="$FOLDER_INPUT_CLEAN"
 fi
 
-# Detectar escenario según nombre de carpeta
+# Detectar escenario según sub-carpeta (NEWMAN_FOLDER es el nombre hoja)
 SCENARIO="happy_path"
-if [[ "$FOLDER_NAME" == "Rejected flow" ]]; then
+if [[ "$NEWMAN_FOLDER" == "Rejected flow" ]]; then
     SCENARIO="rejected"
     log "Escenario: REJECTED — se abrirá el link sin completar el formulario"
-elif [[ "$FOLDER_NAME" == "Expired flow" ]]; then
+elif [[ "$NEWMAN_FOLDER" == "Expired flow" ]]; then
     SCENARIO="expired"
     log "Escenario: EXPIRED — se simulará expiración de 25 horas en BD"
 fi
