@@ -284,13 +284,13 @@ conn = psycopg2.connect(
     port=int(os.environ.get('DB_PORT_${DB_SUFFIX}', '5432') or '5432')
 )
 cur = conn.cursor()
-cur.execute(\"UPDATE supra.\\\"transaction\\\" SET updated_at = NOW() - interval '34 minutes', status = 'EXPIRED' WHERE external_id = %s\", (sys.argv[1],))
+cur.execute(\"UPDATE supra.\\\"transaction\\\" SET status = 'EXPIRED' WHERE external_id = %s\", (sys.argv[1],))
 conn.commit()
-print(f'OK status=EXPIRED y updated_at = NOW() - 34min para external_id: {sys.argv[1][:12]}...')
+print(f'OK status=EXPIRED para external_id: {sys.argv[1][:12]}...')
 cur.close(); conn.close()
-" "$PAYIN_ID" || log_warn "No se pudo actualizar updated_at en BD."
-        log "Esperando 60s para que el backend detecte la expiración..."
-        sleep 60
+" "$PAYIN_ID" || log_warn "No se pudo actualizar status en BD."
+        log "Esperando 120s para que la notificación se dispare..."
+        sleep 120
     else
         log_warn "No se encontró payin_id en el environment export para simular expiración."
     fi
