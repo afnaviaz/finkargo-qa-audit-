@@ -163,7 +163,7 @@ def main():
             # --- 2. supra.transaction (polling) ---
             if payin_id:
                 POLL_INTERVAL = 15
-                POLL_TIMEOUT  = 120
+                POLL_TIMEOUT  = 300 if scenario == 'expired' else 120
                 elapsed       = 0
                 status        = None
 

@@ -289,6 +289,8 @@ conn.commit()
 print(f'OK updated_at = created_at + 34min para external_id: {sys.argv[1][:12]}...')
 cur.close(); conn.close()
 " "$PAYIN_ID" || log_warn "No se pudo actualizar updated_at en BD."
+        log "Esperando 60s para que el backend detecte la expiración..."
+        sleep 60
     else
         log_warn "No se encontró payin_id en el environment export para simular expiración."
     fi
