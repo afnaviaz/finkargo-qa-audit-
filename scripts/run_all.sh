@@ -257,9 +257,8 @@ except:
     print('no')
 " "$ENV_EXPORT" 2>/dev/null)
 
-# Escenario EXPIRED: actualizar updated_at a created_at + 34 minutos para forzar expiración
+# Escenario EXPIRED: esperar 34 minutos para que el proveedor expire la transacción
 if [[ "$SCENARIO" == "expired" ]]; then
-    log "Simulando expiración: actualizando updated_at a created_at + 34 minutos en transaction..."
     PAYIN_ID=$(python3 -c "
 import json, sys
 try:
@@ -273,26 +272,12 @@ except:
 " "$ENV_EXPORT" 2>/dev/null)
 
     if [[ -n "$PAYIN_ID" ]]; then
-        DB_SUFFIX="${AMBIENTE^^}_${PAIS_INPUT^^}"
-        python3 -c "
-import psycopg2, os, sys
-conn = psycopg2.connect(
-    host=os.environ['DB_HOST_${DB_SUFFIX}'],
-    dbname=os.environ['DB_NAME_${DB_SUFFIX}'],
-    user=os.environ['DB_USER_${DB_SUFFIX}'],
-    password=os.environ['DB_PASSWORD_${DB_SUFFIX}'],
-    port=int(os.environ.get('DB_PORT_${DB_SUFFIX}', '5432') or '5432')
-)
-cur = conn.cursor()
-cur.execute(\"UPDATE supra.\\\"transaction\\\" SET status = 'EXPIRED' WHERE external_id = %s\", (sys.argv[1],))
-conn.commit()
-print(f'OK status=EXPIRED para external_id: {sys.argv[1][:12]}...')
-cur.close(); conn.close()
-" "$PAYIN_ID" || log_warn "No se pudo actualizar status en BD."
-        log "Esperando 120s para que la notificación se dispare..."
-        sleep 120
+        log "Transaction creada: $PAYIN_ID"
+        log "Esperando 34 minutos para que el proveedor expire la transacción automáticamente..."
+        sleep 2040
+        log "Espera finalizada. Procediendo a validar estado en BD..."
     else
-        log_warn "No se encontró payin_id en el environment export para simular expiración."
+        log_warn "No se encontró payin_id en el environment export."
     fi
 fi
 
