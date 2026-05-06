@@ -83,7 +83,19 @@ if [[ "$NEWMAN_FOLDER" == "Rejected flow" ]]; then
     log "Escenario: REJECTED — se abrirá el link sin completar el formulario"
 elif [[ "$NEWMAN_FOLDER" == "Expired flow" ]]; then
     SCENARIO="expired"
-    log "Escenario: EXPIRED — se simulará expiración de 25 horas en BD"
+    log "Escenario: EXPIRED — se actualizará updated_at a created_at + 34 minutos en BD"
+elif [[ "$NEWMAN_FOLDER" == "Happy path epayments" ]]; then
+    SCENARIO="epayments_happy"
+    log "Escenario: EPAYMENTS HAPPY PATH — validará epayment.transaction status SUCCESSFUL"
+elif [[ "$NEWMAN_FOLDER" == "Happy path wallet epayments" ]]; then
+    SCENARIO="wallet_epayments_happy"
+    log "Escenario: WALLET EPAYMENTS HAPPY PATH — validará epayment.transaction status SUCCESSFUL"
+elif [[ "$NEWMAN_FOLDER" == "Happy path integration wallet" || "$NEWMAN_FOLDER" == "Happy path integration wallet varios documentos" ]]; then
+    SCENARIO="wallet_happy"
+    log "Escenario: WALLET INTEGRATIONS HAPPY PATH"
+elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
+    SCENARIO="cobre_happy"
+    log "Escenario: COBRE HAPPY PATH"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -245,9 +257,9 @@ except:
     print('no')
 " "$ENV_EXPORT" 2>/dev/null)
 
-# Escenario EXPIRED: actualizar updated_at en BD para simular 25 horas
-if [[ "$SCENARIO" == "expired" && "$PAYMENT_LINK_FOUND" == "yes" ]]; then
-    log "Simulando expiración: actualizando updated_at a -25 horas en transaction..."
+# Escenario EXPIRED: actualizar updated_at a created_at + 34 minutos para forzar expiración
+if [[ "$SCENARIO" == "expired" ]]; then
+    log "Simulando expiración: actualizando updated_at a created_at + 34 minutos en transaction..."
     PAYIN_ID=$(python3 -c "
 import json, sys
 try:
@@ -272,13 +284,13 @@ conn = psycopg2.connect(
     port=int(os.environ.get('DB_PORT_${DB_SUFFIX}', '5432') or '5432')
 )
 cur = conn.cursor()
-cur.execute(\"UPDATE supra.\\\"transaction\\\" SET updated_at = now() - interval '25 hours' WHERE external_id = %s\", (sys.argv[1],))
+cur.execute(\"UPDATE supra.\\\"transaction\\\" SET updated_at = created_at + interval '34 minutes' WHERE external_id = %s\", (sys.argv[1],))
 conn.commit()
-print(f'OK updated_at actualizado para external_id: {sys.argv[1][:12]}...')
+print(f'OK updated_at = created_at + 34min para external_id: {sys.argv[1][:12]}...')
 cur.close(); conn.close()
 " "$PAYIN_ID" || log_warn "No se pudo actualizar updated_at en BD."
     else
-        log_warn "No se encontró payin_id para simular expiración."
+        log_warn "No se encontró payin_id en el environment export para simular expiración."
     fi
 fi
 

@@ -25,7 +25,7 @@ on:
         required: false
         default: "01-Register Company"
         type: choice
-        options: ["01-Register Company", "02-Legal info CO", "03-Update company", "Suppliers", "Economic Activities", "Contactos de Proveedores", "INTEGRATIONS", "PAGOS", "SUPRA INTEGRATION", "Happy path integration", "SUPRA EPAYMENTS", "Happy path epayments", "Recaudo", "Consultas", "SUPRA WALLET - EPAYMENTS"]
+        options: ["01-Register Company", "02-Legal info CO", "03-Update company", "Suppliers", "Economic Activities", "Contactos de Proveedores", "INTEGRATIONS", "PAGOS", "SUPRA INTEGRATION", "Happy path integration", "SUPRA EPAYMENTS", "Happy path epayments", "Recaudo", "Consultas", "SUPRA WALLET - INTEGRATIONS"]
 
 permissions:
   contents: read

@@ -12,9 +12,15 @@ on:
           "SUPRA / SUPRA INTEGRATION / Happy path integration",
           "SUPRA / SUPRA INTEGRATION / Rejected flow",
           "SUPRA / SUPRA INTEGRATION / Expired flow",
-          "SUPRA / SUPRA WALLET - EPAYMENTS",
+          "SUPRA / SUPRA WALLET - INTEGRATIONS",
+          "SUPRA / SUPRA WALLET - INTEGRATIONS / Happy path integration wallet",
+          "SUPRA / SUPRA WALLET - INTEGRATIONS / Happy path integration wallet varios documentos",
           "SUPRA / SUPRA EPAYMENTS",
-          "COBRE / COBRE INTEGRATIONS"
+          "SUPRA / SUPRA EPAYMENTS / Happy path epayments",
+          "SUPRA / SUPRA WALLET - EPAYMENTS",
+          "SUPRA / SUPRA WALLET - EPAYMENTS / Happy path wallet epayments",
+          "COBRE / COBRE INTEGRATIONS",
+          "COBRE / COBRE INTEGRATIONS / Happy path cobre"
         ]
       pais:
         description: "País"

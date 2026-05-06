@@ -3,9 +3,12 @@
 validate_db_states.py — Valida estados en PostgreSQL después de Newman.
 Uso: python3 validate_db_states.py <env_export_path> <pais> <ambiente>
 
-Valida:
-  - supra.exchange_quote  WHERE external_id = supra_quote_id → status CREATED
-  - supra."transaction"   WHERE external_id = payin_id       → status completed (o CREATED/in_progress)
+Valida según escenario:
+  SUPRA (happy_path / rejected / expired):
+    - supra.exchange_quote  WHERE external_id = supra_quote_id → status CREATED
+    - supra."transaction"   WHERE external_id = payin_id       → status PAID / REJECTED / EXPIRED
+  EPAYMENTS (epayments_happy):
+    - epayment."transaction" WHERE process_internal_id = payin_id → status SUCCESSFUL
 """
 import json, sys, os
 
@@ -48,18 +51,11 @@ def main():
     output_path     = sys.argv[4]
     scenario        = sys.argv[5] if len(sys.argv) > 5 else 'happy_path'
 
-    # Estado esperado de transaction según escenario
-    expected_tx_status = {
-        'happy_path': 'completed',
-        'rejected':   'REJECTED',
-        'expired':    'EXPIRED',
-    }.get(scenario, 'completed')
-
     supra_quote_id = get_env_var(env_export, 'supra_quote_id')
     payin_id       = get_env_var(env_export, 'payin_id')
 
     if not supra_quote_id and not payin_id:
-        print('INFO No se encontraron IDs de SUPRA en el environment. Saltando validacion DB.')
+        print('INFO No se encontraron IDs en el environment. Saltando validacion DB.')
         write_result(output_path, False, pais, ambiente, [])
         sys.exit(0)
 
@@ -80,74 +76,127 @@ def main():
     results = []
 
     try:
+        import time
         conn = psycopg2.connect(**db_config)
         cur  = conn.cursor()
 
         print('')
         print('=' * 55)
         print('  VALIDACION DE ESTADOS - BASE DE DATOS')
-        print(f'  Ambiente: {ambiente} | Pais: {pais}')
+        print(f'  Ambiente: {ambiente} | Pais: {pais} | Escenario: {scenario}')
         print('=' * 55)
 
-        # --- 1. exchange_quote ---
-        if supra_quote_id:
-            cur.execute(
-                'SELECT external_id, status FROM supra.exchange_quote WHERE external_id = %s',
-                (supra_quote_id,)
-            )
-            row = cur.fetchone()
-            if row:
-                status   = row[1]
-                expected = 'CREATED'
-                ok       = status == expected
-                result   = 'OK' if ok else 'FAIL'
-                print(f'[{result}] exchange_quote | external_id: {supra_quote_id[:12]}... | status: {status} (esperado: {expected})')
-                results.append({'table': 'exchange_quote', 'external_id': supra_quote_id, 'status': status, 'expected': expected, 'result': result})
-                if not ok:
+        # ============================================================
+        # EPAYMENTS: epayment."transaction" → status SUCCESSFUL
+        # ============================================================
+        if scenario == 'epayments_happy':
+            if payin_id:
+                POLL_INTERVAL = 15
+                POLL_TIMEOUT  = 120
+                elapsed       = 0
+                status        = None
+
+                print(f'INFO Esperando status SUCCESSFUL en epayment.transaction (timeout: {POLL_TIMEOUT}s)...')
+                while elapsed <= POLL_TIMEOUT:
+                    cur.execute(
+                        'SELECT process_internal_id, status FROM epayment."transaction" WHERE process_internal_id = %s',
+                        (payin_id,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        status = row[1]
+                        print(f'  [{elapsed}s] epayment.transaction status: {status}')
+                        if status == 'SUCCESSFUL':
+                            break
+                        if status in ('FAILED', 'REJECTED', 'EXPIRED'):
+                            break
+                    else:
+                        status = 'NOT FOUND'
+                        break
+                    time.sleep(POLL_INTERVAL)
+                    elapsed += POLL_INTERVAL
+
+                if status == 'SUCCESSFUL':
+                    result = 'OK'
+                elif status in ('NOT FOUND', 'FAILED', 'REJECTED', 'EXPIRED'):
+                    result = 'FAIL'
                     errors += 1
+                else:
+                    result = 'WARN'  # Timeout, aún pendiente
+
+                print(f'[{result}] epayment.transaction | process_internal_id: {payin_id[:12]}... | status: {status} (esperado: SUCCESSFUL)')
+                results.append({'table': 'epayment.transaction', 'external_id': payin_id, 'status': status, 'expected': 'SUCCESSFUL', 'result': result})
             else:
-                print(f'[FAIL] exchange_quote | external_id: {supra_quote_id[:12]}... | NO ENCONTRADO en BD')
-                results.append({'table': 'exchange_quote', 'external_id': supra_quote_id, 'status': 'NOT FOUND', 'expected': 'CREATED', 'result': 'FAIL'})
-                errors += 1
+                print('WARN No se encontró payin_id para validar epayment.transaction.')
 
-        # --- 2. transaction (polling hasta completed o timeout) ---
-        if payin_id:
-            import time
-            POLL_INTERVAL = 15   # segundos entre intentos
-            POLL_TIMEOUT  = 120  # segundos máximo de espera (estado final depende de callback PSE)
-            elapsed       = 0
-            status        = None
+        # ============================================================
+        # SUPRA: exchange_quote + supra."transaction"
+        # ============================================================
+        else:
+            expected_tx_status = {
+                'happy_path': 'PAID',
+                'rejected':   'REJECTED',
+                'expired':    'EXPIRED',
+            }.get(scenario, 'PAID')
 
-            print(f'INFO Esperando status {expected_tx_status} en transaction (timeout: {POLL_TIMEOUT}s)...')
-            while elapsed <= POLL_TIMEOUT:
+            # --- 1. exchange_quote ---
+            if supra_quote_id:
                 cur.execute(
-                    'SELECT external_id, status FROM supra."transaction" WHERE external_id = %s',
-                    (payin_id,)
+                    'SELECT external_id, status FROM supra.exchange_quote WHERE external_id = %s',
+                    (supra_quote_id,)
                 )
                 row = cur.fetchone()
                 if row:
-                    status = row[1]
-                    print(f'  [{elapsed}s] transaction status: {status}')
-                    if status == expected_tx_status:
-                        break
-                    if status in ('EXPIRED', 'REJECTED', 'completed'):
-                        break
+                    status   = row[1]
+                    expected = 'CREATED'
+                    ok       = status == expected
+                    result   = 'OK' if ok else 'FAIL'
+                    print(f'[{result}] exchange_quote | external_id: {supra_quote_id[:12]}... | status: {status} (esperado: {expected})')
+                    results.append({'table': 'exchange_quote', 'external_id': supra_quote_id, 'status': status, 'expected': expected, 'result': result})
+                    if not ok:
+                        errors += 1
                 else:
-                    status = 'NOT FOUND'
-                    break
-                time.sleep(POLL_INTERVAL)
-                elapsed += POLL_INTERVAL
+                    print(f'[FAIL] exchange_quote | external_id: {supra_quote_id[:12]}... | NO ENCONTRADO en BD')
+                    results.append({'table': 'exchange_quote', 'external_id': supra_quote_id, 'status': 'NOT FOUND', 'expected': 'CREATED', 'result': 'FAIL'})
+                    errors += 1
 
-            if status == expected_tx_status:
-                result = 'OK'
-            elif status in ('CREATED', 'in_progress'):
-                result = 'WARN'  # Timeout alcanzado, aún pendiente
-            else:
-                result = 'FAIL'
-                errors += 1
+            # --- 2. supra.transaction (polling) ---
+            if payin_id:
+                POLL_INTERVAL = 15
+                POLL_TIMEOUT  = 120
+                elapsed       = 0
+                status        = None
 
-            print(f'[{result}] transaction    | external_id: {payin_id[:12]}...    | status: {status} (esperado: {expected_tx_status})')
-            results.append({'table': 'transaction', 'external_id': payin_id, 'status': status, 'expected': expected_tx_status, 'result': result})
+                print(f'INFO Esperando status {expected_tx_status} en supra.transaction (timeout: {POLL_TIMEOUT}s)...')
+                while elapsed <= POLL_TIMEOUT:
+                    cur.execute(
+                        'SELECT external_id, status FROM supra."transaction" WHERE external_id = %s',
+                        (payin_id,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        status = row[1]
+                        print(f'  [{elapsed}s] transaction status: {status}')
+                        if status == expected_tx_status:
+                            break
+                        if status in ('EXPIRED', 'REJECTED', 'PAID'):
+                            break
+                    else:
+                        status = 'NOT FOUND'
+                        break
+                    time.sleep(POLL_INTERVAL)
+                    elapsed += POLL_INTERVAL
+
+                if status == expected_tx_status:
+                    result = 'OK'
+                elif status in ('CREATED', 'in_progress', 'pending'):
+                    result = 'WARN'
+                else:
+                    result = 'FAIL'
+                    errors += 1
+
+                print(f'[{result}] supra.transaction | external_id: {payin_id[:12]}... | status: {status} (esperado: {expected_tx_status})')
+                results.append({'table': 'transaction', 'external_id': payin_id, 'status': status, 'expected': expected_tx_status, 'result': result})
 
         print('=' * 55)
         cur.close()
