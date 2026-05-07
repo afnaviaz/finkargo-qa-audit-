@@ -1,20 +1,14 @@
-name: QA Audit - ms-core-entities
+name: QA Audit - OB v2 - MX
 
 on:
   workflow_dispatch:
     inputs:
       folder:
-        description: "Selecciona la subcarpeta específica a auditar"
+        description: "Directorio a auditar"
         required: true
-        default: "01-Register Company"
+        default: "Flow"
         type: choice
-        options: 
-          - "01-Register Company"
-          - "02-Legal info CO"
-          - "03-Update company"
-          - "Suppliers"
-          - "Economic Activities"
-          - "Contactos de Proveedores"
+        options: [Flow]
       pais:
         description: "País contexto de ejecución (ALL ejecutará CO y MX)"
         required: true
