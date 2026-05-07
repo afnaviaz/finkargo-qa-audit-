@@ -4,11 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       proyecto:
-        description: "Selecciona el Proyecto a auditar"
+        description: "Workspace a auditar flujos OB"
         required: true
-        default: "CORE"
+        default: "OB v2 - MX"
         type: choice
-        options: [FDM-6197 Cross Accounts CLABE]
+        options: ["Flow"]
+     folder:
+        description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
+        required: false
+        default: ""
       pais:
         description: "País a auditar (ALL ejecutará CO y MX)"
         required: true
@@ -21,6 +25,7 @@ on:
         default: "Testing"
         type: choice
         options: [Testing, Staging]
+      
 
 permissions:
   contents: read
@@ -37,6 +42,7 @@ jobs:
           fetch-depth: 1
 
       - name: Setup Permissions
+        shell: bash
         run: chmod +x scripts/run_all.sh
 
       - name: Execute QA Audit
@@ -53,8 +59,10 @@ jobs:
           # 2. Ejecutar usando la ruta relativa limpia
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
+            "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
+            
 
       - name: Upload Local Artifacts
         if: always()
