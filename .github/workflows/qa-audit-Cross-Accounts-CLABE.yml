@@ -9,7 +9,7 @@ on:
         default: "OB v2 - MX"
         type: choice
         options: ["Flow"]
-     folder:
+      folder:
         description: "Folder específico a ejecutar (opcional, sobreescribe la selección por país)"
         required: false
         default: ""
