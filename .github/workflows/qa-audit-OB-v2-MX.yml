@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   run-audit-pipeline:
-    name: "Audit: ms-core-entities / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
+    name: "Audit: OB v2 - MX / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
     runs-on: self-hosted
     steps:
       - name: Checkout Repository

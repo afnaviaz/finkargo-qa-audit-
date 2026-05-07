@@ -50,7 +50,7 @@ log "CONF_TOKEN      : ${CONF_TOKEN:0:8}... (${#CONF_TOKEN} chars)"
 # ----------------------------------------------------------
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
-CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
+CONFIG_PATH="$SCRIPTS_DIR/config/OB-V2-mx.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
