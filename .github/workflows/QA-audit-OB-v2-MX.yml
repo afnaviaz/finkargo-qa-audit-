@@ -1,0 +1,87 @@
+name: QA Audit - OB v2 MX
+
+on:
+  workflow_dispatch:
+    inputs:
+      folder:
+        description: "Selecciona la subcarpeta específica a auditar"
+        required: true
+        default: "OB v2 - MX"
+        type: choice
+        options: [Flow]
+      pais:
+        description: "País contexto de ejecución (ALL ejecutará CO y MX)"
+        required: true
+        default: "CO"
+        type: choice
+        options: [CO, MX, ALL]
+      ambiente:
+        description: "Ambiente de ejecución (Testing o Staging)"
+        required: true
+        default: "Testing"
+        type: choice
+        options: [Testing, Staging]
+
+env:
+  # Obligamos a usar Node 20 o 22 si es posible, ya que Node 24 es experimental y rompe htmlextra
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true 
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run-audit-pipeline:
+    name: "Audit: ms-core-entities / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true # Mantenemos el runner limpio de la ejecución anterior
+
+      - name: Setup Permissions
+        run: chmod +x scripts/run_all.sh
+
+      - name: Debug Inputs
+        run: |
+          echo "🚀 REVISANDO PARÁMETROS DE ENTRADA"
+          echo "FOLDER SELECCIONADA: ${{ github.event.inputs.folder }}"
+          echo "PAIS: ${{ github.event.inputs.pais }}"
+          echo "AMBIENTE: ${{ github.event.inputs.ambiente }}"
+          echo "------------------------------------------"
+          echo "📁 VERIFICANDO DIRECTORIO DE SCRIPTS:"
+          ls -la scripts/
+          echo "------------------------------------------"
+
+      - name: Execute QA Audit
+        shell: bash
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          # Importante: Envolver inputs en comillas dobles para manejar espacios en nombres de folders
+          ./scripts/run_all.sh \
+            "ms-core-entities" \
+            "${{ github.event.inputs.folder }}" \
+            "${{ github.event.inputs.pais }}" \
+            "${{ github.event.inputs.ambiente }}"
+
+      - name: Prepare Artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+          # Buscamos reportes tanto en la raíz como en scripts/ según tu configuración de run_all.sh
+          cp *.html *.json *.txt artifacts/ 2>/dev/null || true
+          cp scripts/*.html scripts/*.json scripts/*.txt artifacts/ 2>/dev/null || true
+
+      - name: Upload Results to GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ github.event.inputs.folder }}-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 5
