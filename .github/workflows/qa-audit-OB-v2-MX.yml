@@ -66,7 +66,7 @@ jobs:
         run: |
           # Importante: Envolver inputs en comillas dobles para manejar espacios en nombres de folders
           ./scripts/run_all.sh \
-            "ms-core-entities" \
+            "OB v2 - MX" \
             "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
