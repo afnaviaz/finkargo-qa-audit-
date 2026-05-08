@@ -36,28 +36,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Setup Permissions
-        shell: bash
-        run: chmod +x scripts/run_all.sh
+
       - name: Execute QA Audit
-        shell: bash
+        shell: '/bin/bash {0}'
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          cd ${{ github.workspace }}
+          chmod +x scripts/run_all.sh
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
             "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
+
       - name: Upload Local Artifacts
         if: always()
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p ${{ github.workspace }}/artifacts
-          cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true
-          echo "Artifacts guardados:"
-          ls -la ${{ github.workspace }}/artifacts/
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\artifacts" | Out-Null
+          Get-ChildItem scripts -Include "*.html","*.json","*.txt" -ErrorAction SilentlyContinue |
+            Copy-Item -Destination "${{ github.workspace }}\artifacts\" -ErrorAction SilentlyContinue
+          Write-Host "Artifacts guardados:"
+          Get-ChildItem "${{ github.workspace }}\artifacts\" -ErrorAction SilentlyContinue |
+            Format-Table Name, Length -AutoSize
