@@ -31,6 +31,9 @@ jobs:
   run-audit-pipeline:
     name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
     runs-on: self-hosted
+    defaults:
+      run:
+        shell: 'C:\Program Files\Git\bin\bash.exe -e -o pipefail {0}'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -38,7 +41,6 @@ jobs:
           fetch-depth: 1
 
       - name: Execute QA Audit
-        shell: '/bin/bash {0}'
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
@@ -55,9 +57,8 @@ jobs:
 
       - name: Upload Local Artifacts
         if: always()
-        shell: bash
         run: |
-          mkdir -p "${{ github.workspace }}/artifacts"
-          cp scripts/*.html scripts/*.json scripts/*.txt "${{ github.workspace }}/artifacts/" 2>/dev/null || true
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          cp scripts/*.html scripts/*.json scripts/*.txt "$GITHUB_WORKSPACE/artifacts/" 2>/dev/null || true
           echo "Artifacts guardados:"
-          ls -la "${{ github.workspace }}/artifacts/"
+          ls -la "$GITHUB_WORKSPACE/artifacts/"
