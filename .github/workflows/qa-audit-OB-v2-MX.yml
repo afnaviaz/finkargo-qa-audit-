@@ -33,7 +33,7 @@ permissions:
 jobs:
   run-audit-pipeline:
     name: "Audit: OB v2 - MX / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
