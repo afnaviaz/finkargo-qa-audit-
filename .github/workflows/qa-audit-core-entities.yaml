@@ -43,6 +43,7 @@ jobs:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONF_USER: ${{ secrets.CONF_USER }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
           chmod +x scripts/run_all.sh
@@ -54,11 +55,9 @@ jobs:
 
       - name: Upload Local Artifacts
         if: always()
-        shell: pwsh
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\artifacts" | Out-Null
-          Get-ChildItem scripts -Include "*.html","*.json","*.txt" -ErrorAction SilentlyContinue |
-            Copy-Item -Destination "${{ github.workspace }}\artifacts\" -ErrorAction SilentlyContinue
-          Write-Host "Artifacts guardados:"
-          Get-ChildItem "${{ github.workspace }}\artifacts\" -ErrorAction SilentlyContinue |
-            Format-Table Name, Length -AutoSize
+          mkdir -p "${{ github.workspace }}/artifacts"
+          cp scripts/*.html scripts/*.json scripts/*.txt "${{ github.workspace }}/artifacts/" 2>/dev/null || true
+          echo "Artifacts guardados:"
+          ls -la "${{ github.workspace }}/artifacts/"
