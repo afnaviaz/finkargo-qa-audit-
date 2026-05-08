@@ -37,6 +37,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: Setup Permissions
+        shell: bash
         run: chmod +x scripts/run_all.sh
       - name: Execute QA Audit
         shell: bash
@@ -49,13 +50,14 @@ jobs:
           cd ${{ github.workspace }}
           ./scripts/run_all.sh \
             "${{ github.event.inputs.proyecto }}" \
+            "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
-            "${{ github.event.inputs.ambiente }}" \
-            "${{ github.event.inputs.folder }}"
+            "${{ github.event.inputs.ambiente }}"
       - name: Upload Local Artifacts
         if: always()
+        shell: bash
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
           cp scripts/*.html scripts/*.json scripts/*.txt ${{ github.workspace }}/artifacts/ 2>/dev/null || true
-          echo "📦 Artifacts guardados:"
+          echo "Artifacts guardados:"
           ls -la ${{ github.workspace }}/artifacts/
