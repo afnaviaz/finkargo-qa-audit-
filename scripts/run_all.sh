@@ -52,6 +52,7 @@ SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
 CONFIG_PATH="$SCRIPTS_DIR/config/${PROYECTO}.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
+FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
 [[ ! -f "$CONFIG_PATH" ]] && { log_err "No se encontro config para '$PROYECTO': $CONFIG_PATH"; exit 1; }
 [[ ! -f "$HELPERS_DIR/get_config.py"      ]] && { log_err "No se encontro: $HELPERS_DIR/get_config.py";      exit 1; }
@@ -61,7 +62,42 @@ DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
 NOW="$(date +'%Y-%m-%d %H:%M:%S')"
-FOLDER_NAME="$FOLDER_INPUT"
+
+# Soporte para opciones con formato "PROVEEDOR / SUBCARPETA"
+# FOLDER_NAME se usa para display/Confluence; NEWMAN_FOLDER es el nombre real del folder en Postman
+FOLDER_INPUT_CLEAN=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')
+if [[ "$FOLDER_INPUT_CLEAN" == *" / "* ]]; then
+    PROVIDER_PREFIX=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/ \/ .*//')
+    NEWMAN_FOLDER=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/.* \/ //')
+    FOLDER_NAME="$FOLDER_INPUT_CLEAN"
+else
+    PROVIDER_PREFIX=""
+    NEWMAN_FOLDER="$FOLDER_INPUT_CLEAN"
+    FOLDER_NAME="$FOLDER_INPUT_CLEAN"
+fi
+
+# Detectar escenario según sub-carpeta (NEWMAN_FOLDER es el nombre hoja)
+SCENARIO="happy_path"
+if [[ "$NEWMAN_FOLDER" == "Rejected flow" ]]; then
+    SCENARIO="rejected"
+    log "Escenario: REJECTED — se abrirá el link sin completar el formulario"
+elif [[ "$NEWMAN_FOLDER" == "Expired flow" ]]; then
+    SCENARIO="expired"
+    log "Escenario: EXPIRED — se actualizará updated_at a created_at + 34 minutos en BD"
+elif [[ "$NEWMAN_FOLDER" == "Happy path epayments" ]]; then
+    SCENARIO="epayments_happy"
+    log "Escenario: EPAYMENTS HAPPY PATH — validará epayment.transaction status SUCCESSFUL"
+elif [[ "$NEWMAN_FOLDER" == "Happy path wallet epayments" ]]; then
+    SCENARIO="wallet_epayments_happy"
+    log "Escenario: WALLET EPAYMENTS HAPPY PATH — validará epayment.transaction status SUCCESSFUL"
+elif [[ "$NEWMAN_FOLDER" == "Happy path integration wallet" || "$NEWMAN_FOLDER" == "Happy path integration wallet varios documentos" ]]; then
+    SCENARIO="wallet_happy"
+    log "Escenario: WALLET INTEGRATIONS HAPPY PATH"
+elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
+    SCENARIO="cobre_happy"
+    log "Escenario: COBRE HAPPY PATH"
+fi
+[[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
@@ -69,10 +105,13 @@ LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
 CLAUDE_REPORT="$SCRIPTS_DIR/claude_report.html"
 METRICS_FILE="$SCRIPTS_DIR/metrics_summary.json"
 CONFLUENCE_BODY="$SCRIPTS_DIR/confluence_body.html"
+DB_VALIDATION_FILE="$SCRIPTS_DIR/db_validation.json"
 
-rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$CLAUDE_REPORT" "$METRICS_FILE" "$CONFLUENCE_BODY"
+rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$CLAUDE_REPORT" "$METRICS_FILE" "$CONFLUENCE_BODY" "$DB_VALIDATION_FILE"
 
-CONF_USER="${CONF_USER:-andres.navia@finkargo.com}"
+CONF_USER="${CONF_USER:-}"
+CONF_USER=$(echo "$CONF_USER" | tr -d '\n\r')
+[[ -z "$CONF_USER" ]] && { log_err "CONF_USER no definida en Secrets."; exit 1; }
 CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA"
 
@@ -120,6 +159,8 @@ log "Environment UID : $ENV_UID"
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
 
+ENV_EXPORT="$SCRIPTS_DIR/environment_export.json"
+
 NEWMAN_BASE_ARGS=(
     "$COLLECTION_URL"
     --environment "$ENV_URL"
@@ -127,16 +168,15 @@ NEWMAN_BASE_ARGS=(
     -r cli,json,htmlextra
     --reporter-json-export      "$JSON_REPORT"
     --reporter-htmlextra-export "$HTML_NEWMAN"
+    --export-environment        "$ENV_EXPORT"
     --suppress-exit-code
     --timeout-request 30000
     --timeout-script  10000
 )
 
-if [[ -f "$DATA_FILE" ]]; then
+if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
     NEWMAN_BASE_ARGS+=("-d" "$DATA_FILE")
     log "Data-driven: $DATA_FILE"
-else
-    log_warn "scenarios.json no encontrado. Ejecutando sin data-driven."
 fi
 
 # ----------------------------------------------------------
@@ -167,10 +207,10 @@ if [[ "$PAIS_INPUT" == "ALL" ]]; then
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
 else
-    log "Iniciando Newman | Folder: '$FOLDER_NAME' | Pais: $PAIS_INPUT"
+    log "Iniciando Newman | Folder: '$NEWMAN_FOLDER' | Pais: $PAIS_INPUT"
 
     newman run "${NEWMAN_BASE_ARGS[@]}" \
-        --folder "$FOLDER_NAME" \
+        --folder "$NEWMAN_FOLDER" \
         --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
@@ -190,6 +230,98 @@ if [[ ! -f "$JSON_REPORT" ]]; then
     exit 1
 fi
 log_ok "Newman finalizado. Reporte JSON generado."
+
+# ----------------------------------------------------------
+# 7.5 EJECUCIÓN PLAYWRIGHT
+# ----------------------------------------------------------
+if [[ "$SCENARIO" == "expired" ]]; then
+    log "Escenario EXPIRED — saltando Playwright."
+elif [[ "$SCENARIO" == "rejected" ]]; then
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
+else
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
+fi
+
+# ----------------------------------------------------------
+# 7.6 NEWMAN FASE 2 — Post payment (solo si hubo payment_link)
+# ----------------------------------------------------------
+PAYMENT_LINK_FOUND=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        env = json.load(f)
+    values = env.get('values', [])
+    match = next((v['value'] for v in values if v['key'] == 'payment_link' and v['value']), None)
+    print('yes' if match else 'no')
+except:
+    print('no')
+" "$ENV_EXPORT" 2>/dev/null)
+
+# Escenario EXPIRED: esperar 34 minutos para que el proveedor expire la transacción
+if [[ "$SCENARIO" == "expired" ]]; then
+    PAYIN_ID=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        env = json.load(f)
+    values = env.get('values', [])
+    match = next((v['value'] for v in values if v['key'] == 'payin_id' and v['value']), None)
+    print(match or '')
+except:
+    print('')
+" "$ENV_EXPORT" 2>/dev/null)
+
+    if [[ -n "$PAYIN_ID" ]]; then
+        log "Transaction creada: $PAYIN_ID"
+        log "Esperando 34 minutos para que el proveedor expire la transacción automáticamente..."
+        sleep 2040
+        log "Espera finalizada. Procediendo a validar estado en BD..."
+    else
+        log_warn "No se encontró payin_id en el environment export."
+    fi
+fi
+
+if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
+    log "Iniciando Newman Fase 2 | Folder: 'Post payment'"
+    # Resolver UID de la carpeta "Post payment" desde collections.json
+    POST_PAYMENT_FOLDER_ID=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "Post payment" "folder_id" 2>/dev/null || echo "")
+    if [[ -z "$POST_PAYMENT_FOLDER_ID" ]]; then
+        log_warn "No se encontró UID para 'Post payment' en collections.json. Usando nombre como fallback."
+        POST_PAYMENT_FOLDER_ID="Post payment"
+    else
+        # Quitar prefijo de workspace (formato: {workspace_id}-{uuid}) → dejar solo el UUID
+        POST_PAYMENT_FOLDER_ID=$(echo "$POST_PAYMENT_FOLDER_ID" | sed 's/^[0-9]*-//')
+        log "Post payment folder ID: $POST_PAYMENT_FOLDER_ID"
+    fi
+    ENV_EXPORT_P2="$SCRIPTS_DIR/environment_export_phase2.json"
+    JSON_REPORT_P2="$SCRIPTS_DIR/results_phase2.json"
+    HTML_NEWMAN_P2="$SCRIPTS_DIR/reporte_visual_phase2.html"
+    set +e
+    newman run "$COLLECTION_URL" \
+        --environment "$ENV_EXPORT" \
+        --insecure \
+        -r cli,json,htmlextra \
+        --reporter-json-export      "$JSON_REPORT_P2" \
+        --reporter-htmlextra-export "$HTML_NEWMAN_P2" \
+        --export-environment        "$ENV_EXPORT_P2" \
+        --suppress-exit-code \
+        --timeout-request 30000 \
+        --timeout-script  10000 \
+        --folder "$POST_PAYMENT_FOLDER_ID" \
+        --reporter-htmlextra-title "QA Audit | Post payment | $PAIS_INPUT | $AMBIENTE | $NOW" \
+        2>&1 | tee -a "$LOG_FILE"
+    NEWMAN_POST_EXIT=${PIPESTATUS[0]}
+    set -e
+    log "Newman Fase 2 exit code: $NEWMAN_POST_EXIT"
+else
+    log "Sin payment_link — saltando Newman Fase 2."
+fi
+
+# ----------------------------------------------------------
+# 7.8 VALIDACION DE ESTADOS EN BD
+# ----------------------------------------------------------
+log "Validando estados en base de datos..."
+python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" "$DB_VALIDATION_FILE" "$SCENARIO" || true
 
 # ----------------------------------------------------------
 # 8. EXTRACCION DE METRICAS
@@ -223,8 +355,11 @@ PAGE_TITLE="[$PROYECTO] [$PAIS_INPUT] $FOLDER_NAME - Run #$EXEC_NUM"
 
 # Buscar carpeta padre del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
-SEARCH_RES=$(curl -sf -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
-    log_err "Error conectando a Confluence. Verifica CONF_USER y CONF_TOKEN."
+SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
+    CURL_CODE=$?
+    log_err "Error conectando a Confluence (curl exit: $CURL_CODE)."
+    log_err "URL intentada: $SEARCH_URL"
+    log_err "Verifica CONF_USER ('${CONF_USER}') y CONF_TOKEN (${#CONF_TOKEN} chars)."
     exit 1
 }
 
@@ -252,7 +387,7 @@ print(json.dumps({
     }}
 }))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
 
-    PROJECT_FOLDER_ID=$(curl -sf -u "$CONF_USER:$CONF_TOKEN" \
+    PROJECT_FOLDER_ID=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H 'Content-Type: application/json' \
         -d "$CREATE_PAYLOAD" \
         "$CONF_BASE_URL/rest/api/content" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
@@ -267,6 +402,7 @@ fi
 python3 "$HELPERS_DIR/build_confluence.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" "$LOG_FILE" \
     "$PROYECTO" "$FOLDER_NAME" "$PAIS_INPUT" "$AMBIENTE" "$NOW" "$EXEC_NUM" \
+    "$DB_VALIDATION_FILE" \
     > "$CONFLUENCE_BODY"
 
 log_ok "HTML de Confluence construido."
@@ -274,7 +410,7 @@ log_ok "HTML de Confluence construido."
 # Publicar pagina
 FINAL_PAYLOAD=$(python3 -c "
 import json, sys
-body = open(sys.argv[4]).read()
+body = open(sys.argv[4], encoding='utf-8').read()
 print(json.dumps({
     'type': 'page',
     'title': sys.argv[1],
@@ -283,7 +419,7 @@ print(json.dumps({
     'body': {'storage': {'value': body, 'representation': 'storage'}}
 }))" "$PAGE_TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$CONFLUENCE_BODY")
 
-RESPONSE_PUB=$(curl -sf -u "$CONF_USER:$CONF_TOKEN" \
+RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
     -d "$FINAL_PAYLOAD" \
     "$CONF_BASE_URL/rest/api/content") || {
@@ -301,7 +437,7 @@ log_ok "Pagina publicada. ID: $NEW_PAGE_ID"
 if [[ -f "$HTML_NEWMAN" ]]; then
     curl -sf -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H "X-Atlassian-Token: nocheck" \
-        -F "file=@${HTML_NEWMAN};type=text/html" \
+        --insecure -F "file=@${HTML_NEWMAN};type=text/html" \
         "$CONF_BASE_URL/rest/api/content/$NEW_PAGE_ID/attachments" > /dev/null \
         && log_ok "Reporte htmlextra adjuntado." \
         || log_warn "No se pudo adjuntar reporte htmlextra."
@@ -310,7 +446,7 @@ fi
 if [[ -f "$METRICS_FILE" ]]; then
     curl -sf -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H "X-Atlassian-Token: nocheck" \
-        -F "file=@${METRICS_FILE};type=application/json" \
+        --insecure -F "file=@${METRICS_FILE};type=application/json" \
         "$CONF_BASE_URL/rest/api/content/$NEW_PAGE_ID/attachments" > /dev/null \
         && log_ok "JSON de metricas adjuntado." \
         || log_warn "No se pudo adjuntar metrics_summary.json."

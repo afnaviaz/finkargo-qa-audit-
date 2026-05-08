@@ -1,20 +1,14 @@
-name: QA Audit - ms-core-entities
+name: QA Audit - OB v2 - MX
 
 on:
   workflow_dispatch:
     inputs:
       folder:
-        description: "Selecciona la subcarpeta específica a auditar"
+        description: "Directorio a auditar"
         required: true
-        default: "01-Register Company"
+        default: "Flow"
         type: choice
-        options: 
-          - "01-Register Company"
-          - "02-Legal info CO"
-          - "03-Update company"
-          - "Suppliers"
-          - "Economic Activities"
-          - "Contactos de Proveedores"
+        options: [Flow]
       pais:
         description: "País contexto de ejecución (ALL ejecutará CO y MX)"
         required: true
@@ -29,7 +23,6 @@ on:
         options: [Testing, Staging]
 
 env:
-  # Obligamos a usar Node 20 o 22 si es posible, ya que Node 24 es experimental y rompe htmlextra
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true 
 
 permissions:
@@ -38,17 +31,14 @@ permissions:
 
 jobs:
   run-audit-pipeline:
-    name: "Audit: ms-core-entities / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
-    runs-on: self-hosted
+    name: "Audit: OB v2 - MX / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          clean: true # Mantenemos el runner limpio de la ejecución anterior
-
-      - name: Setup Permissions
-        run: chmod +x scripts/run_all.sh
+          clean: true
 
       - name: Debug Inputs
         run: |
@@ -57,30 +47,42 @@ jobs:
           echo "PAIS: ${{ github.event.inputs.pais }}"
           echo "AMBIENTE: ${{ github.event.inputs.ambiente }}"
           echo "------------------------------------------"
-          echo "📁 VERIFICANDO DIRECTORIO DE SCRIPTS:"
           ls -la scripts/
-          echo "------------------------------------------"
+
+      # --- ESTE ES EL PASO QUE FALTABA ---
+      - name: Setup QA Environment (Node & Newman)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Newman
+        run: |
+          npm install -g newman
+          # Si tu script genera reportes bonitos, suele usar este reporter:
+          npm install -g newman-reporter-htmlextra 
+      # -----------------------------------
 
       - name: Execute QA Audit
         shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }} 
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          # Importante: Envolver inputs en comillas dobles para manejar espacios en nombres de folders
+          chmod +x scripts/run_all.sh
           ./scripts/run_all.sh \
-            "ms-core-entities" \
+            "OB v2 - MX" \
             "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
 
       - name: Prepare Artifacts
         if: always()
+        shell: bash
         run: |
           mkdir -p artifacts
-          # Buscamos reportes tanto en la raíz como en scripts/ según tu configuración de run_all.sh
           cp *.html *.json *.txt artifacts/ 2>/dev/null || true
           cp scripts/*.html scripts/*.json scripts/*.txt artifacts/ 2>/dev/null || true
 
