@@ -41,10 +41,6 @@ jobs:
           fetch-depth: 1
           clean: true # Mantenemos el runner limpio de la ejecución anterior
 
-      - name: Setup Permissions
-        shell: bash
-        run: chmod +x scripts/run_all.sh
-
       - name: Debug Inputs
         run: |
           echo "🚀 REVISANDO PARÁMETROS DE ENTRADA"
@@ -65,7 +61,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          # Importante: Envolver inputs en comillas dobles para manejar espacios en nombres de folders
+          # Hacer ejecutable el script y ejecutar
+          chmod +x scripts/run_all.sh
           ./scripts/run_all.sh \
             "OB v2 - MX" \
             "${{ github.event.inputs.folder }}" \
