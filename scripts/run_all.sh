@@ -50,10 +50,10 @@ log "CONF_TOKEN      : ${CONF_TOKEN:0:8}... (${#CONF_TOKEN} chars)"
 # ----------------------------------------------------------
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
-CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
+CONFIG_PATH="$SCRIPTS_DIR/config/${PROYECTO}.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 
-[[ ! -f "$CONFIG_PATH"             ]] && { log_err "No se encontro: $CONFIG_PATH";              exit 1; }
+[[ ! -f "$CONFIG_PATH" ]] && { log_err "No se encontro config para '$PROYECTO': $CONFIG_PATH"; exit 1; }
 [[ ! -f "$HELPERS_DIR/get_config.py"      ]] && { log_err "No se encontro: $HELPERS_DIR/get_config.py";      exit 1; }
 [[ ! -f "$HELPERS_DIR/extract_metrics.py" ]] && { log_err "No se encontro: $HELPERS_DIR/extract_metrics.py"; exit 1; }
 [[ ! -f "$HELPERS_DIR/claude_analysis.py" ]] && { log_err "No se encontro: $HELPERS_DIR/claude_analysis.py"; exit 1; }
@@ -89,7 +89,7 @@ log "============================================"
 # 3. OBTENER COLLECTION UID
 # ----------------------------------------------------------
 COLLECTION_UID=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "" "id") || {
-    log_err "Proyecto '$PROYECTO' no encontrado en collections.json."
+    log_err "Proyecto '$PROYECTO' no encontrado en $CONFIG_PATH."
     log_err "Proyectos disponibles: $(python3 -c "import json; d=json.load(open('$CONFIG_PATH')); print(list(d.keys()))" 2>/dev/null || echo 'N/A')"
     exit 1
 }
