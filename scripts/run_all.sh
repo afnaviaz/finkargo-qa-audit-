@@ -23,11 +23,13 @@ PAIS_INPUT="${3:-}"
 AMBIENTE="${4:-}"
 
 ERRORS=0
-[[ -z "$PROYECTO"     ]] && { log_err "Param 1 (PROYECTO) obligatorio.";           ERRORS=1; }
-[[ -z "$FOLDER_INPUT" ]] && { log_err "Param 2 (FOLDER) obligatorio.";             ERRORS=1; }
-[[ -z "$PAIS_INPUT"   ]] && { log_err "Param 3 (PAIS: CO|MX|ALL) obligatorio.";    ERRORS=1; }
-[[ -z "$AMBIENTE"     ]] && { log_err "Param 4 (Testing|Staging) obligatorio.";    ERRORS=1; }
-[[ $ERRORS -eq 1 ]] && { log_err "Uso: $0 <PROYECTO> <FOLDER> <CO|MX|ALL> <Testing|Staging>"; exit 1; }
+[[ -z "$PROYECTO"   ]] && { log_err "Param 1 (PROYECTO) obligatorio.";        ERRORS=1; }
+[[ -z "$PAIS_INPUT" ]] && { log_err "Param 3 (PAIS: CO|MX|ALL) obligatorio."; ERRORS=1; }
+[[ -z "$AMBIENTE"   ]] && { log_err "Param 4 (Testing|Staging) obligatorio."; ERRORS=1; }
+[[ $ERRORS -eq 1 ]] && { log_err "Uso: $0 <PROYECTO> [FOLDER] <CO|MX|ALL> <Testing|Staging>"; exit 1; }
+
+# Si no se especifica folder, ejecutar a nivel país
+[[ -z "$FOLDER_INPUT" ]] && FOLDER_INPUT="$PAIS_INPUT"
 
 if [[ "$PAIS_INPUT" != "CO" && "$PAIS_INPUT" != "MX" && "$PAIS_INPUT" != "ALL" ]]; then
     log_err "PAIS_INPUT invalido: '$PAIS_INPUT'. Usar CO, MX o ALL."; exit 1
