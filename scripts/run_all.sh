@@ -191,9 +191,11 @@ set +e  # Desactivar pipefail para capturar exit de newman correctamente
 # CO → carpeta padre "🇨🇴 Colombia" (ejecuta todo el subárbol Colombia)
 # MX → carpeta padre "🇲🇽 Mexico"
 # Folder específico → se usa directamente (viene del workflow dispatch)
-if [[ "$PAIS_INPUT" == "CO" && "$FOLDER_NAME" == "$PAIS_INPUT" ]]; then
+if [[ "$PAIS_INPUT" == "CO" && "$NEWMAN_FOLDER" == "$PAIS_INPUT" ]]; then
+    NEWMAN_FOLDER="🇨🇴 Colombia"
     FOLDER_NAME="🇨🇴 Colombia"
-elif [[ "$PAIS_INPUT" == "MX" && "$FOLDER_NAME" == "$PAIS_INPUT" ]]; then
+elif [[ "$PAIS_INPUT" == "MX" && "$NEWMAN_FOLDER" == "$PAIS_INPUT" ]]; then
+    NEWMAN_FOLDER="🇲🇽 Mexico"
     FOLDER_NAME="🇲🇽 Mexico"
 fi
 
