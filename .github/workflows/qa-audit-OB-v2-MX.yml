@@ -42,6 +42,7 @@ jobs:
           clean: true # Mantenemos el runner limpio de la ejecución anterior
 
       - name: Setup Permissions
+        shell: bash
         run: chmod +x scripts/run_all.sh
 
       - name: Debug Inputs
@@ -73,6 +74,7 @@ jobs:
 
       - name: Prepare Artifacts
         if: always()
+        shell: bash
         run: |
           mkdir -p artifacts
           # Buscamos reportes tanto en la raíz como en scripts/ según tu configuración de run_all.sh
