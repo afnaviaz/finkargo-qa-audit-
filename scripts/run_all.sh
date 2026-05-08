@@ -50,44 +50,11 @@ log "CONF_TOKEN      : ${CONF_TOKEN:0:8}... (${#CONF_TOKEN} chars)"
 # ----------------------------------------------------------
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
-CONFIG_DIR="$SCRIPTS_DIR/config"
+CONFIG_PATH="$SCRIPTS_DIR/config/${PROYECTO}.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
-# ----------------------------------------------------------
-# DYNAMIC CONFIG FILE DETECTION
-# Busca archivos .json que contengan el PAIS_INPUT (case-insensitive)
-# Soporta múltiples formatos: OB-V2-mx.json, OB-V2-MX.json, config-mx.json, etc.
-# ----------------------------------------------------------
-CONFIG_PATH=""
-if [[ "$PAIS_INPUT" == "ALL" ]]; then
-    # Para ALL, buscamos un archivo genérico (usando CO como fallback)
-    SEARCH_PAIS="CO"
-else
-    SEARCH_PAIS="$PAIS_INPUT"
-fi
-
-# Buscar archivo que coincida con el país (case-insensitive)
-SEARCH_PAIS_LOWER=$(echo "$SEARCH_PAIS" | tr '[:upper:]' '[:lower:]')
-for config_file in "$CONFIG_DIR"/*.json; do
-    if [[ -f "$config_file" ]]; then
-        filename_lower=$(basename "$config_file" | tr '[:upper:]' '[:lower:]')
-        if [[ "$filename_lower" == *"$SEARCH_PAIS_LOWER"* ]]; then
-            CONFIG_PATH="$config_file"
-            log "✓ Config detectado: $(basename "$config_file")"
-            break
-        fi
-    fi
-done
-
-# Si no encontró config específica, usar primer .json disponible
-if [[ -z "$CONFIG_PATH" ]]; then
-    log_warn "No se encontró config para $SEARCH_PAIS. Usando primer archivo .json disponible..."
-    CONFIG_PATH=$(find "$CONFIG_DIR" -maxdepth 1 -name "*.json" -type f | head -1)
-fi
-
-# Validar que existe el config
-[[ ! -f "$CONFIG_PATH"             ]] && { log_err "No se encontro config en: $CONFIG_DIR/*.json";              exit 1; }
+[[ ! -f "$CONFIG_PATH" ]] && { log_err "No se encontro config para '$PROYECTO': $CONFIG_PATH"; exit 1; }
 [[ ! -f "$HELPERS_DIR/get_config.py"      ]] && { log_err "No se encontro: $HELPERS_DIR/get_config.py";      exit 1; }
 [[ ! -f "$HELPERS_DIR/extract_metrics.py" ]] && { log_err "No se encontro: $HELPERS_DIR/extract_metrics.py"; exit 1; }
 [[ ! -f "$HELPERS_DIR/claude_analysis.py" ]] && { log_err "No se encontro: $HELPERS_DIR/claude_analysis.py"; exit 1; }
@@ -161,7 +128,7 @@ log "============================================"
 # 3. OBTENER COLLECTION UID
 # ----------------------------------------------------------
 COLLECTION_UID=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "" "id") || {
-    log_err "Proyecto '$PROYECTO' no encontrado en collections.json."
+    log_err "Proyecto '$PROYECTO' no encontrado en $CONFIG_PATH."
     log_err "Proyectos disponibles: $(python3 -c "import json; d=json.load(open('$CONFIG_PATH')); print(list(d.keys()))" 2>/dev/null || echo 'N/A')"
     exit 1
 }
