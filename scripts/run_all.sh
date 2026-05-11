@@ -24,10 +24,12 @@ AMBIENTE="${4:-}"
 
 ERRORS=0
 [[ -z "$PROYECTO"     ]] && { log_err "Param 1 (PROYECTO) obligatorio.";           ERRORS=1; }
-[[ -z "$FOLDER_INPUT" ]] && { log_err "Param 2 (FOLDER) obligatorio.";             ERRORS=1; }
 [[ -z "$PAIS_INPUT"   ]] && { log_err "Param 3 (PAIS: CO|MX|ALL) obligatorio.";    ERRORS=1; }
 [[ -z "$AMBIENTE"     ]] && { log_err "Param 4 (Testing|Staging) obligatorio.";    ERRORS=1; }
-[[ $ERRORS -eq 1 ]] && { log_err "Uso: $0 <PROYECTO> <FOLDER> <CO|MX|ALL> <Testing|Staging>"; exit 1; }
+[[ $ERRORS -eq 1 ]] && { log_err "Uso: $0 <PROYECTO> [FOLDER] <CO|MX|ALL> <Testing|Staging>"; exit 1; }
+
+# Si no se especifica folder, ejecutar a nivel país
+[[ -z "$FOLDER_INPUT" ]] && FOLDER_INPUT="$PAIS_INPUT"
 
 if [[ "$PAIS_INPUT" != "CO" && "$PAIS_INPUT" != "MX" && "$PAIS_INPUT" != "ALL" ]]; then
     log_err "PAIS_INPUT invalido: '$PAIS_INPUT'. Usar CO, MX o ALL."; exit 1
@@ -50,7 +52,7 @@ log "CONF_TOKEN      : ${CONF_TOKEN:0:8}... (${#CONF_TOKEN} chars)"
 # ----------------------------------------------------------
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
-CONFIG_PATH="$SCRIPTS_DIR/config/collections.json"
+CONFIG_PATH="$SCRIPTS_DIR/config/${PROYECTO}.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
