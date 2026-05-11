@@ -357,7 +357,7 @@ PAGE_TITLE="[$PROYECTO] [$PAIS_INPUT] $FOLDER_NAME - Run #$EXEC_NUM"
 
 # Buscar carpeta padre del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
-SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
+SEARCH_RES=$(curl -sf --insecure -w "\nHTTP_CODE:%{http_code}" -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
     CURL_CODE=$?
     log_err "Error conectando a Confluence (curl exit: $CURL_CODE)."
     log_err "URL intentada: $SEARCH_URL"
