@@ -54,6 +54,7 @@ SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
 CONFIG_PATH="$SCRIPTS_DIR/config/${PROYECTO}.json"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
+SUPRA_DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/supra_scenarios.json"
 FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
 [[ ! -f "$CONFIG_PATH"             ]] && { log_err "No se encontro: $CONFIG_PATH";              exit 1; }
@@ -179,6 +180,9 @@ NEWMAN_BASE_ARGS=(
 if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
     NEWMAN_BASE_ARGS+=("-d" "$DATA_FILE")
     log "Data-driven: $DATA_FILE"
+elif [[ "$NEWMAN_FOLDER" == "Happy path integration" && -f "$SUPRA_DATA_FILE" ]]; then
+    NEWMAN_BASE_ARGS+=("-d" "$SUPRA_DATA_FILE")
+    log "Data-driven (SUPRA): $SUPRA_DATA_FILE"
 fi
 
 # ----------------------------------------------------------
