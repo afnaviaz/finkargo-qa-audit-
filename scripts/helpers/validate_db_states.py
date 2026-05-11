@@ -138,6 +138,8 @@ def main():
                 'rejected':   'REJECTED',
                 'expired':    'EXPIRED',
             }.get(scenario, 'PAID')
+            # Algunos ambientes usan 'completed' como equivalente a 'PAID'
+            accepted_tx_statuses = {expected_tx_status, 'completed'} if expected_tx_status == 'PAID' else {expected_tx_status}
 
             # --- 1. exchange_quote ---
             if supra_quote_id:
@@ -177,9 +179,9 @@ def main():
                     if row:
                         status = row[1]
                         print(f'  [{elapsed}s] transaction status: {status}')
-                        if status == expected_tx_status:
+                        if status in accepted_tx_statuses:
                             break
-                        if status in ('EXPIRED', 'REJECTED', 'PAID'):
+                        if status in ('EXPIRED', 'REJECTED', 'PAID', 'completed'):
                             break
                     else:
                         status = 'NOT FOUND'
@@ -187,7 +189,7 @@ def main():
                     time.sleep(POLL_INTERVAL)
                     elapsed += POLL_INTERVAL
 
-                if status == expected_tx_status:
+                if status in accepted_tx_statuses:
                     result = 'OK'
                 elif status in ('CREATED', 'in_progress', 'pending'):
                     result = 'WARN'
