@@ -83,8 +83,8 @@ jobs:
         shell: powershell
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
-          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
-          CONF_USER: ${{ secrets.CONF_USER }}
+          CONF_TOKEN: ${{ secrets.TOKEN_1 }}
+          CONF_USER: ${{ secrets.CONF_1 }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           CI: "true"
