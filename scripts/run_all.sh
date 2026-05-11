@@ -357,13 +357,17 @@ PAGE_TITLE="[$PROYECTO] [$PAIS_INPUT] $FOLDER_NAME - Run #$EXEC_NUM"
 
 # Buscar carpeta padre del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
-SEARCH_RES=$(curl -sf --insecure -w "\nHTTP_CODE:%{http_code}" -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
-    CURL_CODE=$?
-    log_err "Error conectando a Confluence (curl exit: $CURL_CODE)."
+SEARCH_RAW=$(curl -s --insecure -w "\nHTTP_CODE:%{http_code}" -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL")
+SEARCH_HTTP=$(echo "$SEARCH_RAW" | grep "HTTP_CODE:" | cut -d: -f2)
+SEARCH_RES=$(echo "$SEARCH_RAW" | grep -v "HTTP_CODE:")
+log "Confluence HTTP status: $SEARCH_HTTP"
+log "Confluence response: ${SEARCH_RES:0:200}"
+if [[ "$SEARCH_HTTP" != "200" ]]; then
+    log_err "Error conectando a Confluence (HTTP $SEARCH_HTTP)."
     log_err "URL intentada: $SEARCH_URL"
     log_err "Verifica CONF_USER ('${CONF_USER}') y CONF_TOKEN (${#CONF_TOKEN} chars)."
     exit 1
-}
+fi
 
 PROJECT_FOLDER_ID=$(python3 -c "
 import json, sys
