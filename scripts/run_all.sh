@@ -184,7 +184,7 @@ if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Happy path integration" && -f "$SUPRA_DATA_FILE" ]]; then
     NEWMAN_BASE_ARGS+=("-d" "$SUPRA_DATA_FILE")
     log "Data-driven (SUPRA): $SUPRA_DATA_FILE"
-elif [[ "$SCENARIO" == "wallet_happy" && -f "$WALLET_DATA_FILE" ]]; then
+elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happy" ) && -f "$WALLET_DATA_FILE" ]]; then
     NEWMAN_BASE_ARGS+=("-d" "$WALLET_DATA_FILE")
     log "Data-driven (WALLET): $WALLET_DATA_FILE"
 fi
