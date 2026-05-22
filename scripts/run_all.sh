@@ -195,6 +195,17 @@ elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happ
     log "Data-driven (WALLET): $WALLET_DATA_FILE"
 fi
 
+# Inyectar base URL de Stripe si el environment no la tiene
+if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" ]]; then
+    if [[ "$AMBIENTE" == "Staging" ]]; then
+        STRIPE_BASE_URL="https://api-staging.finkargo.com.mx/integrations"
+    else
+        STRIPE_BASE_URL="https://api-testing.finkargo.com.mx/integrations"
+    fi
+    NEWMAN_BASE_ARGS+=("--env-var" "services-integrations=${STRIPE_BASE_URL}")
+    log "Stripe base URL: ${STRIPE_BASE_URL}"
+fi
+
 # ----------------------------------------------------------
 # 7. EJECUCION NEWMAN
 # ----------------------------------------------------------
