@@ -95,7 +95,7 @@ function requireSession() {
   // ── Validaciones ───────────────────────────────────────────────────────────
   console.log('🔍 Ejecutando validaciones...\n');
 
-  const pageText = await page.locator('body').innerText().catch(() => '');
+  let pageText = await page.locator('body').innerText().catch(() => '');
 
   // 1. Payment Intent ID presente en la página
   check(
@@ -104,13 +104,36 @@ function requireSession() {
     PAYMENT_INTENT_ID, PAYMENT_INTENT_ID
   );
 
-  // 2. Estado del pago (acepta Exitoso o Incompleto — ambos son estados válidos OXXO)
-  const validStatuses = ['exitoso', 'incompleto', 'incomplete', 'succeeded', 'pending', 'requires'];
-  const statusInPage = validStatuses.find(s => pageText.toLowerCase().includes(s)) || '';
+  // 2. Esperar transición Incompleto → Exitoso (máx 3 minutos, refresh cada 15s)
+  const POLL_INTERVAL_MS = 15000;
+  const MAX_WAIT_MS      = 3 * 60 * 1000;
+  const startWait        = Date.now();
+
+  const isExitoso  = (t) => t.toLowerCase().includes('exitoso')   || t.toLowerCase().includes('succeeded');
+  const isIncomplete = (t) => t.toLowerCase().includes('incompleto') || t.toLowerCase().includes('incomplete');
+
+  if (!isExitoso(pageText) && isIncomplete(pageText)) {
+    console.log('⏳ Estado Incompleto — esperando transición a Exitoso (máx 3 min)...');
+    while (!isExitoso(pageText) && (Date.now() - startWait) < MAX_WAIT_MS) {
+      const elapsed = Math.round((Date.now() - startWait) / 1000);
+      console.log(`   ${elapsed}s — aún Incompleto, recargando en ${POLL_INTERVAL_MS / 1000}s...`);
+      await page.waitForTimeout(POLL_INTERVAL_MS);
+      await page.reload({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(2000);
+      pageText = await page.locator('body').innerText().catch(() => '');
+    }
+    const elapsed = Math.round((Date.now() - startWait) / 1000);
+    console.log(`   Tiempo total de espera: ${elapsed}s`);
+  }
+
+  const finalStatus = isExitoso(pageText) ? 'exitoso'
+    : isIncomplete(pageText)              ? 'incompleto'
+    : 'desconocido';
+
   check(
-    'Estado del pago presente',
-    statusInPage !== '',
-    statusInPage || 'no encontrado', 'exitoso | incompleto'
+    'Estado final = Exitoso',
+    isExitoso(pageText),
+    finalStatus, 'exitoso'
   );
 
   // 3. Método de pago = OXXO
