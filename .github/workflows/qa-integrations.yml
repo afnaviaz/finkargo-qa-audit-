@@ -82,11 +82,16 @@ jobs:
         run: npx playwright install chromium
 
       - name: Restore Stripe session
-        if: ${{ secrets.STRIPE_SESSION != '' }}
         shell: bash
+        env:
+          STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
-          echo "${{ secrets.STRIPE_SESSION }}" | base64 -d > scripts/playwright/.stripe-session.json
-          echo "✅ Stripe session restaurada"
+          if [ -n "$STRIPE_SESSION" ]; then
+            echo "$STRIPE_SESSION" | base64 -d > scripts/playwright/.stripe-session.json
+            echo "✅ Stripe session restaurada"
+          else
+            echo "⚠️ STRIPE_SESSION no configurado, saltando restauración"
+          fi
 
       - name: Execute QA Integrations
         shell: powershell
