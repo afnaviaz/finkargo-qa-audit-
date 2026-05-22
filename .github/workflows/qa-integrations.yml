@@ -87,7 +87,8 @@ jobs:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
           if ($env:STRIPE_SESSION) {
-            $bytes = [Convert]::FromBase64String($env:STRIPE_SESSION)
+            $b64 = $env:STRIPE_SESSION -replace '\s',''
+            $bytes = [Convert]::FromBase64String($b64)
             [IO.File]::WriteAllBytes("${{ github.workspace }}\scripts\playwright\.stripe-session.json", $bytes)
             Write-Host "✅ Stripe session restaurada"
           } else {
