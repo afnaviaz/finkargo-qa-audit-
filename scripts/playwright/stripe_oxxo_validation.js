@@ -129,7 +129,8 @@ function requireSession() {
 
   // 5. Monto (si fue pasado como env var)
   // 5. Monto — extrae lo que Stripe muestra y compara contra lo que Postman envió
-  const amountMatch = pageText.match(/[\d]+\.[\d]{3},[\d]{2}|[\d]+,[\d]{2}/);
+  // Soporta formato europeo (4.485,66) y americano (4,485.66)
+  const amountMatch = pageText.match(/[\d]+\.[\d]{3},[\d]{2}|[\d]+,[\d]{3}\.[\d]{2}|[\d]+,[\d]{2}/);
   const amountFoundRaw = amountMatch ? amountMatch[0] : '';
   const amountFoundCents = amountFoundRaw
     ? parseInt(amountFoundRaw.replace(/\./g, '').replace(',', ''))
