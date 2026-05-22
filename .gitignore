@@ -2,6 +2,8 @@
 .env
 scripts/.run_counter
 scripts/playwright/.stripe-session.json
+scripts/playwright/stripe_session_b64.txt
+scripts/playwright/.chrome-profile/
 
 # GitHub Actions self-hosted runner
 actions-runner/
