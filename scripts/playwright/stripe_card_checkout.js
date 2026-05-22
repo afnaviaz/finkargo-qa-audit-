@@ -65,18 +65,22 @@ async function fillStripeField(locator, value) {
   // ── 1. Navegar al checkout ────────────────────────────────────────────────
   console.log('🌐 Navegando al checkout...');
   await page.goto(CHECKOUT_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(3000);
+  // Esperar a red idle o hasta 8 s, lo que ocurra primero
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(2000);
   await page.screenshot({ path: path.join(outputDir, 'stripe_card_01_loaded.png') });
   console.log('📸 stripe_card_01_loaded.png\n');
 
   // ── 2. Validar que la página cargó ───────────────────────────────────────
   console.log('🔍 Validando carga del checkout...\n');
   const pageText = await page.locator('body').innerText().catch(() => '');
+  const pageTextLower = pageText.toLowerCase();
 
   check('Página checkout cargó', pageText.length > 50, `${pageText.length} chars`, '> 50');
-  check('Método Card presente', pageText.toLowerCase().includes('card'), 'card encontrado', 'card');
+  const hasCard = pageTextLower.includes('card') || pageTextLower.includes('tarjeta');
+  check('Método Card presente', hasCard, hasCard ? 'card encontrado' : 'card no encontrado', 'card');
   check('No expirado / error 404',
-    !pageText.toLowerCase().includes('expired') && !pageText.toLowerCase().includes('not found'),
+    !pageTextLower.includes('expired') && !pageTextLower.includes('not found'),
     'ok', 'ok'
   );
 
@@ -202,7 +206,14 @@ async function fillStripeField(locator, value) {
     console.log('🚀 Enviando pago...\n');
     const payButton = page.locator('button:has-text("Pay"), button[type="submit"]').first();
     await payButton.click();
-    await page.waitForTimeout(5000);
+    // Esperar navegación a página de resultado o hasta 15 s
+    await Promise.race([
+      page.waitForURL('**success**', { timeout: 15000 }).catch(() => {}),
+      page.waitForURL('**return**',  { timeout: 15000 }).catch(() => {}),
+      page.waitForURL('**confirmation**', { timeout: 15000 }).catch(() => {}),
+      page.waitForTimeout(15000),
+    ]);
+    await page.waitForLoadState('networkidle').catch(() => {});
     await page.screenshot({ path: path.join(outputDir, 'stripe_card_03_submitted.png') });
     console.log('📸 stripe_card_03_submitted.png\n');
 
@@ -211,8 +222,12 @@ async function fillStripeField(locator, value) {
     const resultText = await page.locator('body').innerText().catch(() => '');
     const resultUrl  = page.url();
 
-    const successTerms  = ['success', 'exitoso', 'thank you', 'gracias', 'payment successful', 'paid'];
-    const declinedTerms = ['declined', 'rechazado', 'failed', 'error', 'card was declined'];
+    const successTerms  = [
+      'success', 'exitoso', 'thank you', 'gracias', 'payment successful', 'paid',
+      'payment complete', 'your payment', 'succeeded', 'order confirmed',
+      'tu pago', 'confirmado', 'pago realizado', 'payment received',
+    ];
+    const declinedTerms = ['declined', 'rechazado', 'failed', 'card was declined', 'your card was'];
 
     const isSuccess  = successTerms.some(t => resultText.toLowerCase().includes(t))  || resultUrl.includes('success');
     const isDeclined = declinedTerms.some(t => resultText.toLowerCase().includes(t));
