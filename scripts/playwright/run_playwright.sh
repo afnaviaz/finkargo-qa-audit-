@@ -28,7 +28,15 @@ except Exception as e:
     print('')
 " "$ENV_EXPORT" 2>/dev/null)
 
-if [[ "$MODE" == "stripe_card" ]]; then
+if [[ "$MODE" == "stripe_oxxo" ]]; then
+    echo "[$(date +'%H:%M:%S')] 🧾 Modo STRIPE OXXO — validando pago en dashboard Stripe..."
+    export CI="true"
+    export SCRIPTS_DIR="$SCRIPTS_DIR"
+    export NEWMAN_ENV_FILE="$ENV_EXPORT"
+    node "$SCRIPTS_DIR/playwright/run_stripe_validation.js" "$ENV_EXPORT" \
+        || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe OXXO Playwright terminó con errores (no bloquea el pipeline)"
+
+elif [[ "$MODE" == "stripe_card" ]]; then
     echo "[$(date +'%H:%M:%S')] 💳 Modo STRIPE CARD — buscando stripe_checkout_url en environment..."
     export CI="true"
     export SCRIPTS_DIR="$SCRIPTS_DIR"

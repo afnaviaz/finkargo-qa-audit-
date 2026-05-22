@@ -206,6 +206,15 @@ if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" ]]; then
     log "Stripe base URL: ${STRIPE_BASE_URL}"
 fi
 
+# Iteraciones para escenarios Stripe (reemplaza pm.setNextRequest)
+if [[ "$SCENARIO" == "stripe_oxxo" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    log "Stripe OXXO: 11 iteraciones"
+elif [[ "$SCENARIO" == "stripe_card" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    log "Stripe Card: 11 iteraciones"
+fi
+
 # ----------------------------------------------------------
 # 7. EJECUCION NEWMAN
 # ----------------------------------------------------------
@@ -264,7 +273,7 @@ log_ok "Newman finalizado. Reporte JSON generado."
 if [[ "$SCENARIO" == "expired" ]]; then
     log "Escenario EXPIRED — saltando Playwright."
 elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
-    log "Escenario STRIPE OXXO — Playwright no aplica en esta fase."
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_oxxo" || true
 elif [[ "$SCENARIO" == "rejected" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
 elif [[ "$SCENARIO" == "stripe_card" ]]; then
