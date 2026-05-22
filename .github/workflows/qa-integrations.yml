@@ -81,6 +81,13 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
+      - name: Restore Stripe session
+        if: ${{ secrets.STRIPE_SESSION != '' }}
+        shell: bash
+        run: |
+          echo "${{ secrets.STRIPE_SESSION }}" | base64 -d > scripts/playwright/.stripe-session.json
+          echo "✅ Stripe session restaurada"
+
       - name: Execute QA Integrations
         shell: powershell
         env:
