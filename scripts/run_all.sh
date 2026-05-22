@@ -100,6 +100,12 @@ elif [[ "$NEWMAN_FOLDER" == "Happy path integration wallet" || "$NEWMAN_FOLDER" 
 elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
     SCENARIO="cobre_happy"
     log "Escenario: COBRE HAPPY PATH"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Card one time" ]]; then
+    SCENARIO="stripe_card"
+    log "Escenario: STRIPE CARD ONE TIME — Playwright llenará el checkout"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time" ]]; then
+    SCENARIO="stripe_oxxo"
+    log "Escenario: STRIPE OXXO ONE TIME"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -246,8 +252,12 @@ log_ok "Newman finalizado. Reporte JSON generado."
 # ----------------------------------------------------------
 if [[ "$SCENARIO" == "expired" ]]; then
     log "Escenario EXPIRED — saltando Playwright."
+elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
+    log "Escenario STRIPE OXXO — Playwright no aplica en esta fase."
 elif [[ "$SCENARIO" == "rejected" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
+elif [[ "$SCENARIO" == "stripe_card" ]]; then
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_card" || true
 else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
 fi

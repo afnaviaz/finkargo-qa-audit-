@@ -21,7 +21,9 @@ on:
           "SUPRA / SUPRA WALLET - EPAYMENTS",
           "SUPRA / SUPRA WALLET - EPAYMENTS / Happy path wallet epayments",
           "COBRE / COBRE INTEGRATIONS",
-          "COBRE / COBRE INTEGRATIONS / Happy path cobre"
+          "COBRE / COBRE INTEGRATIONS / Happy path cobre",
+          "STRIPE / Create Payment Card one time",
+          "STRIPE / Create Payment Oxxo one time"
         ]
       pais:
         description: "País"
@@ -89,6 +91,9 @@ jobs:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           CI: "true"
           PYTHONIOENCODING: "utf-8"
+          STRIPE_EMAIL: ${{ secrets.STRIPE_EMAIL }}
+          STRIPE_PASSWORD: ${{ secrets.STRIPE_PASSWORD }}
+          STRIPE_ACCOUNT_ID: ${{ secrets.STRIPE_ACCOUNT_ID }}
           DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
           DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
           DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}

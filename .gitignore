@@ -1,6 +1,7 @@
 # Secretos
 .env
 scripts/.run_counter
+scripts/playwright/.stripe-session.json
 
 # GitHub Actions self-hosted runner
 actions-runner/
