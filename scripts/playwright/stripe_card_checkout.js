@@ -84,23 +84,43 @@ async function fillStripeField(locator, value) {
     'ok', 'ok'
   );
 
-  // ── 2.5 Seleccionar divisa MXN si hay selector de divisa ─────────────────
+  // ── 2.5 Seleccionar divisa MXN + país México ─────────────────────────────
   const PREFERRED_CURRENCY = (process.env.CHECKOUT_CURRENCY || 'MXN').toUpperCase();
   try {
-    // Stripe muestra botones de divisa cuando la sesión tiene múltiples monedas
-    const currencyBtn = page.locator(`button:has-text("${PREFERRED_CURRENCY}"), [data-testid*="currency"]:has-text("${PREFERRED_CURRENCY}")`).first();
+    // Botón de divisa: class="CurrencyOptionButton" con texto "MXN"
+    const currencyBtn = page.locator(
+      `button.CurrencyOptionButton:has-text("${PREFERRED_CURRENCY}"),` +
+      `button.CurrencyOptionButton span.CurrencyAmount`
+    ).filter({ hasText: PREFERRED_CURRENCY }).first();
+
     if (await currencyBtn.count() > 0) {
-      await currencyBtn.click();
+      // Si ya está seleccionado (Button--primary suele aplicarse al activo),
+      // verificar si el botón MXN YA es el activo antes de hacer clic
+      const btnMxn = page.locator(`button.CurrencyOptionButton`).filter({ hasText: PREFERRED_CURRENCY }).first();
+      await btnMxn.click();
       await page.waitForTimeout(1500);
       console.log(`💱 Divisa seleccionada: ${PREFERRED_CURRENCY}`);
-      await page.screenshot({ path: path.join(outputDir, 'stripe_card_01b_currency.png') });
-      console.log('📸 stripe_card_01b_currency.png\n');
     } else {
-      console.log(`ℹ️  Sin selector de divisa visible — continuando con la moneda por defecto`);
+      console.log(`ℹ️  Sin botón de divisa ${PREFERRED_CURRENCY} — continuando`);
     }
   } catch (e) {
-    console.log(`ℹ️  Error al buscar selector de divisa: ${e.message}`);
+    console.log(`ℹ️  Selector de divisa: ${e.message}`);
   }
+
+  // País de facturación → México
+  try {
+    const billingCountry = page.locator('#billingCountry').first();
+    if (await billingCountry.count() > 0) {
+      await billingCountry.selectOption('MX');
+      await page.waitForTimeout(800);
+      console.log('🌍 País de facturación: México (MX)');
+    }
+  } catch (e) {
+    console.log(`ℹ️  Selector de país: ${e.message}`);
+  }
+
+  await page.screenshot({ path: path.join(outputDir, 'stripe_card_01b_currency.png') });
+  console.log('📸 stripe_card_01b_currency.png\n');
 
   // ── 3. Llenar datos de tarjeta ────────────────────────────────────────────
   console.log('✍️  Llenando datos de tarjeta...\n');
