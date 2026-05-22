@@ -82,16 +82,17 @@ jobs:
         run: npx playwright install chromium
 
       - name: Restore Stripe session
-        shell: bash
+        shell: powershell
         env:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
-          if [ -n "$STRIPE_SESSION" ]; then
-            echo "$STRIPE_SESSION" | base64 -d > scripts/playwright/.stripe-session.json
-            echo "✅ Stripe session restaurada"
-          else
-            echo "⚠️ STRIPE_SESSION no configurado, saltando restauración"
-          fi
+          if ($env:STRIPE_SESSION) {
+            $bytes = [Convert]::FromBase64String($env:STRIPE_SESSION)
+            [IO.File]::WriteAllBytes("${{ github.workspace }}\scripts\playwright\.stripe-session.json", $bytes)
+            Write-Host "✅ Stripe session restaurada"
+          } else {
+            Write-Host "⚠️ STRIPE_SESSION no configurado, saltando restauración"
+          }
 
       - name: Execute QA Integrations
         shell: powershell
