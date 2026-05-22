@@ -58,7 +58,11 @@ if (checkoutUrls.length === 0) {
 console.log(`\n🔗 Newman → Playwright Card Checkout`);
 console.log(`   ${checkoutUrls.length} checkout(s) a ejecutar\n`);
 
-const scriptPath = path.join(__dirname, 'stripe_card_checkout.js');
+const scriptPath     = path.join(__dirname, 'stripe_card_checkout.js');
+const dashboardScript = path.join(__dirname, 'stripe_card_dashboard_validate.js');
+const SESSION_PATH   = path.join(__dirname, '.stripe-session.json');
+const stripeAccountId = process.env.STRIPE_ACCOUNT_ID || '';
+
 let globalFailed = 0;
 
 for (const { idx, url } of checkoutUrls) {
@@ -66,6 +70,10 @@ for (const { idx, url } of checkoutUrls) {
   console.log(`▶ Escenario idx=${idx}`);
   console.log(`  URL: ${url.slice(0, 80)}...`);
 
+  // Email del cliente guardado por el test script de Postman (stripe_email_<idx>)
+  const customerEmail = getVar(`stripe_email_${idx}`) || '';
+
+  let checkoutOk = false;
   try {
     execSync(`node "${scriptPath}"`, {
       env: {
@@ -79,10 +87,32 @@ for (const { idx, url } of checkoutUrls) {
       },
       stdio: 'inherit',
     });
-    console.log(`✅ idx=${idx} completado`);
+    console.log(`✅ idx=${idx} checkout completado`);
+    checkoutOk = true;
   } catch (e) {
-    console.error(`❌ idx=${idx} falló (exit ${e.status})`);
+    console.error(`❌ idx=${idx} checkout falló (exit ${e.status})`);
     globalFailed++;
+  }
+
+  // ── Validación en Stripe Dashboard ────────────────────────────────────────
+  if (checkoutOk && fs.existsSync(SESSION_PATH)) {
+    console.log(`\n🔍 Validando pago idx=${idx} en Stripe Dashboard...`);
+    try {
+      execSync(`node "${dashboardScript}"`, {
+        env: {
+          ...process.env,
+          CHECKOUT_IDX:      idx,
+          CUSTOMER_EMAIL:    customerEmail,
+          STRIPE_ACCOUNT_ID: stripeAccountId,
+        },
+        stdio: 'inherit',
+      });
+      console.log(`✅ idx=${idx} dashboard OK`);
+    } catch (e) {
+      console.error(`⚠️  idx=${idx} dashboard falló (exit ${e.status}) — no bloquea el pipeline`);
+    }
+  } else if (checkoutOk && !fs.existsSync(SESSION_PATH)) {
+    console.log(`ℹ️  Sin sesión Stripe — saltando validación dashboard para idx=${idx}`);
   }
 }
 
