@@ -87,9 +87,13 @@ jobs:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
           if ($env:STRIPE_SESSION) {
-            $bytes = [Convert]::FromBase64String($env:STRIPE_SESSION.Trim())
+            $b64 = $env:STRIPE_SESSION.Trim()
+            Write-Host "b64 length: $($b64.Length) | mod4: $($b64.Length % 4)"
+            $pad = (4 - ($b64.Length % 4)) % 4
+            $b64 += '=' * $pad
+            $bytes = [Convert]::FromBase64String($b64)
             [IO.File]::WriteAllBytes("${{ github.workspace }}\scripts\playwright\.stripe-session.json", $bytes)
-            Write-Host "✅ Stripe session restaurada"
+            Write-Host "✅ Stripe session restaurada ($($bytes.Length) bytes)"
           } else {
             Write-Host "⚠️ STRIPE_SESSION no configurado, saltando restauración"
           }
