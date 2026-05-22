@@ -5,6 +5,7 @@ const fs = require('fs');
 const PAYMENT_INTENT_ID  = process.env.PAYMENT_INTENT_ID || process.argv[2];
 const STRIPE_ACCOUNT_ID  = process.env.STRIPE_ACCOUNT_ID || '';
 const SESSION_PATH       = path.join(__dirname, '.stripe-session.json');
+const REPORT_SUFFIX      = process.env.STRIPE_REPORT_SUFFIX || '';
 
 const EXPECTED = {
   amount:         process.env.EXPECTED_AMOUNT   ? parseInt(process.env.EXPECTED_AMOUNT) : null,
@@ -88,8 +89,8 @@ function requireSession() {
   console.log('⏳ Esperando carga completa del dashboard...');
   await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(4000);
-  await page.screenshot({ path: path.join(outputDir, 'stripe_oxxo_01_loaded.png') });
-  console.log('📸 stripe_oxxo_01_loaded.png\n');
+  await page.screenshot({ path: path.join(outputDir, `stripe_oxxo_01_loaded${REPORT_SUFFIX}.png`) });
+  console.log(`📸 stripe_oxxo_01_loaded${REPORT_SUFFIX}.png\n`);
 
   // ── Validaciones ───────────────────────────────────────────────────────────
   console.log('🔍 Ejecutando validaciones...\n');
@@ -156,8 +157,8 @@ function requireSession() {
     );
   }
 
-  await page.screenshot({ path: path.join(outputDir, 'stripe_oxxo_02_validation.png') });
-  console.log('\n📸 stripe_oxxo_02_validation.png');
+  await page.screenshot({ path: path.join(outputDir, `stripe_oxxo_02_validation${REPORT_SUFFIX}.png`) });
+  console.log(`\n📸 stripe_oxxo_02_validation${REPORT_SUFFIX}.png`);
 
   // ── Reporte JSON ───────────────────────────────────────────────────────────
   const report = {
@@ -166,7 +167,7 @@ function requireSession() {
     passed, failed,
     results,
   };
-  const reportPath = path.join(outputDir, 'stripe_oxxo_validation_report.json');
+  const reportPath = path.join(outputDir, `stripe_oxxo_validation_report${REPORT_SUFFIX}.json`);
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
   console.log(`\n${'─'.repeat(50)}`);

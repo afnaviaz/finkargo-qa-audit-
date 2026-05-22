@@ -35,6 +35,19 @@ const stripeLoginUrl = `https://dashboard.stripe.com/login?redirect=${redirectPa
 
   const page = await context.newPage();
   await page.goto(stripeLoginUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000); // dar tiempo al redirect si hay sesión activa
+
+  // Si ya hay sesión activa el perfil redirige directo al dashboard — guardar y salir
+  const urlAfterNav = new URL(page.url());
+  if (urlAfterNav.hostname === 'dashboard.stripe.com' && !urlAfterNav.pathname.includes('/login')) {
+    console.log(`✅ Sesión activa detectada — URL: ${page.url()}`);
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await context.storageState({ path: SESSION_PATH });
+    console.log(`💾 Sesión Stripe guardada: ${SESSION_PATH}`);
+    console.log('✅ Listo.');
+    await context.close();
+    return;
+  }
 
   // Click en "Continuar con Google"
   console.log('🖱️  Haciendo click en "Continuar con Google"...');
