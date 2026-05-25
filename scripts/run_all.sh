@@ -109,7 +109,7 @@ elif [[ "$NEWMAN_FOLDER" == "Create Payment Card recurring" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time" ]]; then
     SCENARIO="stripe_oxxo"
     log "Escenario: STRIPE OXXO ONE TIME"
-elif [[ "$NEWMAN_FOLDER" == "Create Payment Balance recurring" ]]; then
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Customer balance recurring" ]]; then
     SCENARIO="stripe_balance_recurring"
     log "Escenario: STRIPE BALANCE RECURRING — Playwright aplicará pago externo en dashboard"
 fi
