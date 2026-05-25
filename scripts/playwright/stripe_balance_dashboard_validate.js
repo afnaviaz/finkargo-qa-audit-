@@ -166,7 +166,12 @@ async function dismissCookieBanner(page) {
     process.exit(1);
   }
 
-  await page.waitForTimeout(2000);
+  // Esperar a que los resultados de búsqueda aparezcan en la tabla
+  await page.waitForSelector(
+    `tr:has-text("${CUSTOMER_EMAIL}"), [role="row"]:has-text("${CUSTOMER_EMAIL}")`,
+    { timeout: 20000 }
+  ).catch(() => {});
+  await page.waitForTimeout(1000);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_02_search_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_02_search_idx${CHECKOUT_IDX}.png`);
 
@@ -267,12 +272,18 @@ async function dismissCookieBanner(page) {
   console.log(`\n📋 Seleccionando "Añadir fondos al saldo disponible"...`);
   let optionClicked = false;
   for (const sel of [
+    // Español
     'span:has-text("Añadir fondos al saldo disponible")',
     '[role="menuitem"]:has-text("Añadir fondos")',
     'li:has-text("Añadir fondos al saldo")',
     'button:has-text("Añadir fondos al saldo")',
     'a:has-text("Añadir fondos al saldo")',
-    'text=Añadir fondos al saldo disponible',
+    // Inglés
+    'span:has-text("Add funds to available balance")',
+    '[role="menuitem"]:has-text("Add funds to available balance")',
+    'li:has-text("Add funds to available balance")',
+    'a:has-text("Add funds to available balance")',
+    'button:has-text("Add funds to available balance")',
   ]) {
     const opt = page.locator(sel).first();
     if (await opt.count() > 0) {
@@ -342,6 +353,9 @@ async function dismissCookieBanner(page) {
     '[role="button"]:has-text("Añadir fondos")',
     'button:has-text("Add funds")',
     '[role="button"]:has-text("Add funds")',
+    // excluir el botón "+" del menú que también dice "Add funds" en contexto diferente
+    'dialog button:has-text("Add funds")',
+    '[role="dialog"] button:has-text("Añadir fondos")',
   ]) {
     const btn = page.locator(sel).first();
     if (await btn.count() > 0) {
