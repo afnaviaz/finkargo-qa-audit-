@@ -1,0 +1,455 @@
+/**
+ * Stripe Dashboard Validator — Customer Balance Recurring
+ * Flujo:
+ *   1. Navega a /test/payments y busca el pago Incompleto del email dado
+ *   2. Entra al detalle del pago → clic en link de Factura (Objetos relacionados)
+ *   3. En la factura, sección Pagos → clic "+" (Aplica el pago)
+ *   4. Modal paso 1: selecciona "Añadir un pago externo" + ingresa "Transferencia" → Siguiente
+ *   5. Modal paso 2: clic Confirmar
+ *   6. Verifica que el pago aparece como Exitoso/Pagada
+ *
+ * Uso:
+ *   node stripe_balance_dashboard_validate.js
+ * Env vars:
+ *   STRIPE_ACCOUNT_ID   — ID de cuenta Stripe (ej: acct_1TWfcTKyHOFqxcvG)
+ *   CUSTOMER_EMAIL      — Email del cliente a buscar
+ *   CHECKOUT_IDX        — Índice de iteración (para nombres de archivo)
+ *   PAYMENT_AMOUNT      — Monto en centavos (ej: 150000 = 1500 MXN), opcional
+ *   INVOICE_ID          — in_xxx (opcional: navega directo a la factura, omite la lista)
+ *   SCRIPTS_DIR         — Directorio de salida para screenshots y reporte
+ */
+
+const { chromium } = require('playwright');
+const path = require('path');
+const fs   = require('fs');
+
+const STRIPE_ACCOUNT_ID = process.env.STRIPE_ACCOUNT_ID || '';
+const CUSTOMER_EMAIL    = process.env.CUSTOMER_EMAIL    || '';
+const CHECKOUT_IDX      = process.env.CHECKOUT_IDX      || '0';
+const PAYMENT_AMOUNT    = process.env.PAYMENT_AMOUNT    || '';
+const INVOICE_ID        = process.env.INVOICE_ID        || '';
+const SESSION_PATH      = path.join(__dirname, '.stripe-session.json');
+const isCI              = process.env.CI === 'true';
+const outputDir         = process.env.SCRIPTS_DIR || '.';
+
+const results = [];
+let passed = 0, failed = 0;
+
+function check(name, condition, actual = '', expected = '') {
+  if (condition) {
+    console.log(`  ✅ ${name}`);
+    results.push({ name, status: 'PASS', actual: String(actual), expected: String(expected) });
+    passed++;
+  } else {
+    console.error(`  ❌ ${name} | esperado: "${expected}" | actual: "${actual}"`);
+    results.push({ name, status: 'FAIL', actual: String(actual), expected: String(expected) });
+    failed++;
+  }
+}
+
+function saveReport(invoiceUrl) {
+  const report = {
+    checkout_idx:   CHECKOUT_IDX,
+    payment_type:   'customer_balance_recurring',
+    customer_email: CUSTOMER_EMAIL,
+    payment_amount: PAYMENT_AMOUNT,
+    invoice_url:    invoiceUrl,
+    timestamp:      new Date().toISOString(),
+    passed, failed, results,
+  };
+  const reportPath = path.join(outputDir, `stripe_balance_dashboard_report_idx${CHECKOUT_IDX}.json`);
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  console.log(`📄 Reporte: ${reportPath}`);
+}
+
+// Centavos → parte entera para matching en la lista (150000 → "1.500" o "1500")
+function amountIntegerPart(centavos) {
+  const num = parseInt(centavos, 10);
+  if (isNaN(num)) return '';
+  const mxn = Math.floor(num / 100);
+  return mxn.toLocaleString('es-MX');
+}
+
+(async () => {
+  if (!fs.existsSync(SESSION_PATH)) {
+    console.error('❌ Sin sesión de Stripe guardada. Corre stripe_save_session.js primero.');
+    process.exit(1);
+  }
+  if (!CUSTOMER_EMAIL) {
+    console.error('❌ CUSTOMER_EMAIL no definido.');
+    process.exit(1);
+  }
+
+  const accountSuffix = STRIPE_ACCOUNT_ID ? `/${STRIPE_ACCOUNT_ID}` : '';
+  const amountInt     = amountIntegerPart(PAYMENT_AMOUNT);
+
+  console.log(`\n🔍 Validando Customer Balance Recurring — Stripe Dashboard`);
+  console.log(`   Email     : ${CUSTOMER_EMAIL}`);
+  console.log(`   Amount    : ${PAYMENT_AMOUNT ? `${PAYMENT_AMOUNT} centavos (~${amountInt} MXN)` : '(no especificado)'}`);
+  console.log(`   Idx       : ${CHECKOUT_IDX}`);
+  console.log(`   Invoice ID: ${INVOICE_ID || '(se buscará desde la lista de pagos)'}`);
+  console.log(`   Ambiente  : ${isCI ? 'CI/headless' : 'local/headed'}\n`);
+
+  const browser = await chromium.launch({
+    headless: isCI,
+    args: isCI ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] : [],
+  });
+
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    storageState: SESSION_PATH,
+    ...(isCI ? { recordVideo: { dir: path.join(outputDir, 'playwright-videos'), size: { width: 1440, height: 900 } } } : {}),
+  });
+
+  const page = await context.newPage();
+  let invoiceUrl = '';
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // BLOQUE A: Ruta rápida si se pasa INVOICE_ID — salta la lista de pagos
+  // ══════════════════════════════════════════════════════════════════════════
+  if (INVOICE_ID) {
+    invoiceUrl = `https://dashboard.stripe.com${accountSuffix}/test/invoices/${INVOICE_ID}`;
+    console.log(`🔗 INVOICE_ID provisto — navegando directo a: ${invoiceUrl}`);
+
+  } else {
+    // ════════════════════════════════════════════════════════════════════════
+    // BLOQUE B: Lista de pagos → detalle → extraer link de factura
+    // ════════════════════════════════════════════════════════════════════════
+    const paymentsUrl = `https://dashboard.stripe.com${accountSuffix}/test/payments`;
+    console.log(`🌐 Navegando a lista de pagos: ${paymentsUrl}`);
+    await page.goto(paymentsUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+
+    if (page.url().includes('/login')) {
+      console.error('❌ Sesión expirada. Renueva con stripe_save_session.js');
+      fs.unlinkSync(SESSION_PATH);
+      await browser.close();
+      process.exit(1);
+    }
+
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_01_loaded_idx${CHECKOUT_IDX}.png`) });
+    console.log(`📸 stripe_balance_dash_01_loaded_idx${CHECKOUT_IDX}.png`);
+
+    // ── Buscar por email ────────────────────────────────────────────────────
+    console.log(`\n🔎 Buscando pagos de: ${CUSTOMER_EMAIL}`);
+    const searchSelectors = [
+      '[data-testid="search-input"]',
+      'input[placeholder*="Search"]',
+      'input[placeholder*="Buscar"]',
+      'input[type="search"]',
+    ];
+    let searchFilled = false;
+    for (const sel of searchSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        await el.click();
+        await el.fill(CUSTOMER_EMAIL);
+        await page.waitForTimeout(3000);
+        searchFilled = true;
+        break;
+      }
+    }
+    if (!searchFilled) console.log('  ⚠️  Campo de búsqueda no encontrado — validando sin filtro');
+
+    await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_02_search_idx${CHECKOUT_IDX}.png`) });
+    console.log(`📸 stripe_balance_dash_02_search_idx${CHECKOUT_IDX}.png`);
+
+    // ── Clic en la fila Incompleto que coincide con email (y amount si dado) ─
+    console.log(`\n🖱️  Localizando fila de pago Incompleto...`);
+    const rows     = page.locator('tr, [role="row"]');
+    const rowCount = await rows.count();
+    let clicked    = false;
+
+    for (let i = 0; i < rowCount && !clicked; i++) {
+      const row     = rows.nth(i);
+      const rowText = await row.innerText().catch(() => '');
+      const hasEmail  = rowText.includes(CUSTOMER_EMAIL);
+      const hasAmount = !amountInt || rowText.includes(amountInt);
+      const isIncomp  = rowText.toLowerCase().includes('incompleto');
+
+      if (hasEmail && hasAmount && isIncomp) {
+        console.log(`   ✅ Fila ${i}: ${rowText.substring(0, 100).replace(/\n/g, ' ').trim()}`);
+        await row.click();
+        clicked = true;
+      }
+    }
+
+    // Fallback: solo por email + incompleto (sin amount)
+    if (!clicked) {
+      console.log(`  ⚠️  Sin match email+amount+Incompleto — fallback solo email+Incompleto`);
+      for (let i = 0; i < rowCount && !clicked; i++) {
+        const row     = rows.nth(i);
+        const rowText = await row.innerText().catch(() => '');
+        if (rowText.includes(CUSTOMER_EMAIL) && rowText.toLowerCase().includes('incompleto')) {
+          await row.click();
+          clicked = true;
+        }
+      }
+    }
+
+    check('Fila de pago Incompleto encontrada', clicked,
+      clicked ? 'ok' : 'no encontrada', `email=${CUSTOMER_EMAIL} estado=Incompleto`);
+
+    if (!clicked) {
+      console.error('❌ No se pudo identificar el pago. Abortando.');
+      saveReport('');
+      await browser.close();
+      process.exit(1);
+    }
+
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_03_payment_idx${CHECKOUT_IDX}.png`) });
+    console.log(`📸 stripe_balance_dash_03_payment_idx${CHECKOUT_IDX}.png`);
+
+    // ── Extraer link de Factura en "Objetos relacionados" ──────────────────
+    console.log(`\n📄 Buscando link de Factura (Objetos relacionados)...`);
+    const invoiceLinkEl    = page.locator('[data-testid="invoice-link"]').first();
+    const invoiceLinkFound = await invoiceLinkEl.count() > 0;
+
+    check('Link de Factura encontrado en detalle de pago', invoiceLinkFound,
+      invoiceLinkFound ? 'ok' : 'no encontrado', 'data-testid="invoice-link"');
+
+    if (!invoiceLinkFound) {
+      console.error('❌ Link de factura no encontrado. Verifica que el pago tiene factura vinculada.');
+      saveReport('');
+      await browser.close();
+      process.exit(1);
+    }
+
+    const invoiceHref = await invoiceLinkEl.getAttribute('href');
+    invoiceUrl = invoiceHref && invoiceHref.startsWith('http')
+      ? invoiceHref
+      : `https://dashboard.stripe.com${invoiceHref}`;
+
+    console.log(`   Link de factura: ${invoiceUrl}`);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 1: Navegar a la factura
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log(`\n📑 Navegando a la factura...`);
+  await page.goto(invoiceUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_04_invoice_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_04_invoice_idx${CHECKOUT_IDX}.png`);
+
+  const invoiceBodyText = await page.locator('body').innerText().catch(() => '');
+  const invoiceLoaded   = invoiceBodyText.toLowerCase().includes('pagos')
+                       || invoiceBodyText.toLowerCase().includes('payments')
+                       || invoiceBodyText.toLowerCase().includes('factura')
+                       || invoiceBodyText.toLowerCase().includes('invoice');
+  check('Página de factura cargada correctamente', invoiceLoaded,
+    invoiceLoaded ? 'ok' : 'contenido inesperado', 'Pagos / Factura');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 2: Clic en "+" → Aplica el pago
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log(`\n➕ Haciendo clic en "Aplica el pago" (+)...`);
+
+  const applySelectors = [
+    '[data-db-analytics-name="invoice_payments_module_apply_payment_button"]',
+    '[aria-label="Aplica el pago"]',
+    '[aria-label="Apply payment"]',
+  ];
+
+  let applyClicked = false;
+  for (const sel of applySelectors) {
+    const btn = page.locator(sel).first();
+    if (await btn.count() > 0) {
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      applyClicked = true;
+      console.log(`   ✅ Botón encontrado con: ${sel}`);
+      break;
+    }
+  }
+
+  check('Botón "Aplica el pago" (+) clickeado', applyClicked,
+    applyClicked ? 'ok' : 'no encontrado', 'invoice_payments_module_apply_payment_button');
+
+  if (!applyClicked) {
+    console.error('❌ No se encontró el botón de aplicar pago.');
+    saveReport(invoiceUrl);
+    await browser.close();
+    process.exit(1);
+  }
+
+  await page.waitForTimeout(2000);
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_05_modal_p1_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_05_modal_p1_idx${CHECKOUT_IDX}.png`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 3: Seleccionar "Añadir un pago externo" (radio out_of_band_payment)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log(`\n📋 Seleccionando "Añadir un pago externo"...`);
+
+  const radioSelectors = [
+    'input[type="radio"][value="out_of_band_payment"]',
+    'input[name="paymentAllocationType"][value="out_of_band_payment"]',
+  ];
+
+  let radioSelected = false;
+  for (const sel of radioSelectors) {
+    const radio = page.locator(sel).first();
+    if (await radio.count() > 0) {
+      const already = await radio.isChecked();
+      if (!already) await radio.click();
+      radioSelected = true;
+      console.log(`   ✅ Radio "out_of_band_payment" ${already ? 'ya estaba' : ''} seleccionado`);
+      break;
+    }
+  }
+
+  check('Radio "Añadir un pago externo" seleccionado', radioSelected,
+    radioSelected ? 'ok' : 'no encontrado', 'radio[value="out_of_band_payment"]');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 4: Ingresar "Transferencia" en Tipo de pago
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log(`\n⌨️  Ingresando "Transferencia" en campo Tipo de pago...`);
+
+  const tipoSelectors = [
+    'input[name="outOfBandPaymentType"]',
+    'input[placeholder*="efectivo"]',
+    'input[placeholder*="ejemplo"]',
+    'input[placeholder*="cash"]',
+  ];
+
+  let tipoFilled = false;
+  for (const sel of tipoSelectors) {
+    const input = page.locator(sel).first();
+    if (await input.count() > 0) {
+      await input.clear();
+      await input.fill('Transferencia');
+      tipoFilled = true;
+      console.log(`   ✅ Campo encontrado con: ${sel}`);
+      break;
+    }
+  }
+
+  check('"Transferencia" ingresado en Tipo de pago', tipoFilled,
+    tipoFilled ? 'ok' : 'campo no encontrado', 'input[name="outOfBandPaymentType"]');
+
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_06_modal_filled_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_06_modal_filled_idx${CHECKOUT_IDX}.png`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 5: Clic en "Siguiente"
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log(`\n▶️  Haciendo clic en "Siguiente"...`);
+
+  const nextSelectors = [
+    'button:has-text("Siguiente")',
+    '[role="button"]:has-text("Siguiente")',
+    'a:has-text("Siguiente")',
+    'button:has-text("Next")',
+    '[role="button"]:has-text("Next")',
+  ];
+
+  let nextClicked = false;
+  for (const sel of nextSelectors) {
+    const btn = page.locator(sel).first();
+    if (await btn.count() > 0) {
+      await btn.click();
+      nextClicked = true;
+      console.log(`   ✅ "Siguiente" clickeado con: ${sel}`);
+      break;
+    }
+  }
+
+  if (!nextClicked) {
+    const btn = page.locator('text=Siguiente').first();
+    if (await btn.count() > 0) { await btn.click(); nextClicked = true; }
+  }
+
+  check('Botón "Siguiente" clickeado (Paso 1 → Paso 2)', nextClicked,
+    nextClicked ? 'ok' : 'no encontrado', '"Siguiente"');
+
+  await page.waitForTimeout(2000);
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_07_modal_p2_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_07_modal_p2_idx${CHECKOUT_IDX}.png`);
+
+  // Verificar que llegamos al paso 2
+  const modalText = await page.locator('body').innerText().catch(() => '');
+  const isStep2   = modalText.toLowerCase().includes('registra un pago') || modalText.toLowerCase().includes('paso 2');
+  check('Modal en Paso 2: "Registra un pago fuera de Stripe"', isStep2,
+    isStep2 ? 'Paso 2 visible' : 'no visible', 'Paso 2');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 6: Clic en "Confirmar"
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log(`\n✅ Haciendo clic en "Confirmar"...`);
+
+  const confirmSelectors = [
+    '[data-testid="external-payment-submit-button"]',
+    'button:has-text("Confirmar")',
+    '[role="button"]:has-text("Confirmar")',
+    'a:has-text("Confirmar")',
+    'button:has-text("Confirm")',
+  ];
+
+  let confirmClicked = false;
+  for (const sel of confirmSelectors) {
+    const btn = page.locator(sel).first();
+    if (await btn.count() > 0) {
+      await btn.click();
+      confirmClicked = true;
+      console.log(`   ✅ "Confirmar" clickeado con: ${sel}`);
+      break;
+    }
+  }
+
+  check('Botón "Confirmar" clickeado', confirmClicked,
+    confirmClicked ? 'ok' : 'no encontrado', '"Confirmar"');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 7: Verificar estado final — Exitoso / Pagada
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log(`\n⏳ Esperando actualización de estado...`);
+  await page.waitForTimeout(4000);
+
+  // Esperar a que aparezca "Exitoso" o "Pagada" (hasta 15 s)
+  try {
+    await page.waitForFunction(() => {
+      const t = document.body.innerText.toLowerCase();
+      return t.includes('exitoso') || t.includes('pagada') || t.includes('paid') || t.includes('succeeded');
+    }, { timeout: 15000 });
+    console.log('  ✅ Estado actualizado');
+  } catch {
+    console.log('  ⚠️  Timeout esperando "Exitoso/Pagada" — continuando con screenshot');
+  }
+
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_08_result_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_08_result_idx${CHECKOUT_IDX}.png`);
+
+  const finalText   = await page.locator('body').innerText().catch(() => '');
+  const esPagada    = /pagada|paid/i.test(finalText);
+  const esExitoso   = /exitoso|succeeded|successful/i.test(finalText);
+  const estadoOK    = esPagada || esExitoso;
+
+  check('Factura marcada como Pagada', esPagada,
+    esPagada ? 'Pagada' : 'no encontrado', 'Pagada');
+  check('Pago aparece como Exitoso en Pagos', esExitoso,
+    esExitoso ? 'Exitoso' : 'no encontrado', 'Exitoso');
+  check('Estado final correcto (Pagada o Exitoso)', estadoOK,
+    estadoOK ? 'ok' : 'sin estado exitoso en la página', 'Pagada | Exitoso');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // REPORTE
+  // ══════════════════════════════════════════════════════════════════════════
+  saveReport(invoiceUrl);
+
+  console.log(`\n${'─'.repeat(52)}`);
+  console.log(`📊 Balance Dashboard: ${passed} ✅  |  ${failed} ❌`);
+  if (isCI) console.log(`📹 Video: ${path.join(outputDir, 'playwright-videos')}`);
+  console.log('─'.repeat(52));
+
+  await context.close();
+  await browser.close();
+
+  if (failed > 0) process.exit(1);
+})();
