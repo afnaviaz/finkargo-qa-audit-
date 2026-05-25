@@ -477,25 +477,26 @@ async function dismissCookieBanner(page) {
   console.log(`\n⏳ Esperando confirmación...`);
   await page.waitForTimeout(3000);
 
-  try {
-    await page.waitForFunction(
-      () => !document.querySelector('[role="dialog"][data-testid="modal"], [data-testid="add-funds-modal"]'),
-      { timeout: 10000 }
-    );
-    console.log('  ✅ Modal cerrado');
-  } catch {
-    console.log('  ⚠️  Modal aún visible — continuando con screenshot');
-  }
+  // Esperar que desaparezca el texto del modal "Fund cash balance" (más fiable que role="dialog"
+  // que también lo usa el cookie banner)
+  const fundModalClosed = await page.waitForFunction(
+    () => {
+      const t = document.body.innerText;
+      return !t.includes('Fund cash balance') && !t.includes('Añadir fondos al saldo');
+    },
+    { timeout: 10000 }
+  ).then(() => true).catch(() => false);
+
+  console.log(fundModalClosed ? '  ✅ Modal cerrado' : '  ⚠️  Modal aún visible — continuando');
 
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_08_result_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_08_result_idx${CHECKOUT_IDX}.png`);
 
-  const finalBody   = await page.locator('body').innerText().catch(() => '');
-  const hasError    = /error|failed|falló|inválido|invalid/i.test(finalBody);
-  const modalClosed = (await page.locator('[role="dialog"]').count()) === 0;
+  const finalBody = await page.locator('body').innerText().catch(() => '');
+  const hasError  = /error|failed|falló|inválido|invalid/i.test(finalBody);
 
   check('Sin errores visibles en la página', !hasError, hasError ? 'error detectado' : 'ok', 'sin errores');
-  check('Modal cerrado (operación completada)', modalClosed, modalClosed ? 'cerrado' : 'aún abierto', 'modal cerrado');
+  check('Fondos añadidos (modal cerrado)', fundModalClosed, fundModalClosed ? 'ok' : 'modal aún abierto', 'modal cerrado');
 
   saveReport(customerUrl);
 

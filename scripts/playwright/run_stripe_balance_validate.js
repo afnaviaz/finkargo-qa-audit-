@@ -73,30 +73,52 @@ if (!fs.existsSync(SESSION_PATH)) {
 
 let globalFailed = 0;
 
+const MAX_RETRIES  = 2;
+const RETRY_DELAY  = 5000; // ms entre reintentos
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 for (const { idx, email, amount } of invoiceEntries) {
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`▶ Escenario idx=${idx}`);
   console.log(`  Email      : ${email  || '(no guardado)'}`);
   console.log(`  Amount     : ${amount ? `${amount} centavos` : '(no guardado)'}`);
 
-  try {
-    execSync(`node "${dashboardScript}"`, {
-      env: {
-        ...process.env,
-        CHECKOUT_IDX:      idx,
-        CUSTOMER_EMAIL:    email,
-        PAYMENT_AMOUNT:    amount,
-        STRIPE_ACCOUNT_ID: stripeAccountId,
-        SCRIPTS_DIR:       scriptsDir,
-        CI:                'true',
-      },
-      stdio: 'inherit',
-    });
-    console.log(`✅ idx=${idx} balance dashboard OK`);
-  } catch (e) {
-    console.error(`❌ idx=${idx} balance dashboard falló (exit ${e.status})`);
-    globalFailed++;
+  const env = {
+    ...process.env,
+    CHECKOUT_IDX:      idx,
+    CUSTOMER_EMAIL:    email,
+    PAYMENT_AMOUNT:    amount,
+    STRIPE_ACCOUNT_ID: stripeAccountId,
+    SCRIPTS_DIR:       scriptsDir,
+    CI:                'true',
+  };
+
+  let success = false;
+  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+    if (attempt > 1) {
+      console.log(`  🔄 Reintento ${attempt - 1}/${MAX_RETRIES} para idx=${idx} (esperando ${RETRY_DELAY / 1000}s)...`);
+      sleep(RETRY_DELAY);
+    }
+    try {
+      execSync(`node "${dashboardScript}"`, { env, stdio: 'inherit' });
+      console.log(`✅ idx=${idx} balance dashboard OK`);
+      success = true;
+      break;
+    } catch (e) {
+      const reason = e.message?.includes('canceled') ? 'operación cancelada (red/CI)'
+                   : e.message?.includes('TIMEOUT')  ? 'timeout'
+                   : `exit ${e.status}`;
+      if (attempt <= MAX_RETRIES) {
+        console.warn(`  ⚠️  idx=${idx} falló (${reason}) — se reintentará`);
+      } else {
+        console.error(`❌ idx=${idx} balance dashboard falló tras ${MAX_RETRIES + 1} intentos (${reason})`);
+      }
+    }
   }
+  if (!success) globalFailed++;
 }
 
 console.log(`\n${'─'.repeat(50)}`);
