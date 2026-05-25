@@ -68,14 +68,23 @@ function centavosToMXN(centavos) {
 
 async function dismissCookieBanner(page) {
   try {
+    // Patrón 1: banner con data-testid (Stripe headless)
     const banner = page.locator('[data-testid="cookie-banner"]');
     if (await banner.count() > 0) {
-      const acceptBtn = banner.locator('button').filter({ hasText: /acepta|accept|ok|agree|entendido|got it/i }).first();
-      if (await acceptBtn.count() > 0) {
-        await acceptBtn.click();
+      const btn = banner.locator('button').filter({ hasText: /acepta|accept|ok|agree|entendido|got it/i }).first();
+      if (await btn.count() > 0) {
+        await btn.click({ force: true });
         await page.waitForTimeout(600);
-        console.log('  🍪 Cookie banner cerrado');
+        console.log('  🍪 Cookie banner cerrado (testid)');
+        return;
       }
+    }
+    // Patrón 2: "Accept all" / "Aceptar todo" suelto en la página (inglés)
+    const acceptAll = page.locator('button:has-text("Accept all"), button:has-text("Aceptar todo"), button:has-text("Aceptar todas")').first();
+    if (await acceptAll.count() > 0) {
+      await acceptAll.click({ force: true });
+      await page.waitForTimeout(600);
+      console.log('  🍪 Cookie banner cerrado (Accept all)');
     }
   } catch { }
 }
@@ -236,6 +245,7 @@ async function dismissCookieBanner(page) {
   console.log(`📸 stripe_balance_dash_04_pm_section_idx${CHECKOUT_IDX}.png`);
 
   console.log(`\n➕ Haciendo clic en "+" (Añade un método de pago)...`);
+  await dismissCookieBanner(page);
   let addBtnClicked = false;
   for (const sel of [
     '[aria-label="Añade un método de pago"]',
@@ -246,7 +256,7 @@ async function dismissCookieBanner(page) {
     const btn = page.locator(sel).first();
     if (await btn.count() > 0) {
       await btn.scrollIntoViewIfNeeded();
-      await btn.click();
+      await btn.click({ force: true });
       addBtnClicked = true;
       console.log(`   ✅ Botón "+" encontrado: ${sel}`);
       break;
@@ -262,9 +272,12 @@ async function dismissCookieBanner(page) {
     process.exit(1);
   }
 
-  // Esperar a que el menú desplegable sea visible
-  await page.waitForSelector('[role="menu"], [role="listbox"]', { timeout: 5000 }).catch(() => {});
-  await page.waitForTimeout(2000);
+  // Esperar a que aparezca el texto del menú desplegable (Stripe no usa role="menu")
+  await page.waitForSelector(
+    'text=/add funds to available balance|añadir fondos al saldo disponible/i',
+    { timeout: 5000 }
+  ).catch(() => {});
+  await page.waitForTimeout(1000);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`);
 
