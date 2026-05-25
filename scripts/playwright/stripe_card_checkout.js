@@ -8,6 +8,8 @@ const CARD_EXPIRY     = process.env.CARD_EXPIRY     || '1226';
 const CARD_CVC        = process.env.CARD_CVC        || '123';
 const CARDHOLDER_NAME = process.env.CARDHOLDER_NAME || 'Usuario QA Automatizacion';
 const EXPECTED_RESULT = (process.env.EXPECTED_RESULT || 'success').toLowerCase();
+// LINK_MODE: 'bypass' → clic en "Pagar sin Link" | 'code' → ingresa 000000 | '' → sin modal
+const LINK_MODE       = (process.env.LINK_MODE || '').toLowerCase();
 
 const isCI      = process.env.CI === 'true';
 const outputDir = process.env.SCRIPTS_DIR || '.';
@@ -121,6 +123,50 @@ async function fillStripeField(locator, value) {
 
   await page.screenshot({ path: path.join(outputDir, 'stripe_card_01b_currency.png') });
   console.log('📸 stripe_card_01b_currency.png\n');
+
+  // ── 2.7 Manejar modal de Stripe Link (si aparece) ─────────────────────────
+  try {
+    const linkModal = page.locator('text=Confirma que eres tú, text=Pagar sin Link').first();
+    const modalVisible = await linkModal.count() > 0;
+
+    if (modalVisible || LINK_MODE) {
+      console.log('🔗 Modal de Stripe Link detectado\n');
+
+      if (LINK_MODE === 'code') {
+        // Ingresar código 000000 (código de test en modo prueba)
+        console.log('   Modo: ingresando código 000000...');
+        const codeInputs = page.locator('input[inputmode="numeric"], input[type="number"], input[autocomplete="one-time-code"]');
+        const count = await codeInputs.count();
+        if (count > 0) {
+          // Si es un campo único, escribir 000000 directo
+          if (count === 1) {
+            await codeInputs.first().fill('000000');
+          } else {
+            // Si son 6 campos separados, llenar uno por uno
+            for (let i = 0; i < Math.min(count, 6); i++) {
+              await codeInputs.nth(i).fill('0');
+            }
+          }
+          await page.waitForTimeout(2000);
+          console.log('   ✅ Código 000000 ingresado');
+        }
+      } else {
+        // Modo bypass por defecto: clic en "Pagar sin Link"
+        console.log('   Modo: bypass → clic en "Pagar sin Link"...');
+        const bypassBtn = page.locator('text=Pagar sin Link, button:has-text("Pagar sin Link")').first();
+        if (await bypassBtn.count() > 0) {
+          await bypassBtn.click();
+          await page.waitForTimeout(2000);
+          console.log('   ✅ "Pagar sin Link" clickeado');
+        }
+      }
+
+      await page.screenshot({ path: path.join(outputDir, 'stripe_card_01c_link.png') });
+      console.log('📸 stripe_card_01c_link.png\n');
+    }
+  } catch (e) {
+    console.log(`ℹ️  Modal Stripe Link: ${e.message}`);
+  }
 
   // ── 3. Llenar datos de tarjeta ────────────────────────────────────────────
   console.log('✍️  Llenando datos de tarjeta...\n');

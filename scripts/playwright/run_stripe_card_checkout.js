@@ -73,6 +73,12 @@ for (const { idx, url } of checkoutUrls) {
   // Email del cliente guardado por el test script de Postman (stripe_email_<idx>)
   const customerEmail = getVar(`stripe_email_${idx}`) || '';
 
+  // LINK_MODE según el índice: EP-04 (idx=11) → bypass, EP-05 (idx=12) → code
+  const numIdx = parseInt(idx, 10);
+  let linkMode = '';
+  if (numIdx === 11) linkMode = 'bypass';
+  if (numIdx === 12) linkMode = 'code';
+
   let checkoutOk = false;
   try {
     execSync(`node "${scriptPath}"`, {
@@ -84,6 +90,7 @@ for (const { idx, url } of checkoutUrls) {
         CARD_CVC:        process.env.CARD_CVC        || '123',
         CARDHOLDER_NAME: process.env.CARDHOLDER_NAME || 'Usuario QA Automatizacion',
         EXPECTED_RESULT: process.env.EXPECTED_RESULT || 'success',
+        LINK_MODE:       linkMode,
       },
       stdio: 'inherit',
     });
