@@ -120,59 +120,56 @@ function amountIntegerPart(centavos) {
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_01_loaded_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_01_loaded_idx${CHECKOUT_IDX}.png`);
 
-  // ── Buscar por email ──────────────────────────────────────────────────────
-  console.log(`\n🔎 Buscando pagos de: ${CUSTOMER_EMAIL}`);
-  const searchSelectors = [
-    '[data-testid="search-input"]',
-    'input[placeholder*="Search"]',
-    'input[placeholder*="Buscar"]',
-    'input[type="search"]',
-  ];
-  let searchFilled = false;
-  for (const sel of searchSelectors) {
-    const el = page.locator(sel).first();
-    if (await el.count() > 0) {
-      await el.click();
-      await el.fill(CUSTOMER_EMAIL);
-      await page.waitForTimeout(3000);
-      searchFilled = true;
-      break;
-    }
+  // ── Esperar que la tabla cargue ──────────────────────────────────────────
+  console.log(`\n🖱️  Esperando tabla de pagos...`);
+  await page.waitForSelector('table tbody tr, [role="row"]', { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(2000);
+
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_02_list_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_02_list_idx${CHECKOUT_IDX}.png`);
+
+  // ── Localizar fila con email + Incompleto usando filter de Playwright ─────
+  console.log(`\n🔎 Buscando fila: email="${CUSTOMER_EMAIL}" + estado=Incompleto`);
+  let clicked = false;
+
+  // Intento 1: email + Incompleto
+  const rowWithBoth = page.locator('tr, [role="row"]')
+    .filter({ hasText: CUSTOMER_EMAIL })
+    .filter({ hasText: /incompleto/i })
+    .first();
+
+  if (await rowWithBoth.count() > 0) {
+    const txt = await rowWithBoth.innerText().catch(() => '');
+    console.log(`   ✅ Fila encontrada (email+Incompleto): ${txt.substring(0, 100).replace(/\n/g, ' ').trim()}`);
+    await rowWithBoth.click();
+    clicked = true;
   }
-  if (!searchFilled) console.log('  ⚠️  Campo de búsqueda no encontrado — validando sin filtro');
 
-  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_02_search_idx${CHECKOUT_IDX}.png`) });
-  console.log(`📸 stripe_balance_dash_02_search_idx${CHECKOUT_IDX}.png`);
+  // Intento 2: solo email (sin filtro Incompleto — por si el texto difiere)
+  if (!clicked) {
+    console.log(`  ⚠️  Sin match email+Incompleto — buscando solo por email...`);
+    const rowWithEmail = page.locator('tr, [role="row"]')
+      .filter({ hasText: CUSTOMER_EMAIL })
+      .first();
 
-  // ── Clic en fila Incompleto que coincide con email (+ amount si disponible) ─
-  console.log(`\n🖱️  Localizando fila de pago Incompleto...`);
-  const rows     = page.locator('tr, [role="row"]');
-  const rowCount = await rows.count();
-  let clicked    = false;
-
-  for (let i = 0; i < rowCount && !clicked; i++) {
-    const row     = rows.nth(i);
-    const rowText = await row.innerText().catch(() => '');
-    const hasEmail  = rowText.includes(CUSTOMER_EMAIL);
-    const hasAmount = !amountInt || rowText.includes(amountInt);
-    const isIncomp  = rowText.toLowerCase().includes('incompleto');
-
-    if (hasEmail && hasAmount && isIncomp) {
-      console.log(`   ✅ Fila ${i}: ${rowText.substring(0, 100).replace(/\n/g, ' ').trim()}`);
-      await row.click();
+    if (await rowWithEmail.count() > 0) {
+      const txt = await rowWithEmail.innerText().catch(() => '');
+      console.log(`   ✅ Fila encontrada (solo email): ${txt.substring(0, 100).replace(/\n/g, ' ').trim()}`);
+      await rowWithEmail.click();
       clicked = true;
     }
   }
 
-  // Fallback: solo email + incompleto (sin amount)
+  // Intento 3: buscar por href que lleve a un pi_* (payment intent) con email visible
   if (!clicked) {
-    console.log(`  ⚠️  Sin match email+amount+Incompleto — fallback solo email+Incompleto`);
-    for (let i = 0; i < rowCount && !clicked; i++) {
-      const row     = rows.nth(i);
-      const rowText = await row.innerText().catch(() => '');
-      if (rowText.includes(CUSTOMER_EMAIL) && rowText.toLowerCase().includes('incompleto')) {
-        await row.click();
+    console.log(`  ⚠️  Intentando buscar por celda de email en la tabla...`);
+    const emailCell = page.locator(`td:has-text("${CUSTOMER_EMAIL}"), [role="cell"]:has-text("${CUSTOMER_EMAIL}")`).first();
+    if (await emailCell.count() > 0) {
+      const parentRow = emailCell.locator('xpath=ancestor::tr').first();
+      if (await parentRow.count() > 0) {
+        await parentRow.click();
         clicked = true;
+        console.log(`   ✅ Fila encontrada vía celda email`);
       }
     }
   }
