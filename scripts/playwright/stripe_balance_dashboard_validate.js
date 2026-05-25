@@ -160,6 +160,7 @@ async function dismissCookieBanner(page) {
     if (await input.count() > 0) {
       await input.click();
       await input.fill(CUSTOMER_EMAIL);
+      await input.press('Enter');
       searchFilled = true;
       console.log(`   Campo búsqueda: ${sel}`);
       break;
@@ -256,7 +257,7 @@ async function dismissCookieBanner(page) {
     const btn = page.locator(sel).first();
     if (await btn.count() > 0) {
       await btn.scrollIntoViewIfNeeded();
-      await btn.click({ force: true });
+      await btn.click();
       addBtnClicked = true;
       console.log(`   ✅ Botón "+" encontrado: ${sel}`);
       break;
@@ -272,12 +273,17 @@ async function dismissCookieBanner(page) {
     process.exit(1);
   }
 
-  // Esperar a que aparezca el texto del menú desplegable (Stripe no usa role="menu")
-  await page.waitForSelector(
-    'text=/add funds to available balance|añadir fondos al saldo disponible/i',
-    { timeout: 5000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1000);
+  // Esperar a que el texto del menú aparezca en el DOM (waitForFunction es más fiable que text= selector)
+  await page.waitForFunction(
+    () => {
+      const t = document.body.innerText.toLowerCase();
+      return t.includes('add funds to available balance') || t.includes('añadir fondos al saldo disponible');
+    },
+    { timeout: 8000 }
+  ).catch(() => {
+    console.log('   ⚠️  waitForFunction: texto del menú no apareció en 8s');
+  });
+  await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`);
 
