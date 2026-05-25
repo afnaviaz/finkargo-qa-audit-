@@ -227,6 +227,21 @@ async function dismissCookieBanner(page) {
   customerUrl = page.url();
   console.log(`   URL customer: ${customerUrl}`);
 
+  // Si no tenemos PAYMENT_AMOUNT, intentar extraerlo de la fila "Incomplete" en Payments
+  let amountToFill = amountMXN;
+  if (!amountToFill) {
+    const incompleteRow = page.locator('tr, [role="row"]')
+      .filter({ hasText: /incomplete|incompleto/i }).first();
+    if (await incompleteRow.count() > 0) {
+      const rowText = await incompleteRow.innerText().catch(() => '');
+      const match = rowText.match(/\$?([\d,]+(?:\.\d+)?)/);
+      if (match) {
+        amountToFill = match[1].replace(/,/g, '').replace(/\.00$/, '');
+        console.log(`   💡 Monto extraído de la página: ${amountToFill} MXN`);
+      }
+    }
+  }
+
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_03_customer_detail_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_03_customer_detail_idx${CHECKOUT_IDX}.png`);
 
@@ -384,10 +399,10 @@ async function dismissCookieBanner(page) {
   // ══════════════════════════════════════════════════════════════════════════
   // PASO 6: Ingresar el importe en el modal
   // ══════════════════════════════════════════════════════════════════════════
-  console.log(`\n⌨️  Ingresando importe: ${amountMXN || '(no especificado)'} MXN...`);
+  console.log(`\n⌨️  Ingresando importe: ${amountToFill || '(sin monto disponible)'} MXN...`);
   let amountFilled = false;
 
-  if (amountMXN) {
+  if (amountToFill) {
     for (const sel of [
       'input.TextInput-element',
       'input[aria-invalid="false"]',
@@ -397,44 +412,58 @@ async function dismissCookieBanner(page) {
       const input = page.locator(sel).first();
       if (await input.count() > 0) {
         await input.click({ clickCount: 3 });
-        await input.fill(amountMXN);
+        await input.fill(amountToFill);
         amountFilled = true;
-        console.log(`   ✅ Importe ingresado (${amountMXN}) en: ${sel}`);
+        console.log(`   ✅ Importe ingresado (${amountToFill}) en: ${sel}`);
         break;
       }
     }
   } else {
-    console.log(`   ⚠️  PAYMENT_AMOUNT no definido — campo de importe no rellenado`);
-    amountFilled = true;
+    console.log(`   ⚠️  Sin monto disponible — agrega stripe_amount_* en el test script de Postman`);
   }
 
-  check(`Importe ingresado (${amountMXN || 'sin valor'} MXN)`, amountFilled,
-    amountFilled ? 'ok' : 'campo no encontrado', 'input importe');
+  check(`Importe ingresado`, amountFilled,
+    amountFilled ? `${amountToFill} MXN` : 'sin valor', 'monto > 0');
 
   await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_07_modal_filled_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_07_modal_filled_idx${CHECKOUT_IDX}.png`);
 
+  if (!amountFilled) {
+    console.error('❌ Sin monto — el botón "Add funds" quedaría deshabilitado. Abortando.');
+    saveReport(customerUrl);
+    await browser.close();
+    process.exit(1);
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
-  // PASO 7: Clic en "Añadir fondos"
+  // PASO 7: Clic en "Add funds" (esperar que el botón esté habilitado)
   // ══════════════════════════════════════════════════════════════════════════
-  console.log(`\n✅ Haciendo clic en "Añadir fondos"...`);
+  console.log(`\n✅ Haciendo clic en "Add funds"...`);
   await dismissCookieBanner(page);
   let confirmClicked = false;
   for (const sel of [
-    'button:has-text("Añadir fondos")',
-    '[role="button"]:has-text("Añadir fondos")',
     'button:has-text("Add funds")',
+    'button:has-text("Añadir fondos")',
     '[role="button"]:has-text("Add funds")',
-    // excluir el botón "+" del menú que también dice "Add funds" en contexto diferente
-    'dialog button:has-text("Add funds")',
-    '[role="dialog"] button:has-text("Añadir fondos")',
+    '[role="button"]:has-text("Añadir fondos")',
   ]) {
     const btn = page.locator(sel).first();
     if (await btn.count() > 0) {
-      await btn.click();
-      confirmClicked = true;
-      console.log(`   ✅ Botón "Añadir fondos" clickeado: ${sel}`);
+      // Esperar a que el botón esté habilitado (se habilita al ingresar monto > 0)
+      await btn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+      const isDisabled = await btn.isDisabled().catch(() => true);
+      if (isDisabled) {
+        console.log(`   ⚠️  Botón deshabilitado con selector: ${sel} — saltando`);
+        continue;
+      }
+      try {
+        await btn.click();
+        confirmClicked = true;
+        console.log(`   ✅ Botón clickeado: ${sel}`);
+      } catch (e) {
+        console.log(`   ⚠️  Error al clickear ${sel}: ${e.message?.substring(0, 60)}`);
+      }
       break;
     }
   }
