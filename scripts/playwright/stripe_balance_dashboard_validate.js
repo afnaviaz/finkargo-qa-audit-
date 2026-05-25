@@ -262,40 +262,58 @@ async function dismissCookieBanner(page) {
     process.exit(1);
   }
 
-  await page.waitForTimeout(1500);
+  // Esperar a que el menú desplegable sea visible
+  await page.waitForSelector('[role="menu"], [role="listbox"]', { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(2000);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`);
 
   // ══════════════════════════════════════════════════════════════════════════
   // PASO 5: Seleccionar "Añadir fondos al saldo disponible"
   // ══════════════════════════════════════════════════════════════════════════
-  console.log(`\n📋 Seleccionando "Añadir fondos al saldo disponible"...`);
+  console.log(`\n📋 Seleccionando "Add funds to available balance"...`);
   let optionClicked = false;
-  for (const sel of [
-    // Español
-    'span:has-text("Añadir fondos al saldo disponible")',
-    '[role="menuitem"]:has-text("Añadir fondos")',
-    'li:has-text("Añadir fondos al saldo")',
-    'button:has-text("Añadir fondos al saldo")',
-    'a:has-text("Añadir fondos al saldo")',
-    // Inglés
-    'span:has-text("Add funds to available balance")',
-    '[role="menuitem"]:has-text("Add funds to available balance")',
-    'li:has-text("Add funds to available balance")',
-    'a:has-text("Add funds to available balance")',
-    'button:has-text("Add funds to available balance")',
-  ]) {
-    const opt = page.locator(sel).first();
-    if (await opt.count() > 0) {
-      await opt.click();
+
+  // Intento 1: buscar dentro del menú por role
+  const menuContainer = page.locator('[role="menu"], [role="listbox"]').first();
+  if (await menuContainer.count() > 0) {
+    const menuItem = menuContainer.locator('a, li, [role="menuitem"], button')
+      .filter({ hasText: /add funds to available balance|añadir fondos al saldo disponible/i })
+      .first();
+    if (await menuItem.count() > 0) {
+      await menuItem.click({ force: true });
       optionClicked = true;
-      console.log(`   ✅ Opción encontrada: ${sel}`);
-      break;
+      console.log(`   ✅ Opción encontrada dentro de [role="menu"]`);
     }
   }
 
-  check('"Añadir fondos al saldo disponible" seleccionado', optionClicked,
-    optionClicked ? 'ok' : 'no encontrado', 'Añadir fondos al saldo disponible');
+  // Intento 2: getByText en toda la página
+  if (!optionClicked) {
+    for (const text of ['Add funds to available balance', 'Añadir fondos al saldo disponible']) {
+      const el = page.getByText(text, { exact: false }).first();
+      if (await el.count() > 0) {
+        await el.click({ force: true });
+        optionClicked = true;
+        console.log(`   ✅ Opción encontrada via getByText: "${text}"`);
+        break;
+      }
+    }
+  }
+
+  // Intento 3: cualquier elemento visible que contenga "funds" / "fondos"
+  if (!optionClicked) {
+    const fallback = page.locator('a, li, button, span')
+      .filter({ hasText: /add funds|añadir fondos/i })
+      .first();
+    if (await fallback.count() > 0) {
+      await fallback.click({ force: true });
+      optionClicked = true;
+      console.log(`   ✅ Opción encontrada via fallback "funds/fondos"`);
+    }
+  }
+
+  check('"Add funds to available balance" seleccionado', optionClicked,
+    optionClicked ? 'ok' : 'no encontrado', 'Add funds to available balance');
 
   if (!optionClicked) {
     saveReport(customerUrl);
