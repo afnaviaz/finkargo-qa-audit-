@@ -109,6 +109,9 @@ elif [[ "$NEWMAN_FOLDER" == "Create Payment Card recurring" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time" ]]; then
     SCENARIO="stripe_oxxo"
     log "Escenario: STRIPE OXXO ONE TIME"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Balance recurring" ]]; then
+    SCENARIO="stripe_balance_recurring"
+    log "Escenario: STRIPE BALANCE RECURRING — Playwright aplicará pago externo en dashboard"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -199,7 +202,7 @@ elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happ
 fi
 
 # Inyectar base URL de Stripe si el environment no la tiene
-if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" ]]; then
+if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" || "$SCENARIO" == "stripe_balance_recurring" ]]; then
     if [[ "$AMBIENTE" == "Staging" ]]; then
         STRIPE_BASE_URL="https://api-staging.finkargo.com.mx/integrations"
     else
@@ -219,6 +222,9 @@ elif [[ "$SCENARIO" == "stripe_card" ]]; then
 elif [[ "$SCENARIO" == "stripe_card_recurring" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe Card recurring: 11 iteraciones"
+elif [[ "$SCENARIO" == "stripe_balance_recurring" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    log "Stripe Balance recurring: 11 iteraciones"
 fi
 
 # ----------------------------------------------------------
@@ -285,6 +291,8 @@ elif [[ "$SCENARIO" == "rejected" ]]; then
 elif [[ "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" ]]; then
     [[ "$SCENARIO" == "stripe_card_recurring" ]] && export STRIPE_PAYMENT_TYPE="recurring" || export STRIPE_PAYMENT_TYPE="one_time"
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_card" || true
+elif [[ "$SCENARIO" == "stripe_balance_recurring" ]]; then
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_balance" || true
 else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
 fi

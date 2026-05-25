@@ -24,7 +24,8 @@ on:
           "COBRE / COBRE INTEGRATIONS / Happy path cobre",
           "STRIPE / Create Payment Card one time",
           "STRIPE / Create Payment Card recurring",
-          "STRIPE / Create Payment Oxxo one time"
+          "STRIPE / Create Payment Oxxo one time",
+          "STRIPE / Create Payment Balance recurring"
         ]
       pais:
         description: "País"

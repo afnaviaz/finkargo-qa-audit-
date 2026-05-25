@@ -43,6 +43,13 @@ elif [[ "$MODE" == "stripe_card" ]]; then
     node "$SCRIPTS_DIR/playwright/run_stripe_card_checkout.js" "$ENV_EXPORT" \
         || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe Card Playwright terminó con errores (no bloquea el pipeline)"
 
+elif [[ "$MODE" == "stripe_balance" ]]; then
+    echo "[$(date +'%H:%M:%S')] 🏦 Modo STRIPE BALANCE RECURRING — aplicando pago externo en dashboard..."
+    export CI="true"
+    export SCRIPTS_DIR="$SCRIPTS_DIR"
+    node "$SCRIPTS_DIR/playwright/run_stripe_balance_validate.js" "$ENV_EXPORT" \
+        || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe Balance Playwright terminó con errores (no bloquea el pipeline)"
+
 elif [ -n "$PAYMENT_LINK" ]; then
     export PAYMENT_LINK="$PAYMENT_LINK"
     export SCRIPTS_DIR="$SCRIPTS_DIR"
