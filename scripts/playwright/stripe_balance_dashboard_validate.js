@@ -68,6 +68,20 @@ function amountIntegerPart(centavos) {
   return Math.floor(num / 100).toLocaleString('es-MX');
 }
 
+async function dismissCookieBanner(page) {
+  try {
+    const banner = page.locator('[data-testid="cookie-banner"]');
+    if (await banner.count() > 0) {
+      const acceptBtn = banner.locator('button').filter({ hasText: /acepta|accept|ok|agree|entendido|got it/i }).first();
+      if (await acceptBtn.count() > 0) {
+        await acceptBtn.click();
+        await page.waitForTimeout(600);
+        console.log('  🍪 Cookie banner cerrado');
+      }
+    }
+  } catch { /* ignorar si no aparece */ }
+}
+
 (async () => {
   if (!fs.existsSync(SESSION_PATH)) {
     console.error('❌ Sin sesión de Stripe guardada. Corre stripe_save_session.js primero.');
@@ -117,6 +131,7 @@ function amountIntegerPart(centavos) {
   }
 
   await page.waitForTimeout(3000);
+  await dismissCookieBanner(page);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_01_loaded_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_01_loaded_idx${CHECKOUT_IDX}.png`);
 
@@ -135,7 +150,7 @@ function amountIntegerPart(centavos) {
   // Intento 1: email + Incompleto
   const rowWithBoth = page.locator('tr, [role="row"]')
     .filter({ hasText: CUSTOMER_EMAIL })
-    .filter({ hasText: /incompleto/i })
+    .filter({ hasText: /incompleto|incomplete/i })
     .first();
 
   if (await rowWithBoth.count() > 0) {
@@ -220,6 +235,7 @@ function amountIntegerPart(centavos) {
   await page.goto(invoiceUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(3000);
+  await dismissCookieBanner(page);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_04_invoice_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_04_invoice_idx${CHECKOUT_IDX}.png`);
 
@@ -265,9 +281,11 @@ function amountIntegerPart(centavos) {
   console.log(`📸 stripe_balance_dash_05_modal_p1_idx${CHECKOUT_IDX}.png`);
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PASO 5: Seleccionar "Añadir un pago externo" + escribir "Transferencia"
+  // PASO 5: Modal Step 1 — Seleccionar "Añadir un pago externo" → Siguiente
   // ══════════════════════════════════════════════════════════════════════════
-  console.log(`\n📋 Seleccionando "Añadir un pago externo"...`);
+  console.log(`\n📋 [Step 1] Seleccionando "Añadir un pago externo"...`);
+  await dismissCookieBanner(page);
+
   let radioSelected = false;
   for (const sel of ['input[type="radio"][value="out_of_band_payment"]', 'input[name="paymentAllocationType"][value="out_of_band_payment"]']) {
     const radio = page.locator(sel).first();
@@ -280,9 +298,43 @@ function amountIntegerPart(centavos) {
   check('Radio "Añadir un pago externo" seleccionado', radioSelected,
     radioSelected ? 'ok' : 'no encontrado', 'radio[value="out_of_band_payment"]');
 
-  console.log(`\n⌨️  Ingresando "Transferencia" en Tipo de pago...`);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_06_modal_p1_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_06_modal_p1_idx${CHECKOUT_IDX}.png`);
+
+  console.log(`\n▶️  [Step 1] Haciendo clic en "Siguiente"...`);
+  await dismissCookieBanner(page);
+  let nextClicked = false;
+  for (const sel of [
+    'button:has-text("Siguiente")', '[role="button"]:has-text("Siguiente")',
+    'button:has-text("Next")',      '[role="button"]:has-text("Next")',
+    'a:has-text("Siguiente")',      'a:has-text("Next")',
+  ]) {
+    const btn = page.locator(sel).first();
+    if (await btn.count() > 0) { await btn.click({ force: true }); nextClicked = true; break; }
+  }
+  if (!nextClicked) {
+    const btn = page.locator('text=Siguiente').first();
+    if (await btn.count() > 0) { await btn.click({ force: true }); nextClicked = true; }
+  }
+  check('Botón "Siguiente" clickeado', nextClicked, nextClicked ? 'ok' : 'no encontrado', '"Siguiente"');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PASO 6: Modal Step 2 — Ingresar "Transferencia" → Confirmar
+  // ══════════════════════════════════════════════════════════════════════════
+  await page.waitForTimeout(2000);
+  await dismissCookieBanner(page);
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_07_modal_p2_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_07_modal_p2_idx${CHECKOUT_IDX}.png`);
+
+  const step2Text = await page.locator('body').innerText().catch(() => '');
+  const isStep2   = /registra un pago|paso 2|record a payment|step 2/i.test(step2Text);
+  check('Modal en Paso 2: "Registra un pago fuera de Stripe"', isStep2,
+    isStep2 ? 'Paso 2 visible' : 'no visible', 'Paso 2');
+
+  console.log(`\n⌨️  [Step 2] Ingresando "Transferencia" en Tipo de pago...`);
   let tipoFilled = false;
-  for (const sel of ['input[name="outOfBandPaymentType"]', 'input[placeholder*="efectivo"]', 'input[placeholder*="ejemplo"]']) {
+  for (const sel of ['input[name="outOfBandPaymentType"]', 'input[placeholder*="efectivo"]', 'input[placeholder*="ejemplo"]', 'input[placeholder*="cash"]']) {
     const input = page.locator(sel).first();
     if (await input.count() > 0) {
       await input.clear();
@@ -295,41 +347,20 @@ function amountIntegerPart(centavos) {
     tipoFilled ? 'ok' : 'campo no encontrado', 'input[name="outOfBandPaymentType"]');
 
   await page.waitForTimeout(800);
-  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_06_modal_filled_idx${CHECKOUT_IDX}.png`) });
-  console.log(`📸 stripe_balance_dash_06_modal_filled_idx${CHECKOUT_IDX}.png`);
+  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_08_modal_filled_idx${CHECKOUT_IDX}.png`) });
+  console.log(`📸 stripe_balance_dash_08_modal_filled_idx${CHECKOUT_IDX}.png`);
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // PASO 6: Clic en "Siguiente"
-  // ══════════════════════════════════════════════════════════════════════════
-  console.log(`\n▶️  Haciendo clic en "Siguiente"...`);
-  let nextClicked = false;
-  for (const sel of ['button:has-text("Siguiente")', '[role="button"]:has-text("Siguiente")', 'a:has-text("Siguiente")', 'button:has-text("Next")', '[role="button"]:has-text("Next")']) {
-    const btn = page.locator(sel).first();
-    if (await btn.count() > 0) { await btn.click(); nextClicked = true; break; }
-  }
-  if (!nextClicked) {
-    const btn = page.locator('text=Siguiente').first();
-    if (await btn.count() > 0) { await btn.click(); nextClicked = true; }
-  }
-  check('Botón "Siguiente" clickeado', nextClicked, nextClicked ? 'ok' : 'no encontrado', '"Siguiente"');
-
-  await page.waitForTimeout(2000);
-  await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_07_modal_p2_idx${CHECKOUT_IDX}.png`) });
-  console.log(`📸 stripe_balance_dash_07_modal_p2_idx${CHECKOUT_IDX}.png`);
-
-  const step2Text = await page.locator('body').innerText().catch(() => '');
-  const isStep2   = /registra un pago|paso 2/i.test(step2Text);
-  check('Modal en Paso 2: "Registra un pago fuera de Stripe"', isStep2,
-    isStep2 ? 'Paso 2 visible' : 'no visible', 'Paso 2');
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // PASO 7: Clic en "Confirmar"
-  // ══════════════════════════════════════════════════════════════════════════
-  console.log(`\n✅ Haciendo clic en "Confirmar"...`);
+  console.log(`\n✅ [Step 2] Haciendo clic en "Confirmar"...`);
+  await dismissCookieBanner(page);
   let confirmClicked = false;
-  for (const sel of ['[data-testid="external-payment-submit-button"]', 'button:has-text("Confirmar")', '[role="button"]:has-text("Confirmar")', 'a:has-text("Confirmar")', 'button:has-text("Confirm")']) {
+  for (const sel of [
+    '[data-testid="external-payment-submit-button"]',
+    'button:has-text("Confirmar")', '[role="button"]:has-text("Confirmar")',
+    'button:has-text("Confirm")',   '[role="button"]:has-text("Confirm")',
+    'a:has-text("Confirmar")',
+  ]) {
     const btn = page.locator(sel).first();
-    if (await btn.count() > 0) { await btn.click(); confirmClicked = true; break; }
+    if (await btn.count() > 0) { await btn.click({ force: true }); confirmClicked = true; break; }
   }
   check('Botón "Confirmar" clickeado', confirmClicked, confirmClicked ? 'ok' : 'no encontrado', '"Confirmar"');
 
