@@ -1,12 +1,16 @@
 /**
  * Puente Newman → Playwright — Stripe Balance Recurring
- * Lee el environment exportado por Newman, extrae todos los stripe_invoice_id_*
- * y lanza stripe_balance_dashboard_validate.js por cada uno para aplicar
- * el pago externo (Transferencia) y verificar que queda Exitoso/Pagada.
+ * Lee el environment exportado por Newman, extrae stripe_email_* y stripe_amount_*
+ * y lanza stripe_balance_dashboard_validate.js por cada escenario para añadir
+ * fondos al saldo del customer vía el dashboard de Stripe (/test/customers).
  *
  * Uso:
  *   node run_stripe_balance_validate.js ./environment_export.json [idx]
- *   Si no se pasa idx, ejecuta todos los invoices guardados.
+ *   Si no se pasa idx, ejecuta todos los escenarios guardados.
+ *
+ * Requiere en el environment exportado por Newman:
+ *   stripe_email_N   — email del customer (guardado por el test script de Postman)
+ *   stripe_amount_N  — monto en centavos (guardado por el test script de Postman)
  */
 
 const { execSync } = require('child_process');
@@ -30,24 +34,27 @@ function getVar(name) {
   return found ? (found.value || '') : '';
 }
 
-// Recopilar todos los invoice IDs guardados por el test script de Postman
+// Recopilar escenarios exitosos: anchor = stripe_invoice_id_* (solo se guarda en positivos)
+// También se lee stripe_amount_* para pasar el monto al dashboard de Stripe.
 const invoiceEntries = [];
 
 if (SCENARIO_IDX !== undefined) {
   const invoiceId = getVar(`stripe_invoice_id_${SCENARIO_IDX}`);
   const email     = getVar(`stripe_email_${SCENARIO_IDX}`);
-  if (invoiceId) invoiceEntries.push({ idx: SCENARIO_IDX, invoiceId, email });
+  const amount    = getVar(`stripe_amount_${SCENARIO_IDX}`);
+  if (invoiceId) invoiceEntries.push({ idx: SCENARIO_IDX, email, amount });
 } else {
   for (let i = 0; i < 20; i++) {
     const invoiceId = getVar(`stripe_invoice_id_${i}`);
     const email     = getVar(`stripe_email_${i}`);
-    if (invoiceId) invoiceEntries.push({ idx: String(i), invoiceId, email });
+    const amount    = getVar(`stripe_amount_${i}`);
+    if (invoiceId) invoiceEntries.push({ idx: String(i), email, amount });
   }
 }
 
 if (invoiceEntries.length === 0) {
   console.error('❌ No se encontraron stripe_invoice_id_* en el environment exportado.');
-  console.error('   Verifica que el test script de Postman guarde body.invoice_id en pm.environment.');
+  console.error('   Verifica que el test script de Postman guarde invoice_id, email y amount en pm.environment.');
   process.exit(1);
 }
 
@@ -66,11 +73,11 @@ if (!fs.existsSync(SESSION_PATH)) {
 
 let globalFailed = 0;
 
-for (const { idx, invoiceId, email } of invoiceEntries) {
+for (const { idx, email, amount } of invoiceEntries) {
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`▶ Escenario idx=${idx}`);
-  console.log(`  Invoice ID : ${invoiceId}`);
-  console.log(`  Email      : ${email || '(no guardado)'}`);
+  console.log(`  Email      : ${email  || '(no guardado)'}`);
+  console.log(`  Amount     : ${amount ? `${amount} centavos` : '(no guardado)'}`);
 
   try {
     execSync(`node "${dashboardScript}"`, {
@@ -78,7 +85,7 @@ for (const { idx, invoiceId, email } of invoiceEntries) {
         ...process.env,
         CHECKOUT_IDX:      idx,
         CUSTOMER_EMAIL:    email,
-        INVOICE_ID:        invoiceId,
+        PAYMENT_AMOUNT:    amount,
         STRIPE_ACCOUNT_ID: stripeAccountId,
         SCRIPTS_DIR:       scriptsDir,
         CI:                'true',
