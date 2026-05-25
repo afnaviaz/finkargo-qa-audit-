@@ -108,9 +108,10 @@ for (const { idx, url } of checkoutUrls) {
       execSync(`node "${dashboardScript}"`, {
         env: {
           ...process.env,
-          CHECKOUT_IDX:      idx,
-          CUSTOMER_EMAIL:    customerEmail,
-          STRIPE_ACCOUNT_ID: stripeAccountId,
+          CHECKOUT_IDX:        idx,
+          CUSTOMER_EMAIL:      customerEmail,
+          STRIPE_ACCOUNT_ID:   stripeAccountId,
+          STRIPE_PAYMENT_TYPE: process.env.STRIPE_PAYMENT_TYPE || 'one_time',
         },
         stdio: 'inherit',
       });

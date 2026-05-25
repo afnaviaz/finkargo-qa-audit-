@@ -283,6 +283,7 @@ elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
 elif [[ "$SCENARIO" == "rejected" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
 elif [[ "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" ]]; then
+    [[ "$SCENARIO" == "stripe_card_recurring" ]] && export STRIPE_PAYMENT_TYPE="recurring" || export STRIPE_PAYMENT_TYPE="one_time"
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_card" || true
 else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true

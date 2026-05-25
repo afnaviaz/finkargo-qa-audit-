@@ -1,20 +1,22 @@
 /**
- * Stripe Dashboard Validator — Card Payments
+ * Stripe Dashboard Validator — Card Payments (one_time y recurring)
  * Navega al dashboard de Stripe con la sesión guardada y verifica
- * que el pago más reciente del email dado aparece como "Exitoso".
+ * que el pago más reciente del email dado aparece como exitoso.
  *
  * Uso:
  *   node stripe_card_dashboard_validate.js
- *   env vars: STRIPE_ACCOUNT_ID, CUSTOMER_EMAIL, CHECKOUT_IDX, SCRIPTS_DIR
+ *   env vars: STRIPE_ACCOUNT_ID, CUSTOMER_EMAIL, CHECKOUT_IDX, SCRIPTS_DIR,
+ *             STRIPE_PAYMENT_TYPE (one_time | recurring)
  */
 
 const { chromium } = require('playwright');
 const path = require('path');
 const fs   = require('fs');
 
-const STRIPE_ACCOUNT_ID = process.env.STRIPE_ACCOUNT_ID || '';
-const CUSTOMER_EMAIL    = process.env.CUSTOMER_EMAIL    || '';
-const CHECKOUT_IDX      = process.env.CHECKOUT_IDX      || '0';
+const STRIPE_ACCOUNT_ID = process.env.STRIPE_ACCOUNT_ID  || '';
+const CUSTOMER_EMAIL    = process.env.CUSTOMER_EMAIL     || '';
+const CHECKOUT_IDX      = process.env.CHECKOUT_IDX       || '0';
+const PAYMENT_TYPE      = process.env.STRIPE_PAYMENT_TYPE || 'one_time';
 const SESSION_PATH      = path.join(__dirname, '.stripe-session.json');
 const isCI              = process.env.CI === 'true';
 const outputDir         = process.env.SCRIPTS_DIR || '.';
@@ -47,6 +49,7 @@ function check(name, condition, actual = '', expected = '') {
   console.log(`\n🔍 Validando pago Card en Stripe Dashboard`);
   console.log(`   Email    : ${CUSTOMER_EMAIL}`);
   console.log(`   Idx      : ${CHECKOUT_IDX}`);
+  console.log(`   Tipo     : ${PAYMENT_TYPE}`);
   console.log(`   Ambiente : ${isCI ? 'CI/headless' : 'local/headed'}\n`);
 
   const browser = await chromium.launch({
@@ -110,49 +113,68 @@ function check(name, condition, actual = '', expected = '') {
   // ── Leer contenido de la lista ────────────────────────────────────────────
   const pageText = await page.locator('body').innerText().catch(() => '');
 
-  // Extraer PI IDs visibles en la página
-  const piMatches = pageText.match(/pi_[A-Za-z0-9]+/g) || [];
-  const uniquePis = [...new Set(piMatches)];
-  console.log(`   PIs encontrados: ${uniquePis.length > 0 ? uniquePis.join(', ') : 'ninguno'}`);
-
-  // Validaciones
   const hasExitoso = pageText.toLowerCase().includes('exitoso')
                   || pageText.toLowerCase().includes('succeeded')
                   || pageText.toLowerCase().includes('successful');
-  const hasCard    = pageText.includes('4242') || pageText.toLowerCase().includes('card');
-  const hasPi      = uniquePis.length > 0;
 
   check('Dashboard accesible (no login)', !page.url().includes('/login'), page.url(), 'dashboard');
-  check('Pagos Card visibles (....4242)', hasCard,    hasCard    ? 'card/4242 encontrado'   : 'no encontrado', 'card/4242');
-  check('Al menos 1 pago Exitoso',        hasExitoso, hasExitoso ? 'Exitoso encontrado'     : 'no encontrado', 'exitoso');
-  check('Al menos 1 PI presente (pi_*)',  hasPi,      uniquePis.length > 0 ? uniquePis[0] : 'ninguno', 'pi_...');
+  check('Al menos 1 pago Exitoso', hasExitoso, hasExitoso ? 'Exitoso encontrado' : 'no encontrado', 'exitoso');
 
-  // Intentar entrar al pago más reciente
   let piIdConfirmed = '';
-  if (uniquePis.length > 0) {
-    const firstPi = uniquePis[0];
-    const piUrl   = `https://dashboard.stripe.com${accountSuffix}/test/payments/${firstPi}`;
-    console.log(`\n🔗 Verificando PI: ${firstPi}`);
-    await page.goto(piUrl, { waitUntil: 'domcontentloaded' });
-    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
-    await page.waitForTimeout(3000);
-    await page.screenshot({ path: path.join(outputDir, `stripe_card_dash_03_pi_idx${CHECKOUT_IDX}.png`) });
-    console.log(`📸 stripe_card_dash_03_pi_idx${CHECKOUT_IDX}.png\n`);
 
-    const piPageText = await page.locator('body').innerText().catch(() => '');
-    const piExitoso  = piPageText.toLowerCase().includes('exitoso') || piPageText.toLowerCase().includes('succeeded');
-    const piEsMxn    = piPageText.toUpperCase().includes('MXN');
+  if (PAYMENT_TYPE === 'recurring') {
+    // ── Flujo RECURRING: validar Subscription creation + email + MXN ─────────
+    const hasSubscription = pageText.toLowerCase().includes('subscription creation')
+                         || pageText.toLowerCase().includes('subscription');
+    const hasEmail = pageText.includes(CUSTOMER_EMAIL);
+    const hasMxn   = pageText.toUpperCase().includes('MXN');
 
-    check(`PI ${firstPi} — Estado Exitoso`, piExitoso, piExitoso ? 'exitoso' : 'no encontrado', 'exitoso');
-    check(`PI ${firstPi} — Moneda MXN`,    piEsMxn,   piEsMxn   ? 'MXN'     : 'no encontrado', 'MXN');
-    piIdConfirmed = firstPi;
+    const subMatches = pageText.match(/sub_[A-Za-z0-9]+/g) || [];
+    const uniqueSubs = [...new Set(subMatches)];
+    console.log(`   Subscriptions encontradas: ${uniqueSubs.length > 0 ? uniqueSubs.join(', ') : 'ninguna'}`);
+
+    check('Subscription creation visible', hasSubscription,
+      hasSubscription ? 'subscription encontrado' : 'no encontrado', 'subscription creation');
+    check('Email cliente presente en dashboard', hasEmail,
+      hasEmail ? CUSTOMER_EMAIL : 'email no encontrado', CUSTOMER_EMAIL);
+    check('Moneda MXN presente', hasMxn, hasMxn ? 'MXN' : 'no encontrado', 'MXN');
+
+  } else {
+    // ── Flujo ONE_TIME: validar pi_* + card 4242 + MXN ───────────────────────
+    const hasCard   = pageText.includes('4242') || pageText.toLowerCase().includes('card');
+    const piMatches = pageText.match(/pi_[A-Za-z0-9]+/g) || [];
+    const uniquePis = [...new Set(piMatches)];
+    console.log(`   PIs encontrados: ${uniquePis.length > 0 ? uniquePis.join(', ') : 'ninguno'}`);
+
+    check('Pagos Card visibles (....4242)', hasCard, hasCard ? 'card/4242 encontrado' : 'no encontrado', 'card/4242');
+    check('Al menos 1 PI presente (pi_*)',  uniquePis.length > 0,
+      uniquePis.length > 0 ? uniquePis[0] : 'ninguno', 'pi_...');
+
+    if (uniquePis.length > 0) {
+      const firstPi = uniquePis[0];
+      const piUrl   = `https://dashboard.stripe.com${accountSuffix}/test/payments/${firstPi}`;
+      console.log(`\n🔗 Verificando PI: ${firstPi}`);
+      await page.goto(piUrl, { waitUntil: 'domcontentloaded' });
+      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: path.join(outputDir, `stripe_card_dash_03_pi_idx${CHECKOUT_IDX}.png`) });
+      console.log(`📸 stripe_card_dash_03_pi_idx${CHECKOUT_IDX}.png\n`);
+
+      const piPageText = await page.locator('body').innerText().catch(() => '');
+      const piExitoso  = piPageText.toLowerCase().includes('exitoso') || piPageText.toLowerCase().includes('succeeded');
+      const piEsMxn    = piPageText.toUpperCase().includes('MXN');
+
+      check(`PI ${firstPi} — Estado Exitoso`, piExitoso, piExitoso ? 'exitoso' : 'no encontrado', 'exitoso');
+      check(`PI ${firstPi} — Moneda MXN`,    piEsMxn,   piEsMxn   ? 'MXN'     : 'no encontrado', 'MXN');
+      piIdConfirmed = firstPi;
+    }
   }
 
   // ── Reporte JSON ───────────────────────────────────────────────────────────
   const report = {
     checkout_idx:     CHECKOUT_IDX,
+    payment_type:     PAYMENT_TYPE,
     customer_email:   CUSTOMER_EMAIL,
-    pi_found:         uniquePis,
     pi_confirmed:     piIdConfirmed,
     timestamp:        new Date().toISOString(),
     passed, failed, results,
