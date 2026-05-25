@@ -37,8 +37,10 @@ if (SCENARIO_IDX !== undefined) {
   const url = getVar(`stripe_checkout_url_${SCENARIO_IDX}`) || getVar('stripe_checkout_url');
   if (url) checkoutUrls.push({ idx: SCENARIO_IDX, url });
 } else {
-  // Modo full: buscar stripe_checkout_url_0, _1, _2, ...
-  for (let i = 0; i < 20; i++) {
+  // Modo full: buscar stripe_checkout_url_0 … _12 (EP/VL/NEG).
+  // Los índices 13-20 son reservados para DEC (declined) y los maneja
+  // run_stripe_declined_scenarios.js — no ejecutar como happy path.
+  for (let i = 0; i <= 12; i++) {
     const url = getVar(`stripe_checkout_url_${i}`);
     if (url) checkoutUrls.push({ idx: String(i), url });
   }

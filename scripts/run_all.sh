@@ -112,6 +112,9 @@ elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Customer balance recurring" ]]; then
     SCENARIO="stripe_balance_recurring"
     log "Escenario: STRIPE BALANCE RECURRING — Playwright aplicará pago externo en dashboard"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Customer balance one time" ]]; then
+    SCENARIO="stripe_balance_one_time"
+    log "Escenario: STRIPE BALANCE ONE TIME — pago único con customer_balance"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -201,15 +204,34 @@ elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happ
     log "Data-driven (WALLET): $WALLET_DATA_FILE"
 fi
 
-# Inyectar base URL de Stripe si el environment no la tiene
-if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" || "$SCENARIO" == "stripe_balance_recurring" ]]; then
+# Inyectar URLs y parámetros de cuerpo para flujos Stripe
+if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" || "$SCENARIO" == "stripe_balance_recurring" || "$SCENARIO" == "stripe_balance_one_time" ]]; then
     if [[ "$AMBIENTE" == "Staging" ]]; then
         STRIPE_BASE_URL="https://api-staging.finkargo.com.mx/integrations"
+        API_EPAYMENTS2="https://api-epayments-staging.back.finkargo.com.mx"
     else
         STRIPE_BASE_URL="https://api-testing.finkargo.com.mx/integrations"
+        API_EPAYMENTS2="https://api-epayments-testing.back.finkargo.com.mx"
     fi
     NEWMAN_BASE_ARGS+=("--env-var" "services-integrations=${STRIPE_BASE_URL}")
-    log "Stripe base URL: ${STRIPE_BASE_URL}"
+    NEWMAN_BASE_ARGS+=("--env-var" "api-epayments2=${API_EPAYMENTS2}")
+    log "Stripe base URL  : ${STRIPE_BASE_URL}"
+    log "api-epayments2   : ${API_EPAYMENTS2}"
+
+    # type y payment_method según flujo — usados en el body de {{api-epayments2}}/v1/mx/create-payment
+    if [[ "$SCENARIO" == "stripe_card" ]]; then
+        NEWMAN_BASE_ARGS+=("--env-var" "stripe_type=one_time" "--env-var" "stripe_payment_method=card")
+    elif [[ "$SCENARIO" == "stripe_card_recurring" ]]; then
+        NEWMAN_BASE_ARGS+=("--env-var" "stripe_type=recurring" "--env-var" "stripe_payment_method=card")
+    elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
+        NEWMAN_BASE_ARGS+=("--env-var" "stripe_type=one_time" "--env-var" "stripe_payment_method=oxxo")
+    elif [[ "$SCENARIO" == "stripe_balance_recurring" ]]; then
+        NEWMAN_BASE_ARGS+=("--env-var" "stripe_type=recurring" "--env-var" "stripe_payment_method=customer_balance")
+    elif [[ "$SCENARIO" == "stripe_balance_one_time" ]]; then
+        NEWMAN_BASE_ARGS+=("--env-var" "stripe_type=one_time" "--env-var" "stripe_payment_method=customer_balance")
+    fi
+    log "stripe_type            : $(echo "${NEWMAN_BASE_ARGS[@]}" | grep -o 'stripe_type=[^ ]*' | cut -d= -f2)"
+    log "stripe_payment_method  : $(echo "${NEWMAN_BASE_ARGS[@]}" | grep -o 'stripe_payment_method=[^ ]*' | cut -d= -f2)"
 fi
 
 # Iteraciones para escenarios Stripe (reemplaza pm.setNextRequest)
@@ -217,14 +239,17 @@ if [[ "$SCENARIO" == "stripe_oxxo" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe OXXO: 11 iteraciones"
 elif [[ "$SCENARIO" == "stripe_card" ]]; then
-    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
-    log "Stripe Card one time: 11 iteraciones"
+    NEWMAN_BASE_ARGS+=("--iteration-count" "21")
+    log "Stripe Card one time: 21 iteraciones (13 EP/VL/NEG + 8 DEC declined)"
 elif [[ "$SCENARIO" == "stripe_card_recurring" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe Card recurring: 11 iteraciones"
 elif [[ "$SCENARIO" == "stripe_balance_recurring" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe Balance recurring: 11 iteraciones"
+elif [[ "$SCENARIO" == "stripe_balance_one_time" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    log "Stripe Balance one time: 11 iteraciones"
 fi
 
 # ----------------------------------------------------------
@@ -291,6 +316,13 @@ elif [[ "$SCENARIO" == "rejected" ]]; then
 elif [[ "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" ]]; then
     [[ "$SCENARIO" == "stripe_card_recurring" ]] && export STRIPE_PAYMENT_TYPE="recurring" || export STRIPE_PAYMENT_TYPE="one_time"
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_card" || true
+    # ── Escenarios de tarjeta rechazada (DEC-01 a DEC-08) — solo one_time ─────
+    if [[ "$SCENARIO" == "stripe_card" ]]; then
+        log "🚫 Ejecutando escenarios declined card (DEC-01 a DEC-08)..."
+        NEWMAN_ENV_FILE="$ENV_EXPORT" SCRIPTS_DIR="$SCRIPTS_DIR" CI="true" \
+            node "$SCRIPTS_DIR/playwright/run_stripe_declined_scenarios.js" \
+            || log_warn "Declined card scenarios terminaron con errores (no bloquea el pipeline)"
+    fi
 elif [[ "$SCENARIO" == "stripe_balance_recurring" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_balance" || true
 else
