@@ -160,7 +160,11 @@ async function dismissCookieBanner(page) {
     if (await input.count() > 0) {
       await input.click();
       await input.fill(CUSTOMER_EMAIL);
-      await input.press('Enter');
+      // Esperar que el debounce de búsqueda dispare (~300ms) antes del AJAX
+      await page.waitForTimeout(800);
+      // Ahora sí esperar networkidle para que el filtrado AJAX termine
+      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(1000);
       searchFilled = true;
       console.log(`   Campo búsqueda: ${sel}`);
       break;
@@ -257,6 +261,9 @@ async function dismissCookieBanner(page) {
     const btn = page.locator(sel).first();
     if (await btn.count() > 0) {
       await btn.scrollIntoViewIfNeeded();
+      await dismissCookieBanner(page);
+      await btn.hover();
+      await page.waitForTimeout(400);
       await btn.click();
       addBtnClicked = true;
       console.log(`   ✅ Botón "+" encontrado: ${sel}`);
@@ -273,66 +280,95 @@ async function dismissCookieBanner(page) {
     process.exit(1);
   }
 
-  // Esperar a que el texto del menú aparezca en el DOM (waitForFunction es más fiable que text= selector)
-  await page.waitForFunction(
+  // Esperar a que el texto del menú aparezca (EN: "Fund cash balance" / ES: "Añadir fondos")
+  const menuOpened = await page.waitForFunction(
     () => {
       const t = document.body.innerText.toLowerCase();
-      return t.includes('add funds to available balance') || t.includes('añadir fondos al saldo disponible');
+      return t.includes('fund cash balance') || t.includes('añadir fondos al saldo');
     },
-    { timeout: 8000 }
-  ).catch(() => {
-    console.log('   ⚠️  waitForFunction: texto del menú no apareció en 8s');
-  });
+    { timeout: 5000 }
+  ).then(() => true).catch(() => false);
+
+  // Fallback teclado: si el dropdown no abrió, intentar focus + Space
+  if (!menuOpened) {
+    console.log('   ⚠️  Dropdown no abrió con click — intentando teclado (focus + Space)...');
+    for (const sel of [
+      '[aria-label="Añade un método de pago"]',
+      '[aria-label="Add a payment method"]',
+      '[aria-label*="payment method"]',
+    ]) {
+      const btn = page.locator(sel).first();
+      if (await btn.count() > 0) {
+        await btn.focus();
+        await page.waitForTimeout(300);
+        await page.keyboard.press('Space');
+        break;
+      }
+    }
+    await page.waitForFunction(
+      () => {
+        const t = document.body.innerText.toLowerCase();
+        return t.includes('fund cash balance') || t.includes('añadir fondos al saldo');
+      },
+      { timeout: 5000 }
+    ).catch(() => console.log('   ⚠️  Dropdown no abrió con teclado tampoco'));
+  }
+
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(outputDir, `stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`) });
   console.log(`📸 stripe_balance_dash_05_menu_idx${CHECKOUT_IDX}.png`);
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PASO 5: Seleccionar "Añadir fondos al saldo disponible"
+  // PASO 5: Seleccionar "Fund cash balance (test only)"
   // ══════════════════════════════════════════════════════════════════════════
-  console.log(`\n📋 Seleccionando "Add funds to available balance"...`);
+  console.log(`\n📋 Seleccionando "Fund cash balance (test only)"...`);
   let optionClicked = false;
 
-  // Intento 1: buscar dentro del menú por role
-  const menuContainer = page.locator('[role="menu"], [role="listbox"]').first();
-  if (await menuContainer.count() > 0) {
-    const menuItem = menuContainer.locator('a, li, [role="menuitem"], button')
-      .filter({ hasText: /add funds to available balance|añadir fondos al saldo disponible/i })
-      .first();
-    if (await menuItem.count() > 0) {
-      await menuItem.click({ force: true });
+  // Intento 1: getByText con el texto exacto del menú
+  for (const text of ['Fund cash balance', 'Añadir fondos al saldo disponible', 'Añadir fondos al saldo']) {
+    const el = page.getByText(text, { exact: false }).first();
+    if (await el.count() > 0) {
+      await el.click();
       optionClicked = true;
-      console.log(`   ✅ Opción encontrada dentro de [role="menu"]`);
+      console.log(`   ✅ Opción encontrada via getByText: "${text}"`);
+      break;
     }
   }
 
-  // Intento 2: getByText en toda la página
+  // Intento 2: locator con has-text
   if (!optionClicked) {
-    for (const text of ['Add funds to available balance', 'Añadir fondos al saldo disponible']) {
-      const el = page.getByText(text, { exact: false }).first();
+    for (const sel of [
+      'a:has-text("Fund cash balance")',
+      'li:has-text("Fund cash balance")',
+      'button:has-text("Fund cash balance")',
+      '[role="menuitem"]:has-text("Fund cash balance")',
+      'a:has-text("Añadir fondos al saldo")',
+      'li:has-text("Añadir fondos al saldo")',
+    ]) {
+      const el = page.locator(sel).first();
       if (await el.count() > 0) {
-        await el.click({ force: true });
+        await el.click();
         optionClicked = true;
-        console.log(`   ✅ Opción encontrada via getByText: "${text}"`);
+        console.log(`   ✅ Opción encontrada: ${sel}`);
         break;
       }
     }
   }
 
-  // Intento 3: cualquier elemento visible que contenga "funds" / "fondos"
+  // Intento 3: fallback amplio — cualquier enlace/item con "fund" o "fondos"
   if (!optionClicked) {
     const fallback = page.locator('a, li, button, span')
-      .filter({ hasText: /add funds|añadir fondos/i })
+      .filter({ hasText: /fund cash|añadir fondos/i })
       .first();
     if (await fallback.count() > 0) {
-      await fallback.click({ force: true });
+      await fallback.click();
       optionClicked = true;
-      console.log(`   ✅ Opción encontrada via fallback "funds/fondos"`);
+      console.log(`   ✅ Opción encontrada via fallback`);
     }
   }
 
-  check('"Add funds to available balance" seleccionado', optionClicked,
-    optionClicked ? 'ok' : 'no encontrado', 'Add funds to available balance');
+  check('"Fund cash balance" seleccionado', optionClicked,
+    optionClicked ? 'ok' : 'no encontrado', 'Fund cash balance (test only)');
 
   if (!optionClicked) {
     saveReport(customerUrl);
