@@ -103,6 +103,9 @@ elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Card one time" ]]; then
     SCENARIO="stripe_card"
     log "Escenario: STRIPE CARD ONE TIME — Playwright llenará el checkout"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Card recurring" ]]; then
+    SCENARIO="stripe_card_recurring"
+    log "Escenario: STRIPE CARD RECURRING — Playwright llenará el checkout de suscripción"
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time" ]]; then
     SCENARIO="stripe_oxxo"
     log "Escenario: STRIPE OXXO ONE TIME"
@@ -196,7 +199,7 @@ elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happ
 fi
 
 # Inyectar base URL de Stripe si el environment no la tiene
-if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" ]]; then
+if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" ]]; then
     if [[ "$AMBIENTE" == "Staging" ]]; then
         STRIPE_BASE_URL="https://api-staging.finkargo.com.mx/integrations"
     else
@@ -212,7 +215,10 @@ if [[ "$SCENARIO" == "stripe_oxxo" ]]; then
     log "Stripe OXXO: 11 iteraciones"
 elif [[ "$SCENARIO" == "stripe_card" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
-    log "Stripe Card: 11 iteraciones"
+    log "Stripe Card one time: 11 iteraciones"
+elif [[ "$SCENARIO" == "stripe_card_recurring" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    log "Stripe Card recurring: 11 iteraciones"
 fi
 
 # ----------------------------------------------------------
@@ -276,7 +282,7 @@ elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_oxxo" || true
 elif [[ "$SCENARIO" == "rejected" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
-elif [[ "$SCENARIO" == "stripe_card" ]]; then
+elif [[ "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_card" || true
 else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true

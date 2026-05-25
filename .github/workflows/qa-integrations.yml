@@ -23,6 +23,7 @@ on:
           "COBRE / COBRE INTEGRATIONS",
           "COBRE / COBRE INTEGRATIONS / Happy path cobre",
           "STRIPE / Create Payment Card one time",
+          "STRIPE / Create Payment Card recurring",
           "STRIPE / Create Payment Oxxo one time"
         ]
       pais:

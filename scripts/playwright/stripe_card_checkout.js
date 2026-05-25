@@ -297,10 +297,16 @@ async function fillStripeField(locator, value) {
       throw new Error('FORM_UNAVAILABLE');
     }
 
-    // ── 4. Clic en Pay ────────────────────────────────────────────────────
+    // ── 4. Clic en Pay / Suscribirse ─────────────────────────────────────────
     console.log('🚀 Enviando pago...\n');
     const urlAntesDePago = page.url();
-    const payButton = page.locator('button:has-text("Pay"), button[type="submit"]').first();
+    // Recurring usa "Suscribirse" / "Subscribe", one_time usa "Pay"
+    const payButton = page.locator([
+      'button:has-text("Suscribirse")',
+      'button:has-text("Subscribe")',
+      'button:has-text("Pay")',
+      'button[type="submit"]',
+    ].join(', ')).first();
     await payButton.click();
     // Esperar hasta 30s a que la URL cambie (redirección a success_url del backend)
     await page.waitForURL(url => url !== urlAntesDePago, { timeout: 30000 }).catch(() => {});
