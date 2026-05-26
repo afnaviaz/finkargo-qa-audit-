@@ -28,9 +28,9 @@ permissions:
   actions: read
 
 jobs:
-  run-integrations-pipeline:
-    name: "Integrations: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
-    runs-on: [self-hosted, TROCHACOL]
+  run-flujos-criticos-pipeline:
+    name: "Flujos Críticos: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
+    runs-on: [self-hosted, macOS, X64]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
