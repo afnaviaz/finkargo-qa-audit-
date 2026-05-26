@@ -6,25 +6,18 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "PAGA / Onboarding Colombia MD "
+        default: "PAGA / Onboarding Colombia MD / 1. Create User"
         type: choice
         options:
           - "PAGA / Onboarding Colombia MD / 1. Create User"
           - "PAGA / Onboarding Colombia MD / 2. Onboarding"
           - "PAGA / Onboarding Colombia MD / 3. Create creditrequest"
           - "PAGA / Onboarding Colombia MD / 4. DecisionCommittee"
-      folder_operations:
-        description: "Operations"
-        required: true
-        default: "Operations"
-        type: choice
-        options:
           - "PAGA / Financing Orchestrator API / 1. Create Operation"
           - "PAGA / Financing Orchestrator API / 2. Update Operation"
           - "PAGA / Financing Orchestrator API / 3. Declined"
           - "PAGA / Financing Orchestrator API / 4. Funnel Client"
           - "PAGA / Financing Orchestrator API / 5. Funnel Options"
-         
 
 
       pais:
@@ -89,16 +82,6 @@ jobs:
         run: |
           npm install -g newman newman-reporter-htmlextra
 
-      - name: Install Playwright
-        shell: bash
-        run: |
-          npm install playwright
-
-      - name: Install Playwright browsers
-        shell: bash
-        run: |
-          npx playwright install chromium
-
       - name: Execute QA Integrations
         shell: bash
         env:
@@ -162,5 +145,4 @@ jobs:
             scripts/*.json
             scripts/*.txt
             scripts/*.png
-            scripts/playwright-videos/
           retention-days: 7
