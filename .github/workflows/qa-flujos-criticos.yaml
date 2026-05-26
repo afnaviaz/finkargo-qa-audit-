@@ -1,4 +1,4 @@
-name: QA Integrations - Flows APP
+name: QA-Flujos-Criticos
 
 on:
   workflow_dispatch:
