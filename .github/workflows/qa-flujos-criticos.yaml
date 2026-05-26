@@ -6,12 +6,12 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "PAGA / Onboarding Colombia MD / 1.Create User"
+        default: "PAGA / Onboarding Colombia MD "
         type: choice
         options:
-          - "PAGA / Onboarding Colombia MD / 1. Create User",
-          - "PAGA / Onboarding Colombia MD / 2. Onboarding",
-          - "PAGA / Onboarding Colombia MD / 3. Create creditrequtest",
+          - "PAGA / Onboarding Colombia MD / 1. Create User"
+          - "PAGA / Onboarding Colombia MD / 2. Onboarding"
+          - "PAGA / Onboarding Colombia MD / 3. Create creditrequest"
           - "PAGA / Onboarding Colombia MD / 4. DecisionCommittee"
          
 
