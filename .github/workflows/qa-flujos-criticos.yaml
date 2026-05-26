@@ -6,26 +6,14 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "PAGA / Onboarding Colombia MD "
+        default: "PAGA / Onboarding Colombia MD / 1. Create User"
         type: choice
         options:
           - "PAGA / Onboarding Colombia MD / 1. Create User"
           - "PAGA / Onboarding Colombia MD / 2. Onboarding"
           - "PAGA / Onboarding Colombia MD / 3. Create creditrequest"
           - "PAGA / Onboarding Colombia MD / 4. DecisionCommittee"
-      folder_operations:
-        description: "Operations"
-        required: true
-        default: "Operations"
-        type: choice
-        options:
-          - "PAGA / Financing Orchestrator API / 1. Create Operation"
-          - "PAGA / Financing Orchestrator API / 2. Update Operation"
-          - "PAGA / Financing Orchestrator API / 3. Declined"
-          - "PAGA / Financing Orchestrator API / 4. Funnel Client"
-          - "PAGA / Financing Orchestrator API / 5. Funnel Options"
-         
-
+          - "PAGA / Financing Orchestrator API / Operations"
 
       pais:
         description: "País"
@@ -139,7 +127,7 @@ jobs:
         run: |
           chmod +x ./scripts/run_all.sh
           ./scripts/run_all.sh \
-            "Flows APP" \
+            "qa-flujos-criticos" \
             "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"

@@ -101,6 +101,12 @@ elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
+if [[ "$NEWMAN_FOLDER" == "Operations" ]]; then
+    PROYECTO="QA Audit - Operations"
+    PROVIDER_PREFIX="$PAIS_INPUT"
+    log "Modo Operations → proyecto: $PROYECTO | país: $PAIS_INPUT"
+fi
+
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
 LOG_FILE="$SCRIPTS_DIR/log_${PROYECTO}.txt"
