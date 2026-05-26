@@ -34,10 +34,7 @@ permissions:
 jobs:
   run-audit-pipeline:
     name: "Audit: ${{ github.event.inputs.proyecto }} - ${{ github.event.inputs.pais }}"
-    runs-on: self-hosted
-    defaults:
-      run:
-        shell: 'C:\Program Files\Git\bin\bash.exe -e -o pipefail {0}'
+    runs-on: [self-hosted, macOS]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -45,6 +42,7 @@ jobs:
           fetch-depth: 1
 
       - name: Execute QA Audit
+        shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
