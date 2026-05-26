@@ -115,6 +115,12 @@ elif [[ "$NEWMAN_FOLDER" == "Create Payment Customer balance recurring" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Customer balance one time" ]]; then
     SCENARIO="stripe_balance_one_time"
     log "Escenario: STRIPE BALANCE ONE TIME — pago único con customer_balance"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Card one time epayments" ]]; then
+    SCENARIO="stripe_card_epayments"
+    log "Escenario: STRIPE CARD ONE TIME EPAYMENTS — Playwright llenará el checkout"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Card recurring epayments" ]]; then
+    SCENARIO="stripe_card_recurring_epayments"
+    log "Escenario: STRIPE CARD RECURRING EPAYMENTS — Playwright llenará el checkout de suscripción PG005"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -205,7 +211,7 @@ elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happ
 fi
 
 # Inyectar URLs y parámetros de cuerpo para flujos Stripe
-if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" || "$SCENARIO" == "stripe_balance_recurring" || "$SCENARIO" == "stripe_balance_one_time" ]]; then
+if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" || "$SCENARIO" == "stripe_balance_recurring" || "$SCENARIO" == "stripe_balance_one_time" || "$SCENARIO" == "stripe_card_epayments" || "$SCENARIO" == "stripe_card_recurring_epayments" ]]; then
     if [[ "$AMBIENTE" == "Staging" ]]; then
         STRIPE_BASE_URL="https://api-staging.finkargo.com.mx/integrations"
         API_EPAYMENTS2="https://api-epayments-staging.back.finkargo.com.mx"
@@ -250,6 +256,12 @@ elif [[ "$SCENARIO" == "stripe_balance_recurring" ]]; then
 elif [[ "$SCENARIO" == "stripe_balance_one_time" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe Balance one time: 11 iteraciones"
+elif [[ "$SCENARIO" == "stripe_card_epayments" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "21")
+    log "Stripe Card one time epayments: 21 iteraciones (13 EP/VL/NEG + 8 DEC declined)"
+elif [[ "$SCENARIO" == "stripe_card_recurring_epayments" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    log "Stripe Card recurring epayments: 11 iteraciones"
 fi
 
 # ----------------------------------------------------------
@@ -329,6 +341,15 @@ elif [[ "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" ]
             node "$SCRIPTS_DIR/playwright/run_stripe_declined_scenarios.js" \
             || log_warn "Declined card scenarios terminaron con errores (no bloquea el pipeline)"
     fi
+elif [[ "$SCENARIO" == "stripe_card_epayments" ]]; then
+    export STRIPE_PAYMENT_TYPE="one_time"
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_card" || true
+    log "Ejecutando escenarios declined card epayments (DEC-01 a DEC-08)..."
+    NEWMAN_ENV_FILE="$ENV_EXPORT" SCRIPTS_DIR="$SCRIPTS_DIR" CI="true" \
+        node "$SCRIPTS_DIR/playwright/run_stripe_declined_scenarios.js" \
+        || log_warn "Declined card scenarios epayments terminaron con errores (no bloquea el pipeline)"
+elif [[ "$SCENARIO" == "stripe_card_recurring_epayments" ]]; then
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_card_recurring" || true
 elif [[ "$SCENARIO" == "stripe_balance_recurring" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_balance" || true
 elif [[ "$SCENARIO" == "stripe_balance_one_time" ]]; then

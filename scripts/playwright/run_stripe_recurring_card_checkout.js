@@ -1,11 +1,12 @@
 /**
- * Puente Newman → Playwright — Stripe Card Checkout
+ * Puente Newman → Playwright — Stripe Card Recurring Checkout
  * Lee el environment exportado por Newman, extrae todos los stripe_checkout_url_*
+ * (guardados por el test script de Postman desde body.payment_link)
  * y lanza stripe_card_checkout.js por cada uno.
  *
  * Uso:
- *   node run_stripe_card_checkout.js ./environment_export.json [idx]
- *   Si no se pasa idx, ejecuta todos los URLs guardados.
+ *   node run_stripe_recurring_card_checkout.js ./environment_export.json [idx]
+ *   Si no se pasa idx, ejecuta todos los URLs guardados (escenarios EP/VL positivos).
  */
 
 const { execSync } = require('child_process');
@@ -13,11 +14,11 @@ const path = require('path');
 const fs   = require('fs');
 
 const ENV_FILE     = process.env.NEWMAN_ENV_FILE || process.argv[2];
-const SCENARIO_IDX = process.argv[3];           // opcional: ejecutar solo uno
+const SCENARIO_IDX = process.argv[3];
 
 if (!ENV_FILE || !fs.existsSync(ENV_FILE)) {
   console.error('❌ Debes pasar la ruta al environment exportado por Newman.');
-  console.error('   Uso: node run_stripe_card_checkout.js ./environment_export.json [idx]');
+  console.error('   Uso: node run_stripe_recurring_card_checkout.js ./environment_export.json [idx]');
   process.exit(1);
 }
 
@@ -29,22 +30,19 @@ function getVar(name) {
   return found ? (found.value || '') : '';
 }
 
-// Recopilar todos los checkout URLs guardados por el test script
+// Recopilar checkout URLs — el test script guarda body.payment_link como stripe_checkout_url_N
 const checkoutUrls = [];
 
 if (SCENARIO_IDX !== undefined) {
-  // Modo single: ejecutar solo el índice pedido
   const url = getVar(`stripe_checkout_url_${SCENARIO_IDX}`) || getVar('stripe_checkout_url');
   if (url) checkoutUrls.push({ idx: SCENARIO_IDX, url });
 } else {
-  // Modo full: buscar stripe_checkout_url_0 … _12 (EP/VL/NEG).
-  // Los índices 13-20 son reservados para DEC (declined) y los maneja
-  // run_stripe_declined_scenarios.js — no ejecutar como happy path.
-  for (let i = 0; i <= 12; i++) {
+  // 11 escenarios (EP-01..NEG-05), índices 0..10
+  // Los negativos (NEG) no generan checkout_url, así que solo se recogen los positivos
+  for (let i = 0; i <= 10; i++) {
     const url = getVar(`stripe_checkout_url_${i}`);
     if (url) checkoutUrls.push({ idx: String(i), url });
   }
-  // Fallback: variable genérica
   if (checkoutUrls.length === 0) {
     const url = getVar('stripe_checkout_url');
     if (url) checkoutUrls.push({ idx: '0', url });
@@ -53,16 +51,17 @@ if (SCENARIO_IDX !== undefined) {
 
 if (checkoutUrls.length === 0) {
   console.error('❌ No se encontraron stripe_checkout_url en el environment exportado.');
-  console.error('   Verifica que el test script de Postman guarde body.checkout_url en pm.environment.');
+  console.error('   Verifica que el test script de Postman guarde body.payment_link');
+  console.error('   en pm.environment como stripe_checkout_url_N.');
   process.exit(1);
 }
 
-console.log(`\n🔗 Newman → Playwright Card Checkout`);
+console.log(`\n🔄 Newman → Playwright Card Recurring Checkout`);
 console.log(`   ${checkoutUrls.length} checkout(s) a ejecutar\n`);
 
-const scriptPath     = path.join(__dirname, 'stripe_card_checkout.js');
+const scriptPath      = path.join(__dirname, 'stripe_card_checkout.js');
 const dashboardScript = path.join(__dirname, 'stripe_card_dashboard_validate.js');
-const SESSION_PATH   = path.join(__dirname, '.stripe-session.json');
+const SESSION_PATH    = path.join(__dirname, '.stripe-session.json');
 const stripeAccountId = process.env.STRIPE_ACCOUNT_ID || '';
 
 let globalFailed = 0;
@@ -72,16 +71,7 @@ for (const { idx, url } of checkoutUrls) {
   console.log(`▶ Escenario idx=${idx}`);
   console.log(`  URL: ${url.slice(0, 80)}...`);
 
-  // Email del cliente guardado por el test script de Postman (stripe_email_<idx>)
   const customerEmail = getVar(`stripe_email_${idx}`) || '';
-
-  // LINK_MODE según el índice en COMPACT_BODIES:
-  //   idx=3 → EP-04 (email prueba@prueba.co → bypass "Pagar sin Link")
-  //   idx=4 → EP-05 (email prueba@prueba.co → ingresar código 000000)
-  const numIdx = parseInt(idx, 10);
-  let linkMode = '';
-  if (numIdx === 3) linkMode = 'bypass';
-  if (numIdx === 4) linkMode = 'code';
 
   let checkoutOk = false;
   try {
@@ -94,7 +84,7 @@ for (const { idx, url } of checkoutUrls) {
         CARD_CVC:        process.env.CARD_CVC        || '123',
         CARDHOLDER_NAME: process.env.CARDHOLDER_NAME || 'Usuario QA Automatizacion',
         EXPECTED_RESULT: process.env.EXPECTED_RESULT || 'success',
-        LINK_MODE:       linkMode,
+        LINK_MODE:       '',
       },
       stdio: 'inherit',
     });
@@ -115,7 +105,7 @@ for (const { idx, url } of checkoutUrls) {
           CHECKOUT_IDX:        idx,
           CUSTOMER_EMAIL:      customerEmail,
           STRIPE_ACCOUNT_ID:   stripeAccountId,
-          STRIPE_PAYMENT_TYPE: process.env.STRIPE_PAYMENT_TYPE || 'one_time',
+          STRIPE_PAYMENT_TYPE: 'recurring',
         },
         stdio: 'inherit',
       });

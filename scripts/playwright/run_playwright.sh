@@ -57,6 +57,13 @@ elif [[ "$MODE" == "stripe_balance_onetime" ]]; then
     node "$SCRIPTS_DIR/playwright/run_stripe_onetime_validate.js" "$ENV_EXPORT" \
         || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe Balance One Time Playwright terminó con errores (no bloquea el pipeline)"
 
+elif [[ "$MODE" == "stripe_card_recurring" ]]; then
+    echo "[$(date +'%H:%M:%S')] 🔄 Modo STRIPE CARD RECURRING EPAYMENTS — buscando stripe_checkout_url en environment..."
+    export CI="true"
+    export SCRIPTS_DIR="$SCRIPTS_DIR"
+    node "$SCRIPTS_DIR/playwright/run_stripe_recurring_card_checkout.js" "$ENV_EXPORT" \
+        || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe Card Recurring Playwright terminó con errores (no bloquea el pipeline)"
+
 elif [ -n "$PAYMENT_LINK" ]; then
     export PAYMENT_LINK="$PAYMENT_LINK"
     export SCRIPTS_DIR="$SCRIPTS_DIR"
