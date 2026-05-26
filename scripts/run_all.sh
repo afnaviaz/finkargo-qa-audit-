@@ -218,7 +218,7 @@ if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Happy path integration" && -f "$SUPRA_DATA_FILE" ]]; then
     NEWMAN_BASE_ARGS+=("-d" "$SUPRA_DATA_FILE")
     log "Data-driven (SUPRA): $SUPRA_DATA_FILE"
-elif [[ "$SCENARIO" == "supra_epayments" && -f "$SUPRA_EPAYMENTS_DATA_FILE" ]]; then
+elif [[ ( "$SCENARIO" == "supra_epayments" || "$SCENARIO" == "epayments_happy" ) && -f "$SUPRA_EPAYMENTS_DATA_FILE" ]]; then
     NEWMAN_BASE_ARGS+=("-d" "$SUPRA_EPAYMENTS_DATA_FILE")
     log "Data-driven (SUPRA EPAYMENTS): $SUPRA_EPAYMENTS_DATA_FILE"
 elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happy" ) && -f "$WALLET_DATA_FILE" ]]; then
@@ -384,6 +384,9 @@ elif [[ "$SCENARIO" == "stripe_balance_one_time" || "$SCENARIO" == "stripe_balan
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_balance_onetime" || true
 elif [[ "$NEWMAN_FOLDER" == "Happy path integration" ]]; then
     log "Escenario SUPRA INTEGRATION — Playwright para cada happy path link..."
+    bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "supra_integration" || true
+elif [[ "$SCENARIO" == "supra_epayments" || "$SCENARIO" == "epayments_happy" ]]; then
+    log "Escenario SUPRA EPAYMENTS — Playwright para cada happy path link..."
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "supra_integration" || true
 else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
