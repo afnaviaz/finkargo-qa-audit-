@@ -50,6 +50,13 @@ elif [[ "$MODE" == "stripe_balance" ]]; then
     node "$SCRIPTS_DIR/playwright/run_stripe_balance_validate.js" "$ENV_EXPORT" \
         || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe Balance Playwright terminó con errores (no bloquea el pipeline)"
 
+elif [[ "$MODE" == "stripe_balance_onetime" ]]; then
+    echo "[$(date +'%H:%M:%S')] 🏦 Modo STRIPE BALANCE ONE TIME — aplicando pago único en dashboard..."
+    export CI="true"
+    export SCRIPTS_DIR="$SCRIPTS_DIR"
+    node "$SCRIPTS_DIR/playwright/run_stripe_onetime_validate.js" "$ENV_EXPORT" \
+        || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe Balance One Time Playwright terminó con errores (no bloquea el pipeline)"
+
 elif [ -n "$PAYMENT_LINK" ]; then
     export PAYMENT_LINK="$PAYMENT_LINK"
     export SCRIPTS_DIR="$SCRIPTS_DIR"
