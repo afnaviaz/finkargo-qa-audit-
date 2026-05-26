@@ -1,0 +1,18 @@
+{
+  "QA Audit - Operations": {
+    "collection_id": "19198347-7dbcfbb9-9230-4a6a-aae1-f666eb177a49",
+    "description": "Financing Orchestrator API",
+    "folders": {
+      "MX": {
+        "id": "19198347-6eef2965-7ee1-4f5b-adca-11a0584954c8",
+        "items": {
+          "Create Operation": "19198347-6acc7810-b10b-4244-b3c6-50659dbd967a",
+          "Update Operation":  "19198347-3c164130-0958-4fcc-9d71-f5ff8409d207",
+          "Declined":          "19198347-2aab2885-9143-4881-a904-611085149d79",
+          "Funnel Client":     "19198347-9aced818-24e3-4258-a174-3e33b27d2472",
+          "Funnel Options":    "19198347-5c882efa-fc3b-48bb-a539-15521e24a2ea"
+        }
+      }
+    }
+  }
+}
