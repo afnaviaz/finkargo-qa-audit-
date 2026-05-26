@@ -64,6 +64,13 @@ elif [[ "$MODE" == "stripe_card_recurring" ]]; then
     node "$SCRIPTS_DIR/playwright/run_stripe_recurring_card_checkout.js" "$ENV_EXPORT" \
         || echo "[$(date +'%H:%M:%S')] ⚠️ Stripe Card Recurring Playwright terminó con errores (no bloquea el pipeline)"
 
+elif [[ "$MODE" == "supra_integration" ]]; then
+    echo "[$(date +'%H:%M:%S')] 🏦 Modo SUPRA INTEGRATION — ejecutando Playwright para cada happy path link..."
+    export CI="true"
+    export SCRIPTS_DIR="$SCRIPTS_DIR"
+    node "$SCRIPTS_DIR/playwright/run_supra_integration_playwright.js" "$ENV_EXPORT" "$SCRIPTS_DIR" \
+        || echo "[$(date +'%H:%M:%S')] ⚠️ Playwright SUPRA INTEGRATION terminó con errores (no bloquea el pipeline)"
+
 elif [ -n "$PAYMENT_LINK" ]; then
     export PAYMENT_LINK="$PAYMENT_LINK"
     export SCRIPTS_DIR="$SCRIPTS_DIR"
