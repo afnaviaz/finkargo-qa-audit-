@@ -1,0 +1,14 @@
+{
+  "Flows APP": {
+    "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
+    "description": "Onboarding Colombia MD",
+    "folders": {
+      "1. Create User": "1. Create User",
+      "2. Onboarding": "2. Onboarding",
+      "3. Create creditrequest": "3. Create creditrequest",
+      "4. DecisionCommittee": "4. DecisionCommittee"
+
+     
+    }
+  }
+}

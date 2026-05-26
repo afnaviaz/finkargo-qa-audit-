@@ -1,0 +1,122 @@
+name: QA Integrations - Flows APP
+
+on:
+  workflow_dispatch:
+    inputs:
+      folder:
+        description: "Carpeta a ejecutar"
+        required: true
+        default: "Onboarding Colombia MD"
+        type: choice
+        options: [
+          "PAGA / Onboarding Colombia MD / 1.Create User"         
+      pais:
+        description: "País"
+        required: true
+        default: "CO"
+        type: choice
+        options: [CO, MX, ALL]
+      ambiente:
+        description: "Ambiente de ejecución"
+        required: true
+        default: "Testing"
+        type: choice
+        options: [Testing, Staging]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run-integrations-pipeline:
+    name: "Integrations: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
+    runs-on: [self-hosted, TROCHACOL]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        run: pip install requests psycopg2-binary
+
+      - name: Create python3 alias for Git Bash
+        shell: powershell
+        run: |
+          $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+          if ($pythonExe) {
+            $dir = Split-Path $pythonExe
+            Copy-Item $pythonExe "$dir\python3.exe" -Force
+            Write-Host "python3.exe creado en: $dir"
+          } else {
+            Write-Error "Python no encontrado en PATH"
+          }
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Install Playwright
+        run: npm install playwright
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Execute QA Integrations
+        shell: powershell
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          CI: "true"
+          PYTHONIOENCODING: "utf-8"
+          DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
+          DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
+          DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
+          DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
+          DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
+          DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
+          DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
+          DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
+          DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
+          DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
+          DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
+          DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
+          DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
+          DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
+          DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
+          DB_HOST_STAGING_MX: ${{ secrets.DB_HOST_STAGING_MX }}
+          DB_PORT_STAGING_MX: ${{ secrets.DB_PORT_STAGING_MX }}
+          DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
+          DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
+          DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
+        run: |
+          $bash = "C:\Program Files\Git\bin\bash.exe"
+          & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'INTEGRATIONS' '${{ github.event.inputs.folder }}' '${{ github.event.inputs.pais }}' '${{ github.event.inputs.ambiente }}'"
+
+      - name: Set artifact name
+        if: always()
+        id: artifact-name
+        shell: powershell
+        run: |
+          $safe = "${{ github.event.inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
+          echo "value=integrations-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact-name.outputs.value }}
+          path: |
+            scripts/*.html
+            scripts/*.json
+            scripts/*.txt
+            scripts/*.png
+            scripts/playwright-videos/
+          retention-days: 7
