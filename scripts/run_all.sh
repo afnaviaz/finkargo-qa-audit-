@@ -121,6 +121,9 @@ elif [[ "$NEWMAN_FOLDER" == "Create Payment Card one time epayments" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Card recurring epayments" ]]; then
     SCENARIO="stripe_card_recurring_epayments"
     log "Escenario: STRIPE CARD RECURRING EPAYMENTS — Playwright llenará el checkout de suscripción PG005"
+elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time epayments" ]]; then
+    SCENARIO="stripe_oxxo_epayments"
+    log "Escenario: STRIPE OXXO ONE TIME EPAYMENTS (PG005)"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -211,7 +214,7 @@ elif [[ ( "$SCENARIO" == "wallet_happy" || "$SCENARIO" == "wallet_epayments_happ
 fi
 
 # Inyectar URLs y parámetros de cuerpo para flujos Stripe
-if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" || "$SCENARIO" == "stripe_balance_recurring" || "$SCENARIO" == "stripe_balance_one_time" || "$SCENARIO" == "stripe_card_epayments" || "$SCENARIO" == "stripe_card_recurring_epayments" ]]; then
+if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO" == "stripe_card_recurring" || "$SCENARIO" == "stripe_balance_recurring" || "$SCENARIO" == "stripe_balance_one_time" || "$SCENARIO" == "stripe_card_epayments" || "$SCENARIO" == "stripe_card_recurring_epayments" || "$SCENARIO" == "stripe_oxxo_epayments" ]]; then
     if [[ "$AMBIENTE" == "Staging" ]]; then
         STRIPE_BASE_URL="https://api-staging.finkargo.com.mx/integrations"
         API_EPAYMENTS2="https://api-epayments-staging.back.finkargo.com.mx"
@@ -262,6 +265,9 @@ elif [[ "$SCENARIO" == "stripe_card_epayments" ]]; then
 elif [[ "$SCENARIO" == "stripe_card_recurring_epayments" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe Card recurring epayments: 11 iteraciones"
+elif [[ "$SCENARIO" == "stripe_oxxo_epayments" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    log "Stripe OXXO one time epayments: 11 iteraciones"
 fi
 
 # ----------------------------------------------------------
@@ -327,7 +333,7 @@ log_ok "Newman finalizado. Reporte JSON generado."
 # ----------------------------------------------------------
 if [[ "$SCENARIO" == "expired" ]]; then
     log "Escenario EXPIRED — saltando Playwright."
-elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
+elif [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_oxxo_epayments" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "stripe_oxxo" || true
 elif [[ "$SCENARIO" == "rejected" ]]; then
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "rejected" || true
