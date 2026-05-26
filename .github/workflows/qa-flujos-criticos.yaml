@@ -128,7 +128,7 @@ jobs:
         run: |
           chmod +x ./scripts/run_all.sh
           ./scripts/run_all.sh \
-            "qa-flujos-criticos" \
+            "Flows APP" \
             "${{ github.event.inputs.folder }}" \
             "${{ github.event.inputs.pais }}" \
             "${{ github.event.inputs.ambiente }}"
