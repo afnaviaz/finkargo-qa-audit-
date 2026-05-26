@@ -1,0 +1,95 @@
+name: QA Audit - OB v2 - MX
+
+on:
+  workflow_dispatch:
+    inputs:
+      folder:
+        description: "Directorio a auditar"
+        required: true
+        default: "Flow"
+        type: choice
+        options: [Flow]
+      pais:
+        description: "País contexto de ejecución (ALL ejecutará CO y MX)"
+        required: true
+        default: "CO"
+        type: choice
+        options: [CO, MX, ALL]
+      ambiente:
+        description: "Ambiente de ejecución (Testing o Staging)"
+        required: true
+        default: "Testing"
+        type: choice
+        options: [Testing, Staging]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true 
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run-audit-pipeline:
+    name: "Audit: OB v2 - MX / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true
+
+      - name: Debug Inputs
+        run: |
+          echo "🚀 REVISANDO PARÁMETROS DE ENTRADA"
+          echo "FOLDER SELECCIONADA: ${{ github.event.inputs.folder }}"
+          echo "PAIS: ${{ github.event.inputs.pais }}"
+          echo "AMBIENTE: ${{ github.event.inputs.ambiente }}"
+          echo "------------------------------------------"
+          ls -la scripts/
+
+      # --- ESTE ES EL PASO QUE FALTABA ---
+      - name: Setup QA Environment (Node & Newman)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Newman
+        run: |
+          npm install -g newman
+          # Si tu script genera reportes bonitos, suele usar este reporter:
+          npm install -g newman-reporter-htmlextra 
+      # -----------------------------------
+
+      - name: Execute QA Audit
+        shell: bash
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }} 
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          chmod +x scripts/run_all.sh
+          ./scripts/run_all.sh \
+            "OB v2 - MX" \
+            "${{ github.event.inputs.folder }}" \
+            "${{ github.event.inputs.pais }}" \
+            "${{ github.event.inputs.ambiente }}"
+
+      - name: Prepare Artifacts
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cp *.html *.json *.txt artifacts/ 2>/dev/null || true
+          cp scripts/*.html scripts/*.json scripts/*.txt artifacts/ 2>/dev/null || true
+
+      - name: Upload Results to GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ github.event.inputs.folder }}-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 5
