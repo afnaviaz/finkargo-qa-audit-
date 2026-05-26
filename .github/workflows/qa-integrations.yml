@@ -29,7 +29,8 @@ on:
           "STRIPE / Create Payment Customer balance one time",
           "STRIPE EPAYMENTS / Create Payment Card one time epayments",
           "STRIPE EPAYMENTS / Create Payment Card recurring epayments",
-          "STRIPE EPAYMENTS / Create Payment Oxxo one time epayments"
+          "STRIPE EPAYMENTS / Create Payment Oxxo one time epayments",
+          "STRIPE EPAYMENTS / Create Payment Customer balance recurring"
         ]
       pais:
         description: "País"
