@@ -8,13 +8,7 @@
     "postman:apply-flow-tests": "node scripts/postman/apply-ob-v2-flow-tests.js"
   },
   "dependencies": {
-<<<<<<< HEAD
     "newman": "^2.1.2",
     "newman-reporter-htmlextra": "^1.22.5"
-=======
-    "newman": "^6.1.0",
-    "newman-reporter-htmlextra": "^1.23.1",
-    "playwright": "^1.59.1"
->>>>>>> a89ff04e1e165985483d007ca85483c2dd954da9
   }
 }
