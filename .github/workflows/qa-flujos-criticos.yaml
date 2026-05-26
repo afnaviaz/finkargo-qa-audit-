@@ -13,6 +13,17 @@ on:
           - "PAGA / Onboarding Colombia MD / 2. Onboarding"
           - "PAGA / Onboarding Colombia MD / 3. Create creditrequest"
           - "PAGA / Onboarding Colombia MD / 4. DecisionCommittee"
+      folder_operations:
+        description: "Operations"
+        required: true
+        default: "Operations"
+        type: choice
+        options:
+          - "PAGA / Financing Orchestrator API / 1. Create Operation"
+          - "PAGA / Financing Orchestrator API / 2. Update Operation"
+          - "PAGA / Financing Orchestrator API / 3. Declined"
+          - "PAGA / Financing Orchestrator API / 4. Funnel Client"
+          - "PAGA / Financing Orchestrator API / 5. Funnel Options"
          
 
 

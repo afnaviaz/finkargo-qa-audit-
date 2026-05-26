@@ -1,9 +1,13 @@
 {
-  "OB v2 - MX": {
-    "collection_id": "17667316-05ad1217-bf7a-47d2-8e5d-0d8aaac0c9ce",
-    "description": "OB v2 - MX",
+  "FINANCING ORCHESTRATOR API": {
+    "collection_id": "19198347-7dbcfbb9-9230-4a6a-aae1-f666eb177a49",
     "folders": {
-      "Flow": "17667316-05ad1217-bf7a-47d2-8e5d-0d8aaac0c9ce"
+
+      "MX": "19198347-6eef2965-7ee1-4f5b-adca-11a0584954c8"
     }
+
+  }
+    
+
 }
 

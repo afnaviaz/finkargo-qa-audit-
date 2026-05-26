@@ -5,6 +5,7 @@ Uso: python3 get_config.py <config_path> <proyecto> <key> <mode>
   mode=id          → devuelve collection_id
   mode=folder_id   → devuelve el ID de la carpeta cuyo nombre es <key>
   mode=all_folders → devuelve todos los IDs de carpetas separados por newline
+  mode=all_items   → devuelve todos los IDs de items dentro de folders[key], uno por línea
 """
 import json, sys
 
@@ -46,19 +47,51 @@ def main():
         if not folders:
             print(f"ERROR: no hay folders definidos para '{proyecto}'", file=sys.stderr)
             sys.exit(1)
-        print('\n'.join(folders.values()))
+        ids = []
+        for v in folders.values():
+            ids.append(v['id'] if isinstance(v, dict) else v)
+        print('\n'.join(ids))
 
     elif mode == 'folder_id':
         folders = proj.get('folders', {})
-        folder_id = folders.get(key, '')
-        if not folder_id:
+        entry = folders.get(key, '')
+        if not entry:
             available = list(folders.keys())
             print(f"ERROR: folder '{key}' no encontrado para '{proyecto}'. Disponibles: {available}", file=sys.stderr)
             sys.exit(1)
-        print(folder_id)
+        print(entry['id'] if isinstance(entry, dict) else entry)
+
+    elif mode == 'item_id':
+        if len(sys.argv) < 6:
+            print(f"ERROR: item_id requiere 6 args: config proyecto pais item_id item_name", file=sys.stderr)
+            sys.exit(1)
+        item_name = sys.argv[5]
+        folders = proj.get('folders', {})
+        entry = folders.get(key, '')
+        if not entry or not isinstance(entry, dict):
+            print(f"ERROR: folder '{key}' no tiene estructura de items", file=sys.stderr)
+            sys.exit(1)
+        item_id = entry.get('items', {}).get(item_name, '')
+        if not item_id:
+            available = list(entry.get('items', {}).keys())
+            print(f"ERROR: item '{item_name}' no encontrado en '{key}'. Disponibles: {available}", file=sys.stderr)
+            sys.exit(1)
+        print(item_id)
+
+    elif mode == 'all_items':
+        folders = proj.get('folders', {})
+        entry = folders.get(key, '')
+        if not entry or not isinstance(entry, dict):
+            print(f"ERROR: folder '{key}' no tiene estructura de items", file=sys.stderr)
+            sys.exit(1)
+        items = entry.get('items', {})
+        if not items:
+            print(f"ERROR: no hay items definidos en folder '{key}'", file=sys.stderr)
+            sys.exit(1)
+        print('\n'.join(items.values()))
 
     else:
-        print(f"ERROR: mode inválido '{mode}'. Usar: id, all_folders, folder_id", file=sys.stderr)
+        print(f"ERROR: mode inválido '{mode}'. Usar: id, all_folders, folder_id, item_id, all_items", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == '__main__':

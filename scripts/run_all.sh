@@ -161,10 +161,36 @@ log "Environment UID : $ENV_UID"
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
 
+# ----------------------------------------------------------
+# 5.5 FILTRADO DE COLECCIÓN (modo items seleccionados)
+# ----------------------------------------------------------
+FILTER_MODE=false
+NEWMAN_COLLECTION_SOURCE="$COLLECTION_URL"
+ITEM_IDS_ARRAY=()
+
+if [[ -n "$PROVIDER_PREFIX" ]]; then
+    mapfile -t ITEM_IDS_ARRAY < <(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "$PROVIDER_PREFIX" "all_items" 2>/dev/null)
+    if [[ ${#ITEM_IDS_ARRAY[@]} -gt 0 ]]; then
+        log "Modo filtrado: ${#ITEM_IDS_ARRAY[@]} item(s) en '$PROVIDER_PREFIX / $NEWMAN_FOLDER'. Descargando colección..."
+        COLLECTION_FULL="$SCRIPTS_DIR/collection_full.json"
+        curl -sf --insecure \
+            "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}" \
+            -o "$COLLECTION_FULL" \
+            || { log_err "No se pudo descargar la colección desde Postman API."; exit 1; }
+        COLLECTION_FILTERED="$SCRIPTS_DIR/collection_filtered.json"
+        python3 "$HELPERS_DIR/filter_collection.py" \
+            "$COLLECTION_FULL" "$COLLECTION_FILTERED" "${ITEM_IDS_ARRAY[@]}" \
+            || { log_err "Error al filtrar la colección."; exit 1; }
+        NEWMAN_COLLECTION_SOURCE="$COLLECTION_FILTERED"
+        FILTER_MODE=true
+        log_ok "Colección filtrada lista: ${#ITEM_IDS_ARRAY[@]} request(s) seleccionado(s)."
+    fi
+fi
+
 ENV_EXPORT="$SCRIPTS_DIR/environment_export.json"
 
 NEWMAN_BASE_ARGS=(
-    "$COLLECTION_URL"
+    "$NEWMAN_COLLECTION_SOURCE"
     --environment "$ENV_URL"
     --insecure
     -r cli,json,htmlextra
@@ -199,7 +225,14 @@ elif [[ "$PAIS_INPUT" == "MX" && "$NEWMAN_FOLDER" == "$PAIS_INPUT" ]]; then
     FOLDER_NAME="🇲🇽 Mexico"
 fi
 
-if [[ "$PAIS_INPUT" == "ALL" ]]; then
+if [[ "$FILTER_MODE" == "true" ]]; then
+    log "Iniciando Newman (filtrado) | ${#ITEM_IDS_ARRAY[@]} request(s) | Pais: $PAIS_INPUT"
+
+    newman run "${NEWMAN_BASE_ARGS[@]}" \
+        --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
+        2>&1 | tee "$LOG_FILE"
+    NEWMAN_EXIT=${PIPESTATUS[0]}
+elif [[ "$PAIS_INPUT" == "ALL" ]]; then
     FOLDER_CO="🇨🇴 Colombia"
     FOLDER_MX="🇲🇽 Mexico"
     log "Iniciando Newman (ALL): Colombia + Mexico"
