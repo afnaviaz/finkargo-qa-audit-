@@ -315,7 +315,7 @@ else
         NEWMAN_FOLDER="e0d59532-aa3b-40ad-89a7-196d2874ba35"
         log "Iniciando Newman | Folder UID: '$NEWMAN_FOLDER' (stripe_balance_one_time) | Pais: $PAIS_INPUT"
     elif [[ "$SCENARIO" == "stripe_balance_one_time_epayments" ]]; then
-        NEWMAN_FOLDER="19456853-b2154d80-2628-4ade-8c7f-75abe9800a5d"
+        NEWMAN_FOLDER="b2154d80-2628-4ade-8c7f-75abe9800a5d"
         log "Iniciando Newman | Folder UID: '$NEWMAN_FOLDER' (stripe_balance_one_time_epayments) | Pais: $PAIS_INPUT"
     else
         log "Iniciando Newman | Folder: '$NEWMAN_FOLDER' | Pais: $PAIS_INPUT"
