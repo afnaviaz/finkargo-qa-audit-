@@ -9,7 +9,12 @@ on:
         default: "PAGA / Onboarding Colombia MD / 1.Create User"
         type: choice
         options:
-          - "PAGA / Onboarding Colombia MD / 1.Create User"
+          - "PAGA / Onboarding Colombia MD / 1. Create User",
+          - "PAGA / Onboarding Colombia MD / 2. Onboarding",
+          - "PAGA / Onboarding Colombia MD / 3. Create creditrequtest",
+          - "PAGA / Onboarding Colombia MD / 4. DecisionCommittee"
+         
+
 
       pais:
         description: "País"
