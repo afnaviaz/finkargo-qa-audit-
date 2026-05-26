@@ -6,22 +6,29 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "Onboarding Colombia MD"
+        default: "PAGA / Onboarding Colombia MD / 1.Create User"
         type: choice
-        options: [
-          "PAGA / Onboarding Colombia MD / 1.Create User"         
+        options:
+          - "PAGA / Onboarding Colombia MD / 1.Create User"
+
       pais:
         description: "País"
         required: true
         default: "CO"
         type: choice
-        options: [CO, MX, ALL]
+        options:
+          - CO
+          - MX
+          - ALL
+
       ambiente:
         description: "Ambiente de ejecución"
         required: true
         default: "Testing"
         type: choice
-        options: [Testing, Staging]
+        options:
+          - Testing
+          - Staging
 
 permissions:
   contents: read
