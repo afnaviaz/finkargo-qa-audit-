@@ -2,13 +2,18 @@
   "Flows APP": {
     "type": "folder",
     "collection_id": "19456853-796050f4-5ff3-43fa-9b97-d404e8b561ce",
-    "description": "Onboarding Colombia MD",
+    "description": "Onboarding MD",
     "folders": {
       "Onboarding Colombia MD": "Onboarding Colombia MD",
-      "1. Create User": "1. Create User",
-      "2. Onboarding": "2. Onboarding",
-      "3. Create creditrequest": "3. Create creditrequest",
-      "4. DecisionCommittee": "4. DecisionCommittee"
+      "Onboarding Colombia MD / 1. Create User": "1. Create User",
+      "Onboarding Colombia MD / 2. Onboarding": "2. Onboarding",
+      "Onboarding Colombia MD / 3. Create creditrequest": "3. Create creditrequest",
+      "Onboarding Colombia MD / 4. DecisionCommittee": "4. DecisionCommittee",
+      "Onboarding Mexico MD": "Onboarding Mexico MD",
+      "Onboarding Mexico MD / 1. Create User": "1. Create User",
+      "Onboarding Mexico MD / 2. Onboarding": "2. Onboarding",
+      "Onboarding Mexico MD / 3. Create creditrequest": "3. Create creditrequest",
+      "Onboarding Mexico MD / 4. DecisionCommittee": "4. DecisionCommittee"
     }
   }
 }
