@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ============================================================
-# FINKARGO QA AUDIT PIPELINE v2.1
-# Sin heredocs Python — toda la lógica en scripts/helpers/*.py
+# FINKARGO QA AUDIT PIPELINE v2.2
+# Arquitectura escalable: tipo de colección definido en JSON
 # ============================================================
 
 # ----------------------------------------------------------
@@ -52,11 +52,28 @@ log "CONF_TOKEN      : ${CONF_TOKEN:0:8}... (${#CONF_TOKEN} chars)"
 # ----------------------------------------------------------
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
-CONFIG_PATH="$SCRIPTS_DIR/config/${PROYECTO}.json"
+
+# ----------------------------------------------------------
+# MAPEO PROYECTO → ARCHIVO DE CONFIGURACION
+# Para agregar un proyecto nuevo: solo añade una línea al case.
+# ----------------------------------------------------------
+case "$PROYECTO" in
+    "Flows APP")         CONFIG_FILE="qa-flujos-criticos.json" ;;
+    "QA Operations")     CONFIG_FILE="qa-operations.json" ;;
+    "ms-communicator")   CONFIG_FILE="ms-communicator.json" ;;
+    *)                   CONFIG_FILE="${PROYECTO}.json" ;;
+esac
+
+CONFIG_PATH="$SCRIPTS_DIR/config/$CONFIG_FILE"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
-[[ ! -f "$CONFIG_PATH" ]] && { log_err "No se encontro config para '$PROYECTO': $CONFIG_PATH"; exit 1; }
+[[ ! -f "$CONFIG_PATH" ]] && {
+    log_err "No se encontro config para '$PROYECTO': $CONFIG_PATH"
+    log_err "Archivos disponibles en config/:"
+    ls "$SCRIPTS_DIR/config/" 2>/dev/null || echo "  (directorio vacio)"
+    exit 1
+}
 [[ ! -f "$HELPERS_DIR/get_config.py"      ]] && { log_err "No se encontro: $HELPERS_DIR/get_config.py";      exit 1; }
 [[ ! -f "$HELPERS_DIR/extract_metrics.py" ]] && { log_err "No se encontro: $HELPERS_DIR/extract_metrics.py"; exit 1; }
 [[ ! -f "$HELPERS_DIR/claude_analysis.py" ]] && { log_err "No se encontro: $HELPERS_DIR/claude_analysis.py"; exit 1; }
@@ -65,33 +82,40 @@ FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
 NOW="$(date +'%Y-%m-%d %H:%M:%S')"
 
-# Soporte para opciones con formato "PROVEEDOR / SUBCARPETA"
-# FOLDER_NAME se usa para display/Confluence; NEWMAN_FOLDER es el nombre real del folder en Postman
+# ----------------------------------------------------------
+# PROCESAMIENTO DEL FOLDER INPUT
+# Soporta dos formatos:
+#   "Onboarding Colombia MD"           → ejecuta carpeta completa en Postman
+#   "Onboarding Colombia MD / 1. Create User" → ejecuta solo ese subfolder
+# ----------------------------------------------------------
 FOLDER_INPUT_CLEAN=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')
+PROVIDER_PREFIX=""
+FOLDER_NAME="$FOLDER_INPUT_CLEAN"
+
 if [[ "$FOLDER_INPUT_CLEAN" == *" / "* ]]; then
-    PROVIDER_PREFIX=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/ \/ .*//')
-    NEWMAN_FOLDER=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/.* \/ //')
-    FOLDER_NAME="$FOLDER_INPUT_CLEAN"
+    # Hay al menos un separador: tomar la última parte como NEWMAN_FOLDER
+    # y el resto como display name (FOLDER_NAME ya está completo)
+    NEWMAN_FOLDER=$(echo "$FOLDER_INPUT_CLEAN" | awk -F' / ' '{print $NF}' | xargs)
+    PROVIDER_PREFIX=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/ \/ [^/]*$//' | xargs)
 else
-    PROVIDER_PREFIX=""
+    # Sin separador: ejecutar la carpeta tal cual
     NEWMAN_FOLDER="$FOLDER_INPUT_CLEAN"
-    FOLDER_NAME="$FOLDER_INPUT_CLEAN"
 fi
 
-# Detectar escenario según sub-carpeta (NEWMAN_FOLDER es el nombre hoja)
+# Detectar escenario según subfolder
 SCENARIO="happy_path"
 if [[ "$NEWMAN_FOLDER" == "Rejected flow" ]]; then
     SCENARIO="rejected"
-    log "Escenario: REJECTED — se abrirá el link sin completar el formulario"
+    log "Escenario: REJECTED"
 elif [[ "$NEWMAN_FOLDER" == "Expired flow" ]]; then
     SCENARIO="expired"
-    log "Escenario: EXPIRED — se actualizará updated_at a created_at + 34 minutos en BD"
+    log "Escenario: EXPIRED"
 elif [[ "$NEWMAN_FOLDER" == "Happy path epayments" ]]; then
     SCENARIO="epayments_happy"
-    log "Escenario: EPAYMENTS HAPPY PATH — validará epayment.transaction status SUCCESSFUL"
+    log "Escenario: EPAYMENTS HAPPY PATH"
 elif [[ "$NEWMAN_FOLDER" == "Happy path wallet epayments" ]]; then
     SCENARIO="wallet_epayments_happy"
-    log "Escenario: WALLET EPAYMENTS HAPPY PATH — validará epayment.transaction status SUCCESSFUL"
+    log "Escenario: WALLET EPAYMENTS HAPPY PATH"
 elif [[ "$NEWMAN_FOLDER" == "Happy path integration wallet" || "$NEWMAN_FOLDER" == "Happy path integration wallet varios documentos" ]]; then
     SCENARIO="wallet_happy"
     log "Escenario: WALLET INTEGRATIONS HAPPY PATH"
@@ -99,7 +123,6 @@ elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
     SCENARIO="cobre_happy"
     log "Escenario: COBRE HAPPY PATH"
 fi
-[[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
 HTML_NEWMAN="$SCRIPTS_DIR/reporte_visual_newman.html"
@@ -118,9 +141,11 @@ CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA"
 
 log "============================================"
-log " FINKARGO QA AUDIT v2.1"
+log " FINKARGO QA AUDIT v2.2"
 log " Proyecto : $PROYECTO"
+log " Config   : $CONFIG_FILE"
 log " Folder   : $FOLDER_NAME"
+log " Newman F : $NEWMAN_FOLDER"
 log " Pais     : $PAIS_INPUT"
 log " Ambiente : $AMBIENTE"
 log " Run #    : $EXEC_NUM"
@@ -151,39 +176,44 @@ esac
 log "Environment UID : $ENV_UID"
 
 # ----------------------------------------------------------
-# 5. DIAGNOSTICO POSTMAN API (antes de Newman)
-# ----------------------------------------------------------
-# ----------------------------------------------------------
 # 5. CONSTRUCCION DE ARGUMENTOS NEWMAN
 # ----------------------------------------------------------
-# Usamos eval para que la POSTMAN_API_KEY se expanda correctamente
-# en el contexto de GitHub Actions (igual que el script original)
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
 
 # ----------------------------------------------------------
-# 5.5 FILTRADO DE COLECCIÓN (modo items seleccionados)
+# 5.5 FILTRADO DE COLECCIÓN
+# Detecta el tipo desde el JSON de config:
+#   "type": "folder" → Newman ejecuta carpetas nativas de Postman (default)
+#   "type": "items"  → Newman ejecuta requests filtrados por IDs
+# Para agregar soporte a una colección nueva, solo cambia el JSON de config.
 # ----------------------------------------------------------
 FILTER_MODE=false
 NEWMAN_COLLECTION_SOURCE="$COLLECTION_URL"
 ITEM_IDS_ARRAY=()
 
-if [[ -n "$PROVIDER_PREFIX" ]]; then
-    mapfile -t ITEM_IDS_ARRAY < <(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "$PROVIDER_PREFIX" "all_items" 2>/dev/null)
+CONFIG_TYPE=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "" "type" 2>/dev/null || echo "folder")
+log "Tipo de coleccion: $CONFIG_TYPE"
+
+if [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
+    mapfile -t ITEM_IDS_ARRAY < <(
+        python3 "$HELPERS_DIR/get_config.py" \
+            "$CONFIG_PATH" "$PROYECTO" "$PROVIDER_PREFIX" "all_items" 2>/dev/null
+    )
     if [[ ${#ITEM_IDS_ARRAY[@]} -gt 0 ]]; then
-        log "Modo filtrado: ${#ITEM_IDS_ARRAY[@]} item(s) en '$PROVIDER_PREFIX / $NEWMAN_FOLDER'. Descargando colección..."
+        log "Modo filtrado: ${#ITEM_IDS_ARRAY[@]} item(s) en '$PROVIDER_PREFIX'. Descargando coleccion..."
         COLLECTION_FULL="$SCRIPTS_DIR/collection_full.json"
         curl -sf --insecure \
             "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}" \
             -o "$COLLECTION_FULL" \
-            || { log_err "No se pudo descargar la colección desde Postman API."; exit 1; }
+            || { log_err "No se pudo descargar la coleccion desde Postman API."; exit 1; }
         COLLECTION_FILTERED="$SCRIPTS_DIR/collection_filtered.json"
         python3 "$HELPERS_DIR/filter_collection.py" \
             "$COLLECTION_FULL" "$COLLECTION_FILTERED" "${ITEM_IDS_ARRAY[@]}" \
-            || { log_err "Error al filtrar la colección."; exit 1; }
+            || { log_err "Error al filtrar la coleccion."; exit 1; }
         NEWMAN_COLLECTION_SOURCE="$COLLECTION_FILTERED"
         FILTER_MODE=true
-        log_ok "Colección filtrada lista: ${#ITEM_IDS_ARRAY[@]} request(s) seleccionado(s)."
+        log_ok "Coleccion filtrada lista: ${#ITEM_IDS_ARRAY[@]} request(s) seleccionado(s)."
     fi
 fi
 
@@ -211,41 +241,26 @@ fi
 # 7. EJECUCION NEWMAN
 # ----------------------------------------------------------
 NEWMAN_EXIT=0
-set +e  # Desactivar pipefail para capturar exit de newman correctamente
-
-# Resolver el folder a ejecutar según país e input
-# CO → carpeta padre "🇨🇴 Colombia" (ejecuta todo el subárbol Colombia)
-# MX → carpeta padre "🇲🇽 Mexico"
-# Folder específico → se usa directamente (viene del workflow dispatch)
-if [[ "$PAIS_INPUT" == "CO" && "$NEWMAN_FOLDER" == "$PAIS_INPUT" ]]; then
-    NEWMAN_FOLDER="🇨🇴 Colombia"
-    FOLDER_NAME="🇨🇴 Colombia"
-elif [[ "$PAIS_INPUT" == "MX" && "$NEWMAN_FOLDER" == "$PAIS_INPUT" ]]; then
-    NEWMAN_FOLDER="🇲🇽 Mexico"
-    FOLDER_NAME="🇲🇽 Mexico"
-fi
+set +e
 
 if [[ "$FILTER_MODE" == "true" ]]; then
     log "Iniciando Newman (filtrado) | ${#ITEM_IDS_ARRAY[@]} request(s) | Pais: $PAIS_INPUT"
-
     newman run "${NEWMAN_BASE_ARGS[@]}" \
         --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
-elif [[ "$PAIS_INPUT" == "ALL" ]]; then
-    FOLDER_CO="🇨🇴 Colombia"
-    FOLDER_MX="🇲🇽 Mexico"
-    log "Iniciando Newman (ALL): Colombia + Mexico"
 
+elif [[ "$PAIS_INPUT" == "ALL" ]]; then
+    log "Iniciando Newman (ALL): Colombia + Mexico"
     newman run "${NEWMAN_BASE_ARGS[@]}" \
-        --folder "$FOLDER_CO" \
-        --folder "$FOLDER_MX" \
+        --folder "🇨🇴 Colombia" \
+        --folder "🇲🇽 Mexico" \
         --reporter-htmlextra-title "QA Audit | ALL | $AMBIENTE | $NOW" \
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
+
 else
     log "Iniciando Newman | Folder: '$NEWMAN_FOLDER' | Pais: $PAIS_INPUT"
-
     newman run "${NEWMAN_BASE_ARGS[@]}" \
         --folder "$NEWMAN_FOLDER" \
         --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
@@ -253,16 +268,14 @@ else
     NEWMAN_EXIT=${PIPESTATUS[0]}
 fi
 
-set -e  # Reactivar pipefail
+set -e
 log "Newman exit code: $NEWMAN_EXIT"
 
-# Si Newman fallo por infra (no hay reporte JSON), abortar
 if [[ ! -f "$JSON_REPORT" ]]; then
     log_err "Newman no genero reporte JSON."
-    log_err "Posibles causas:"
-    log_err "  1. POSTMAN_API_KEY invalida o expirada — verifica en web.postman.co/settings/me/api-keys"
-    log_err "  2. Collection UID incorrecto en collections.json"
-    log_err "  3. El folder '$FOLDER_NAME' no existe en la coleccion de Postman"
+    log_err "  1. POSTMAN_API_KEY invalida o expirada"
+    log_err "  2. Collection UID incorrecto en $CONFIG_FILE"
+    log_err "  3. El folder '$NEWMAN_FOLDER' no existe en la coleccion de Postman"
     log_err "  4. Sin acceso a internet / VPN no activa"
     exit 1
 fi
@@ -294,7 +307,6 @@ except:
     print('no')
 " "$ENV_EXPORT" 2>/dev/null)
 
-# Escenario EXPIRED: esperar 34 minutos para que el proveedor expire la transacción
 if [[ "$SCENARIO" == "expired" ]]; then
     PAYIN_ID=$(python3 -c "
 import json, sys
@@ -310,23 +322,21 @@ except:
 
     if [[ -n "$PAYIN_ID" ]]; then
         log "Transaction creada: $PAYIN_ID"
-        log "Esperando 34 minutos para que el proveedor expire la transacción automáticamente..."
+        log "Esperando 34 minutos para que el proveedor expire la transaccion automaticamente..."
         sleep 2040
         log "Espera finalizada. Procediendo a validar estado en BD..."
     else
-        log_warn "No se encontró payin_id en el environment export."
+        log_warn "No se encontro payin_id en el environment export."
     fi
 fi
 
 if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
     log "Iniciando Newman Fase 2 | Folder: 'Post payment'"
-    # Resolver UID de la carpeta "Post payment" desde collections.json
     POST_PAYMENT_FOLDER_ID=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "Post payment" "folder_id" 2>/dev/null || echo "")
     if [[ -z "$POST_PAYMENT_FOLDER_ID" ]]; then
-        log_warn "No se encontró UID para 'Post payment' en collections.json. Usando nombre como fallback."
+        log_warn "No se encontro UID para 'Post payment'. Usando nombre como fallback."
         POST_PAYMENT_FOLDER_ID="Post payment"
     else
-        # Quitar prefijo de workspace (formato: {workspace_id}-{uuid}) → dejar solo el UUID
         POST_PAYMENT_FOLDER_ID=$(echo "$POST_PAYMENT_FOLDER_ID" | sed 's/^[0-9]*-//')
         log "Post payment folder ID: $POST_PAYMENT_FOLDER_ID"
     fi
@@ -390,7 +400,6 @@ fi
 FOLDER_TITLE="Auditorias $AMBIENTE - $PROYECTO"
 PAGE_TITLE="[$PROYECTO] [$PAIS_INPUT] $FOLDER_NAME - Run #$EXEC_NUM"
 
-# Buscar carpeta padre del proyecto
 SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
 SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
     CURL_CODE=$?
@@ -435,7 +444,6 @@ else
     log "Carpeta padre encontrada: ID $PROJECT_FOLDER_ID"
 fi
 
-# Construir body HTML enriquecido
 python3 "$HELPERS_DIR/build_confluence.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" "$LOG_FILE" \
     "$PROYECTO" "$FOLDER_NAME" "$PAIS_INPUT" "$AMBIENTE" "$NOW" "$EXEC_NUM" \
@@ -444,7 +452,6 @@ python3 "$HELPERS_DIR/build_confluence.py" \
 
 log_ok "HTML de Confluence construido."
 
-# Publicar pagina
 FINAL_PAYLOAD=$(python3 -c "
 import json, sys
 body = open(sys.argv[4], encoding='utf-8').read()
@@ -511,7 +518,7 @@ log "============================================"
 
 if [[ "$FINAL_FAILURES" -gt 0 ]]; then
     log_warn "$FINAL_FAILURES test(s) fallaron. Revisa el analisis en Confluence."
-    exit 2  # 2 = tests fallaron (distingue de errores de infraestructura)
+    exit 2
 fi
 
 log_ok "Todos los tests pasaron."

@@ -6,19 +6,14 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "PAGA / Onboarding Colombia MD / 1. Create User"
+        default: "Onboarding Colombia MD"
         type: choice
         options:
-          - "PAGA / Onboarding Colombia MD / 1. Create User"
-          - "PAGA / Onboarding Colombia MD / 2. Onboarding"
-          - "PAGA / Onboarding Colombia MD / 3. Create creditrequest"
-          - "PAGA / Onboarding Colombia MD / 4. DecisionCommittee"
-          - "PAGA / Financing Orchestrator API / 1. Create Operation"
-          - "PAGA / Financing Orchestrator API / 2. Update Operation"
-          - "PAGA / Financing Orchestrator API / 3. Declined"
-          - "PAGA / Financing Orchestrator API / 4. Funnel Client"
-          - "PAGA / Financing Orchestrator API / 5. Funnel Options"
-
+          - "Onboarding Colombia MD"
+          - "Onboarding Colombia MD / 1. Create User"
+          - "Onboarding Colombia MD / 2. Onboarding"
+          - "Onboarding Colombia MD / 3. Create creditrequest"
+          - "Onboarding Colombia MD / 4. DecisionCommittee"
 
       pais:
         description: "País"
@@ -44,7 +39,7 @@ permissions:
   actions: read
 
 jobs:
-  run-integrations-pipeline:
+  run-qa-flujos-criticos:
     name: "Flujos Críticos: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
 
     runs-on:
@@ -58,7 +53,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Validar Python existente en el runner
       - name: Check Python
         shell: bash
         run: |
@@ -82,7 +76,7 @@ jobs:
         run: |
           npm install -g newman newman-reporter-htmlextra
 
-      - name: Execute QA Integrations
+      - name: Execute QA Flujos Criticos
         shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -133,7 +127,7 @@ jobs:
         shell: bash
         run: |
           SAFE=$(echo "${{ github.event.inputs.folder }}" | sed 's#[ /]#-#g')
-          echo "value=integrations-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+          echo "value=flujos-criticos-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifacts
         if: always()
