@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-get_config.py — Lee collections.json y devuelve el valor solicitado.
+get_config.py — Lee el archivo de configuracion de colecciones y devuelve el valor solicitado.
 Uso: python3 get_config.py <config_path> <proyecto> <key> <mode>
+
   mode=id          → devuelve collection_id
+  mode=type        → devuelve el tipo de coleccion: "folder" (default) o "items"
   mode=folder_id   → devuelve el ID de la carpeta cuyo nombre es <key>
   mode=all_folders → devuelve todos los IDs de carpetas separados por newline
-  mode=all_items   → devuelve todos los IDs de items dentro de folders[key], uno por línea
+  mode=all_items   → devuelve todos los IDs de items dentro de folders[key], uno por linea
+  mode=item_id     → devuelve el ID de un item especifico (requiere 6 args)
 """
 import json, sys
 
@@ -23,10 +26,10 @@ def main():
         with open(config_path, encoding='utf-8') as f:
             data = json.load(f)
     except FileNotFoundError:
-        print(f"ERROR: No se encontró {config_path}", file=sys.stderr)
+        print(f"ERROR: No se encontro {config_path}", file=sys.stderr)
         sys.exit(1)
     except json.JSONDecodeError as e:
-        print(f"ERROR: collections.json inválido: {e}", file=sys.stderr)
+        print(f"ERROR: JSON invalido en {config_path}: {e}", file=sys.stderr)
         sys.exit(1)
 
     proj = data.get(proyecto)
@@ -41,6 +44,13 @@ def main():
             print(f"ERROR: collection_id no definido para '{proyecto}'", file=sys.stderr)
             sys.exit(1)
         print(cid)
+
+    elif mode == 'type':
+        # Devuelve el tipo de coleccion.
+        # "folder" → Newman ejecuta carpetas nativas de Postman (sin filtrado por IDs)
+        # "items"  → Newman ejecuta requests filtrados por IDs definidos en el JSON
+        # Si no esta definido, asume "folder" como default seguro.
+        print(proj.get('type', 'folder'))
 
     elif mode == 'all_folders':
         folders = proj.get('folders', {})
@@ -63,7 +73,7 @@ def main():
 
     elif mode == 'item_id':
         if len(sys.argv) < 6:
-            print(f"ERROR: item_id requiere 6 args: config proyecto pais item_id item_name", file=sys.stderr)
+            print(f"ERROR: item_id requiere 6 args: config proyecto key mode item_name", file=sys.stderr)
             sys.exit(1)
         item_name = sys.argv[5]
         folders = proj.get('folders', {})
@@ -91,7 +101,7 @@ def main():
         print('\n'.join(items.values()))
 
     else:
-        print(f"ERROR: mode inválido '{mode}'. Usar: id, all_folders, folder_id, item_id, all_items", file=sys.stderr)
+        print(f"ERROR: mode invalido '{mode}'. Usar: id, type, all_folders, folder_id, item_id, all_items", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == '__main__':
