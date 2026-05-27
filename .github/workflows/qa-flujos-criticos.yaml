@@ -14,6 +14,11 @@ on:
           - "Onboarding Colombia MD / 2. Onboarding"
           - "Onboarding Colombia MD / 3. Create creditrequest"
           - "Onboarding Colombia MD / 4. DecisionCommittee"
+          - "Onboarding Mexico MD"
+          - "Onboarding Mexico MD / 1. Create User"
+          - "Onboarding Mexico MD / 2. Onboarding"
+          - "Onboarding Mexico MD / 3. Create creditrequest"
+          - "Onboarding Mexico MD / 4. DecisionCommittee"
 
       pais:
         description: "País"
