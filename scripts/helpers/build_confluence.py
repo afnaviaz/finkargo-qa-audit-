@@ -7,6 +7,88 @@ Imprime el HTML resultante por stdout.
 """
 import json, sys, html as htmllib
 
+def build_endpoint_breakdown_section(breakdown):
+    if not breakdown:
+        return ''
+
+    method_styles = {
+        'GET':    ('#e3f2fd', '#1565c0'),
+        'POST':   ('#e8f5e9', '#1b5e20'),
+        'PUT':    ('#fff3e0', '#e65100'),
+        'PATCH':  ('#f3e5f5', '#6a1b9a'),
+        'DELETE': ('#ffebee', '#c62828'),
+    }
+
+    rows = ''
+    for i, ep in enumerate(breakdown, 1):
+        failed  = ep.get('failed_tests', 0)
+        total   = ep.get('total_tests', 0)
+        passed  = ep.get('passed_tests', 0)
+        method  = ep.get('method', '').upper()
+        name    = htmllib.escape(ep.get('name', ''))
+        errors  = ep.get('errors', [])
+
+        row_bg        = '#fff8f8' if failed > 0 else ('#f9fbe7' if i % 2 == 0 else '#ffffff')
+        status_color  = '#c62828' if failed > 0 else '#2e7d32'
+        status_icon   = '❌' if failed > 0 else '✅'
+        status_text   = 'FAIL' if failed > 0 else 'PASS'
+        fail_color    = '#c62828' if failed > 0 else '#90a4ae'
+        fail_weight   = '700' if failed > 0 else '400'
+
+        mbg, mcolor   = method_styles.get(method, ('#f5f5f5', '#333'))
+
+        error_detail  = ''
+        if errors:
+            escaped = ''.join(f'<li style="margin:2px 0; color:#c62828;">{htmllib.escape(e)}</li>' for e in errors)
+            error_detail = f'<ul style="margin:4px 0 0 0; padding-left:16px; font-size:11px;">{escaped}</ul>'
+
+        rows += f"""
+        <tr style="background:{row_bg};">
+          <td style="padding:8px 12px; text-align:center; color:#90a4ae; font-size:12px;">{i}</td>
+          <td style="padding:8px 12px; font-size:13px;">{name}{error_detail}</td>
+          <td style="padding:8px 12px; text-align:center;">
+            <span style="background:{mbg}; color:{mcolor}; padding:2px 8px; border-radius:4px;
+                         font-size:11px; font-weight:700; font-family:monospace;">{method}</span>
+          </td>
+          <td style="padding:8px 12px; text-align:center; font-weight:600;">{total}</td>
+          <td style="padding:8px 12px; text-align:center; color:#1b5e20; font-weight:700;">{passed}</td>
+          <td style="padding:8px 12px; text-align:center; color:{fail_color}; font-weight:{fail_weight};">{failed}</td>
+          <td style="padding:8px 12px; text-align:center;">
+            <span style="color:{status_color}; font-weight:700;">{status_icon} {status_text}</span>
+          </td>
+        </tr>"""
+
+    total_eps  = len(breakdown)
+    failed_eps = sum(1 for ep in breakdown if ep.get('failed_tests', 0) > 0)
+    badge_bg   = '#ffebee' if failed_eps > 0 else '#e8f5e9'
+    badge_col  = '#c62828' if failed_eps > 0 else '#1b5e20'
+
+    return f"""<div style="margin-bottom:24px;">
+    <h2 style="font-size:16px; color:#37474f; border-bottom:2px solid #b0bec5;
+               padding-bottom:8px; margin-bottom:12px;">
+      📋 Desglose por Endpoint
+      <span style="font-size:12px; font-weight:400; color:#666; margin-left:8px;">
+        {total_eps} requests
+        &nbsp;·&nbsp;
+        <span style="background:{badge_bg}; color:{badge_col}; padding:1px 8px;
+                     border-radius:10px; font-weight:700;">{failed_eps} con fallos</span>
+      </span>
+    </h2>
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <tr style="background:#455a64; color:#fff;">
+        <th style="padding:10px 12px; text-align:center; width:4%;">#</th>
+        <th style="padding:10px 12px; text-align:left;">Endpoint / Escenario</th>
+        <th style="padding:10px 12px; text-align:center; width:8%;">Método</th>
+        <th style="padding:10px 12px; text-align:center; width:10%;">Total Tests</th>
+        <th style="padding:10px 12px; text-align:center; width:10%;">✅ Pasaron</th>
+        <th style="padding:10px 12px; text-align:center; width:10%;">❌ Fallaron</th>
+        <th style="padding:10px 12px; text-align:center; width:10%;">Estado</th>
+      </tr>
+      {rows}
+    </table>
+  </div>"""
+
+
 def build_db_section(db_data):
     if not db_data or not db_data.get('ran') or not db_data.get('results'):
         return ''
@@ -171,6 +253,9 @@ def main():
       </td>
     </tr>
   </table>
+
+  <!-- DESGLOSE POR ENDPOINT -->
+  {build_endpoint_breakdown_section(m.get('endpoint_breakdown', []))}
 
   <!-- VALIDACIÓN BASE DE DATOS -->
   {build_db_section(db_data)}
