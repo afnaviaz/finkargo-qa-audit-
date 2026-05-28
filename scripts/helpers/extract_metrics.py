@@ -55,17 +55,49 @@ def main():
             "type":      "assertion" if error.get('name') == 'AssertionError' else "request"
         })
 
+    # Desglose por endpoint desde run.executions
+    endpoint_breakdown = []
+    for execution in run.get('executions', []):
+        item       = execution.get('item', {})
+        name       = item.get('name', 'N/A')
+        assertions = execution.get('assertions', [])
+        total_ep   = len(assertions)
+        failed_ep  = sum(1 for a in assertions if a.get('error') is not None)
+        passed_ep  = total_ep - failed_ep
+
+        req_ep     = execution.get('request', {})
+        if not req_ep:
+            resp_ep = execution.get('response', {})
+            req_ep  = (resp_ep.get('originalRequest', {}) if isinstance(resp_ep, dict) else {})
+        method_ep  = req_ep.get('method', '') if isinstance(req_ep, dict) else ''
+
+        failed_tests_ep = [
+            a.get('error', {}).get('message', 'N/A')
+            for a in assertions if a.get('error') is not None
+        ]
+
+        endpoint_breakdown.append({
+            "name":         name,
+            "method":       method_ep,
+            "total_tests":  total_ep,
+            "passed_tests": passed_ep,
+            "failed_tests": failed_ep,
+            "status":       "PASS" if failed_ep == 0 else "FAIL",
+            "errors":       failed_tests_ep,
+        })
+
     metrics = {
-        "total_requests":  total_requests,
-        "failed_requests": failed_requests,
-        "total_tests":     total_tests,
-        "passed_tests":    passed_tests,
-        "failed_tests":    failed_tests,
-        "pass_rate":       pass_rate,
-        "duration_ms":     duration_ms,
-        "duration_s":      round(duration_ms / 1000, 2),
-        "status":          "PASS" if failed_tests == 0 else "FAIL",
-        "failures":        clean_failures
+        "total_requests":    total_requests,
+        "failed_requests":   failed_requests,
+        "total_tests":       total_tests,
+        "passed_tests":      passed_tests,
+        "failed_tests":      failed_tests,
+        "pass_rate":         pass_rate,
+        "duration_ms":       duration_ms,
+        "duration_s":        round(duration_ms / 1000, 2),
+        "status":            "PASS" if failed_tests == 0 else "FAIL",
+        "failures":          clean_failures,
+        "endpoint_breakdown": endpoint_breakdown,
     }
 
     with open(metrics_path, 'w', encoding='utf-8') as f:
