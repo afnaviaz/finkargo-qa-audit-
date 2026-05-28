@@ -28,33 +28,36 @@ def build_endpoint_breakdown_section(breakdown):
         name    = htmllib.escape(ep.get('name', ''))
         errors  = ep.get('errors', [])
 
-        row_bg        = '#fff8f8' if failed > 0 else ('#f9fbe7' if i % 2 == 0 else '#ffffff')
-        status_color  = '#c62828' if failed > 0 else '#2e7d32'
-        status_icon   = '❌' if failed > 0 else '✅'
-        status_text   = 'FAIL' if failed > 0 else 'PASS'
-        fail_color    = '#c62828' if failed > 0 else '#90a4ae'
-        fail_weight   = '700' if failed > 0 else '400'
+        row_bg       = '#fff5f5' if failed > 0 else ('#f7fbf7' if i % 2 == 0 else '#ffffff')
+        status_color = '#c62828' if failed > 0 else '#2e7d32'
+        status_icon  = '❌' if failed > 0 else '✅'
+        fail_color   = '#c62828' if failed > 0 else '#bdbdbd'
+        fail_weight  = '700' if failed > 0 else '400'
+        mbg, mcolor  = method_styles.get(method, ('#f5f5f5', '#333'))
 
-        mbg, mcolor   = method_styles.get(method, ('#f5f5f5', '#333'))
-
-        error_detail  = ''
+        error_detail = ''
         if errors:
-            escaped = ''.join(f'<li style="margin:2px 0; color:#c62828;">{htmllib.escape(e)}</li>' for e in errors)
-            error_detail = f'<ul style="margin:4px 0 0 0; padding-left:16px; font-size:11px;">{escaped}</ul>'
+            items = ''.join(
+                f'<div style="font-size:10px; color:#b71c1c; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:340px;">▸ {htmllib.escape(e)}</div>'
+                for e in errors[:3]
+            )
+            if len(errors) > 3:
+                items += f'<div style="font-size:10px; color:#9e9e9e;">+{len(errors)-3} más</div>'
+            error_detail = f'<div style="margin-top:2px; line-height:1.3;">{items}</div>'
 
+        border = '1px solid #fce8e8' if failed > 0 else '1px solid #f0f0f0'
         rows += f"""
         <tr style="background:{row_bg};">
-          <td style="padding:8px 12px; text-align:center; color:#90a4ae; font-size:12px;">{i}</td>
-          <td style="padding:8px 12px; font-size:13px;">{name}{error_detail}</td>
-          <td style="padding:8px 12px; text-align:center;">
-            <span style="background:{mbg}; color:{mcolor}; padding:2px 8px; border-radius:4px;
-                         font-size:11px; font-weight:700; font-family:monospace;">{method}</span>
+          <td style="padding:4px 6px; text-align:center; color:#bdbdbd; font-size:10px; border-bottom:{border};">{i}</td>
+          <td style="padding:4px 8px; font-size:11px; border-bottom:{border}; line-height:1.4;">{name}{error_detail}</td>
+          <td style="padding:4px 6px; text-align:center; border-bottom:{border};">
+            <span style="background:{mbg}; color:{mcolor}; padding:1px 5px; border-radius:3px; font-size:9px; font-weight:700; font-family:monospace; white-space:nowrap;">{method}</span>
           </td>
-          <td style="padding:8px 12px; text-align:center; font-weight:600;">{total}</td>
-          <td style="padding:8px 12px; text-align:center; color:#1b5e20; font-weight:700;">{passed}</td>
-          <td style="padding:8px 12px; text-align:center; color:{fail_color}; font-weight:{fail_weight};">{failed}</td>
-          <td style="padding:8px 12px; text-align:center;">
-            <span style="color:{status_color}; font-weight:700;">{status_icon} {status_text}</span>
+          <td style="padding:4px 6px; text-align:center; font-size:11px; font-weight:600; color:#546e7a; border-bottom:{border};">{total}</td>
+          <td style="padding:4px 6px; text-align:center; font-size:11px; color:#2e7d32; font-weight:700; border-bottom:{border};">{passed}</td>
+          <td style="padding:4px 6px; text-align:center; font-size:11px; color:{fail_color}; font-weight:{fail_weight}; border-bottom:{border};">{failed}</td>
+          <td style="padding:4px 6px; text-align:center; font-size:12px; border-bottom:{border};">
+            <span style="color:{status_color};">{status_icon}</span>
           </td>
         </tr>"""
 
@@ -63,26 +66,24 @@ def build_endpoint_breakdown_section(breakdown):
     badge_bg   = '#ffebee' if failed_eps > 0 else '#e8f5e9'
     badge_col  = '#c62828' if failed_eps > 0 else '#1b5e20'
 
-    return f"""<div style="margin-bottom:24px;">
-    <h2 style="font-size:16px; color:#37474f; border-bottom:2px solid #b0bec5;
-               padding-bottom:8px; margin-bottom:12px;">
-      📋 Desglose por Endpoint
-      <span style="font-size:12px; font-weight:400; color:#666; margin-left:8px;">
-        {total_eps} requests
-        &nbsp;·&nbsp;
-        <span style="background:{badge_bg}; color:{badge_col}; padding:1px 8px;
-                     border-radius:10px; font-weight:700;">{failed_eps} con fallos</span>
+    return f"""<div style="margin-bottom:20px;">
+    <h2 style="font-size:13px; font-weight:700; color:#37474f; border-bottom:2px solid #cfd8dc;
+               padding-bottom:6px; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+      📋 Desglose por Endpoint &nbsp;
+      <span style="font-size:11px; font-weight:400; color:#78909c; text-transform:none; letter-spacing:0;">
+        {total_eps} requests &nbsp;·&nbsp;
+        <span style="background:{badge_bg}; color:{badge_col}; padding:1px 7px; border-radius:10px; font-weight:700;">{failed_eps} con fallos</span>
       </span>
     </h2>
-    <table style="width:100%; border-collapse:collapse; font-size:13px;">
-      <tr style="background:#455a64; color:#fff;">
-        <th style="padding:10px 12px; text-align:center; width:4%;">#</th>
-        <th style="padding:10px 12px; text-align:left;">Endpoint / Escenario</th>
-        <th style="padding:10px 12px; text-align:center; width:8%;">Método</th>
-        <th style="padding:10px 12px; text-align:center; width:10%;">Total Tests</th>
-        <th style="padding:10px 12px; text-align:center; width:10%;">✅ Pasaron</th>
-        <th style="padding:10px 12px; text-align:center; width:10%;">❌ Fallaron</th>
-        <th style="padding:10px 12px; text-align:center; width:10%;">Estado</th>
+    <table style="width:100%; border-collapse:collapse; font-size:11px;">
+      <tr style="background:#546e7a; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:0.3px;">
+        <th style="padding:5px 6px; text-align:center; width:3%; font-weight:600;">#</th>
+        <th style="padding:5px 8px; text-align:left; font-weight:600;">Endpoint / Escenario</th>
+        <th style="padding:5px 6px; text-align:center; width:7%; font-weight:600;">Método</th>
+        <th style="padding:5px 6px; text-align:center; width:8%; font-weight:600;">Total</th>
+        <th style="padding:5px 6px; text-align:center; width:8%; font-weight:600;">✅ Pass</th>
+        <th style="padding:5px 6px; text-align:center; width:8%; font-weight:600;">❌ Fail</th>
+        <th style="padding:5px 6px; text-align:center; width:7%; font-weight:600;">OK?</th>
       </tr>
       {rows}
     </table>
@@ -94,9 +95,9 @@ def build_db_section(db_data):
         return ''
 
     result_colors = {
-        'OK':   ('#e8f5e9', '#2e7d32', '✅'),
-        'WARN': ('#fff8e1', '#f57f17', '⚠️'),
-        'FAIL': ('#ffebee', '#c62828', '❌'),
+        'OK':   ('#f1faf2', '#2e7d32', '✅'),
+        'WARN': ('#fffde7', '#f57f17', '⚠️'),
+        'FAIL': ('#fff5f5', '#c62828', '❌'),
     }
 
     rows = ''
@@ -104,24 +105,26 @@ def build_db_section(db_data):
         bg, color, icon = result_colors.get(r['result'], ('#f5f5f5', '#333', '❓'))
         rows += f"""
         <tr style="background:{bg};">
-          <td style="padding:10px 14px; font-weight:600; color:#37474f;">{r['table']}</td>
-          <td style="padding:10px 14px; font-family:monospace; font-size:12px;">{r['external_id']}</td>
-          <td style="padding:10px 14px; font-weight:700; color:{color};">{r['status']}</td>
-          <td style="padding:10px 14px; color:#666;">{r['expected']}</td>
-          <td style="padding:10px 14px; font-weight:700; color:{color}; text-align:center;">{icon} {r['result']}</td>
+          <td style="padding:4px 8px; font-weight:600; color:#37474f; font-size:11px; border-bottom:1px solid #e8f5e9;">{r['table']}</td>
+          <td style="padding:4px 8px; font-family:monospace; font-size:10px; color:#546e7a; border-bottom:1px solid #e8f5e9;">{r['external_id']}</td>
+          <td style="padding:4px 8px; font-weight:600; color:{color}; font-size:11px; border-bottom:1px solid #e8f5e9;">{r['status']}</td>
+          <td style="padding:4px 8px; color:#757575; font-size:11px; border-bottom:1px solid #e8f5e9;">{r['expected']}</td>
+          <td style="padding:4px 8px; font-weight:700; color:{color}; text-align:center; font-size:11px; border-bottom:1px solid #e8f5e9;">{icon} {r['result']}</td>
         </tr>"""
 
-    return f"""<div style="margin-bottom:24px;">
-    <h2 style="font-size:16px; color:#1b5e20; border-bottom:2px solid #1b5e20; padding-bottom:8px; margin-bottom:12px;">
-      🗄️ Validación de Estados — Base de Datos ({db_data.get('ambiente','')}/{db_data.get('pais','')})
+    return f"""<div style="margin-bottom:20px;">
+    <h2 style="font-size:13px; font-weight:700; color:#1b5e20; border-bottom:2px solid #a5d6a7;
+               padding-bottom:6px; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+      🗄️ Validación BD &nbsp;
+      <span style="font-size:11px; font-weight:400; color:#78909c; text-transform:none; letter-spacing:0;">{db_data.get('ambiente','')}/{db_data.get('pais','')}</span>
     </h2>
-    <table style="width:100%; border-collapse:collapse; border-radius:8px; overflow:hidden; font-size:13px;">
-      <tr style="background:#1b5e20; color:#fff;">
-        <th style="padding:10px 14px; text-align:left;">Tabla</th>
-        <th style="padding:10px 14px; text-align:left;">external_id</th>
-        <th style="padding:10px 14px; text-align:left;">Status BD</th>
-        <th style="padding:10px 14px; text-align:left;">Esperado</th>
-        <th style="padding:10px 14px; text-align:center;">Resultado</th>
+    <table style="width:100%; border-collapse:collapse; font-size:11px;">
+      <tr style="background:#2e7d32; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:0.3px;">
+        <th style="padding:5px 8px; text-align:left; font-weight:600;">Tabla</th>
+        <th style="padding:5px 8px; text-align:left; font-weight:600;">external_id</th>
+        <th style="padding:5px 8px; text-align:left; font-weight:600;">Status BD</th>
+        <th style="padding:5px 8px; text-align:left; font-weight:600;">Esperado</th>
+        <th style="padding:5px 8px; text-align:center; font-weight:600;">Resultado</th>
       </tr>
       {rows}
     </table>

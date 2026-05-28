@@ -389,38 +389,41 @@ log_ok "Reporte Claude -> $CLAUDE_REPORT"
 # ----------------------------------------------------------
 # 10. PUBLICACION EN CONFLUENCE
 # ----------------------------------------------------------
-log "Publicando en Confluence..."
 
-if [[ "$AMBIENTE" == "Staging" ]]; then
-    AMBIENTE_PARENT_ID="2217115649"
-else
-    AMBIENTE_PARENT_ID="2216984577"
-fi
+# Busca una página en Confluence por título y padre exacto.
+# Si no existe, la crea como índice de hijos.
+# Devuelve el ID por stdout; logs van a stderr para no contaminar la captura.
+conf_find_or_create() {
+    local PARENT_ID="$1"
+    local TITLE="$2"
 
-FOLDER_TITLE="Auditorias $AMBIENTE - $PROYECTO"
-PAGE_TITLE="[$PROYECTO] [$PAIS_INPUT] $FOLDER_NAME - Run #$EXEC_NUM"
+    local CQL_ENC
+    CQL_ENC=$(python3 -c "
+import urllib.parse, sys
+title, parent_id, space = sys.argv[1], sys.argv[2], sys.argv[3]
+cql = 'title=\"{}\" AND parent={} AND space=\"{}\"'.format(title, parent_id, space)
+print(urllib.parse.quote(cql))
+" "$TITLE" "$PARENT_ID" "$SPACE_KEY")
 
-SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&spaceKey=${SPACE_KEY}"
-SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
-    CURL_CODE=$?
-    log_err "Error conectando a Confluence (curl exit: $CURL_CODE)."
-    log_err "URL intentada: $SEARCH_URL"
-    log_err "Verifica CONF_USER ('${CONF_USER}') y CONF_TOKEN (${#CONF_TOKEN} chars)."
-    exit 1
-}
+    local SEARCH_RES
+    SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
+        "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5") || SEARCH_RES='{}'
 
-PROJECT_FOLDER_ID=$(python3 -c "
+    local PAGE_ID
+    PAGE_ID=$(python3 -c "
 import json, sys
 try:
     d = json.loads(sys.argv[1])
-    print(d['results'][0]['id'] if d.get('results') else '')
+    results = d.get('results', [])
+    print(results[0]['id'] if results else '')
 except:
     print('')
 " "$SEARCH_RES")
 
-if [[ -z "$PROJECT_FOLDER_ID" ]]; then
-    log "Creando carpeta padre en Confluence: '$FOLDER_TITLE'..."
-    CREATE_PAYLOAD=$(python3 -c "
+    if [[ -z "$PAGE_ID" ]]; then
+        echo "[$(date +'%H:%M:%S')] Creando carpeta Confluence: '$TITLE'..." >&2
+        local CREATE_PAYLOAD
+        CREATE_PAYLOAD=$(python3 -c "
 import json, sys
 print(json.dumps({
     'type': 'page',
@@ -431,18 +434,52 @@ print(json.dumps({
         'value': '<ac:structured-macro ac:name=\"children\"><ac:parameter ac:name=\"sort\">creation</ac:parameter></ac:structured-macro>',
         'representation': 'storage'
     }}
-}))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
+}))" "$TITLE" "$SPACE_KEY" "$PARENT_ID")
 
-    PROJECT_FOLDER_ID=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
-        -X POST -H 'Content-Type: application/json' \
-        -d "$CREATE_PAYLOAD" \
-        "$CONF_BASE_URL/rest/api/content" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
+        PAGE_ID=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
+            -X POST -H 'Content-Type: application/json' \
+            -d "$CREATE_PAYLOAD" \
+            "$CONF_BASE_URL/rest/api/content" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
 
-    [[ -z "$PROJECT_FOLDER_ID" ]] && { log_err "No se pudo crear carpeta padre en Confluence."; exit 1; }
-    log_ok "Carpeta creada: ID $PROJECT_FOLDER_ID"
+        if [[ -z "$PAGE_ID" ]]; then
+            echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear carpeta '$TITLE'." >&2
+            return 1
+        fi
+        echo "[$(date +'%H:%M:%S')] OK  Carpeta creada: '$TITLE' (ID: $PAGE_ID)" >&2
+    else
+        echo "[$(date +'%H:%M:%S')] Carpeta encontrada: '$TITLE' (ID: $PAGE_ID)" >&2
+    fi
+
+    echo "$PAGE_ID"
+}
+
+log "Publicando en Confluence..."
+
+if [[ "$AMBIENTE" == "Staging" ]]; then
+    AMBIENTE_PARENT_ID="2217115649"
 else
-    log "Carpeta padre encontrada: ID $PROJECT_FOLDER_ID"
+    AMBIENTE_PARENT_ID="2216984577"
 fi
+
+# Verificar conectividad antes de la jerarquía completa
+PROBE_URL="${CONF_BASE_URL}/rest/api/content?spaceKey=${SPACE_KEY}&limit=1"
+curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" "$PROBE_URL" > /dev/null || {
+    log_err "Error conectando a Confluence."
+    log_err "Verifica CONF_USER ('${CONF_USER}') y CONF_TOKEN (${#CONF_TOKEN} chars)."
+    exit 1
+}
+
+PAGE_TITLE="[$PROYECTO] [$PAIS_INPUT] $FOLDER_NAME - Run #$EXEC_NUM"
+
+# Nivel 1 — Proyecto/Ambiente  (ej. "Auditorias Testing - Flows APP")
+PROJECT_FOLDER_ID=$(conf_find_or_create "$AMBIENTE_PARENT_ID" "Auditorias $AMBIENTE - $PROYECTO") || exit 1
+
+# Nivel 2 — Flujo              (ej. "Onboarding Colombia MD")
+FLOW_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$FOLDER_NAME") || exit 1
+
+# Nivel 3 — País               (ej. "CO" / "MX" / "ALL")
+COUNTRY_FOLDER_ID=$(conf_find_or_create "$FLOW_FOLDER_ID" "$PAIS_INPUT") || exit 1
 
 python3 "$HELPERS_DIR/build_confluence.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" "$LOG_FILE" \
@@ -461,7 +498,7 @@ print(json.dumps({
     'space': {'key': sys.argv[2]},
     'ancestors': [{'id': sys.argv[3]}],
     'body': {'storage': {'value': body, 'representation': 'storage'}}
-}))" "$PAGE_TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$CONFLUENCE_BODY")
+}))" "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" "$CONFLUENCE_BODY")
 
 RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
