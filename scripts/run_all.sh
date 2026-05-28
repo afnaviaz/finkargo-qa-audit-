@@ -57,11 +57,11 @@ HELPERS_DIR="$SCRIPTS_DIR/helpers"
 # MAPEO PROYECTO → ARCHIVO DE CONFIGURACION
 # Para agregar un proyecto nuevo: solo añade una línea al case.
 # ----------------------------------------------------------
+CONFIG_FILE=$(echo "$PROYECTO" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g').json
+
 case "$PROYECTO" in
-    "Flows APP")         CONFIG_FILE="qa-flujos-criticos.json" ;;
-    "QA Operations")     CONFIG_FILE="qa-operations.json" ;;
-    "ms-communicator")   CONFIG_FILE="ms-communicator.json" ;;
-    *)                   CONFIG_FILE="${PROYECTO}.json" ;;
+    "Flows APP")       CONFIG_FILE="qa-flujos-criticos.json" ;;
+    "ms-communicator") CONFIG_FILE="ms-communicator.json" ;;
 esac
 
 CONFIG_PATH="$SCRIPTS_DIR/config/$CONFIG_FILE"
