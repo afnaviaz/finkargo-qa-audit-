@@ -134,6 +134,10 @@ elif [[ "$NEWMAN_FOLDER" == "Create Payment Card recurring epayments" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time epayments" ]]; then
     SCENARIO="stripe_oxxo_epayments"
     log "Escenario: STRIPE OXXO ONE TIME EPAYMENTS (PG005)"
+elif [[ "$NEWMAN_FOLDER" == "laft-reconsult-monolito" ]]; then
+    SCENARIO="laft_reconsult"
+    NEWMAN_FOLDER="ENDPOINTS MIGRADOS"
+    log "Escenario: LAFT RECONSULT — 36 compañías, corre monolito + integrations en orden"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -287,6 +291,17 @@ elif [[ "$SCENARIO" == "stripe_balance_recurring_epayments" ]]; then
 elif [[ "$SCENARIO" == "stripe_balance_one_time_epayments" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe Balance one time epayments: 11 iteraciones"
+elif [[ "$SCENARIO" == "laft_reconsult" ]]; then
+    if [[ "$AMBIENTE" == "Staging" ]]; then
+        LAFT_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com"
+    else
+        LAFT_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com"
+    fi
+    NEWMAN_BASE_ARGS+=("--iteration-count" "36")
+    NEWMAN_BASE_ARGS+=("--env-var" "companyIndex=0")
+    NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
+    NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${LAFT_MONOLITO_BASE}")
+    log "LAFT Reconsult: 36 iteraciones | monolito: ${LAFT_MONOLITO_BASE}"
 fi
 
 # ----------------------------------------------------------

@@ -31,7 +31,8 @@ on:
           "STRIPE EPAYMENTS / Create Payment Card recurring epayments",
           "STRIPE EPAYMENTS / Create Payment Oxxo one time epayments",
           "STRIPE EPAYMENTS / Create Payment Customer balance recurring",
-          "STRIPE EPAYMENTS / Create Payment Customer balance one time"
+          "STRIPE EPAYMENTS / Create Payment Customer balance one time",
+          "ENDPOINTS MIGRADOS / laft-reconsult-monolito"
         ]
       pais:
         description: "País"
