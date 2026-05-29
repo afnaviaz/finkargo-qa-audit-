@@ -308,17 +308,20 @@ elif [[ "$SCENARIO" == "laft_reconsult" ]]; then
     log "LAFT Reconsult: 36 iteraciones | monolito: ${LAFT_MONOLITO_BASE}"
 elif [[ "$SCENARIO" == "upload_buro_mx" ]]; then
     if [[ "$AMBIENTE" == "Staging" ]]; then
-        BURO_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com"
+        BURO_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com.mx"
+        BURO_INTEGRATIONS_MX="https://msa-integrations-mx-staging.back.finkargo.com.mx"
     else
-        BURO_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com"
+        BURO_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com.mx"
+        BURO_INTEGRATIONS_MX="https://msa-integrations-mx-testing.back.finkargo.com.mx"
     fi
     NEWMAN_BASE_ARGS+=("--iteration-count" "35")
     NEWMAN_BASE_ARGS+=("--env-var" "rfcIndex=0")
     NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "consumoBuro=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${BURO_MONOLITO_BASE}")
+    NEWMAN_BASE_ARGS+=("--env-var" "api-integrations-mx=${BURO_INTEGRATIONS_MX}")
     NEWMAN_BASE_ARGS+=("--working-dir" "${SCRIPTS_DIR}/data")
-    log "Upload Buro MX: 35 iteraciones | monolito: ${BURO_MONOLITO_BASE} | working-dir: ${SCRIPTS_DIR}/data"
+    log "Upload Buro MX: 35 iteraciones | monolito: ${BURO_MONOLITO_BASE} | integrations-mx: ${BURO_INTEGRATIONS_MX} | working-dir: ${SCRIPTS_DIR}/data"
 fi
 
 # ----------------------------------------------------------
