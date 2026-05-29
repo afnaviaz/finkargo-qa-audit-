@@ -138,6 +138,10 @@ elif [[ "$NEWMAN_FOLDER" == "laft-reconsult-monolito" ]]; then
     SCENARIO="laft_reconsult"
     NEWMAN_FOLDER="ENDPOINTS MIGRADOS"
     log "Escenario: LAFT RECONSULT — 36 compañías, corre monolito + integrations en orden"
+elif [[ "$NEWMAN_FOLDER" == "upload-buro-mx" ]]; then
+    SCENARIO="upload_buro_mx"
+    NEWMAN_FOLDER="ea1f69c0-7bf1-4cf1-91e7-427294a69625"
+    log "Escenario: UPLOAD BURO MX — 35 RFCs, integrations + monolito"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -302,6 +306,19 @@ elif [[ "$SCENARIO" == "laft_reconsult" ]]; then
     NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${LAFT_MONOLITO_BASE}")
     log "LAFT Reconsult: 36 iteraciones | monolito: ${LAFT_MONOLITO_BASE}"
+elif [[ "$SCENARIO" == "upload_buro_mx" ]]; then
+    if [[ "$AMBIENTE" == "Staging" ]]; then
+        BURO_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com"
+    else
+        BURO_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com"
+    fi
+    NEWMAN_BASE_ARGS+=("--iteration-count" "35")
+    NEWMAN_BASE_ARGS+=("--env-var" "rfcIndex=0")
+    NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
+    NEWMAN_BASE_ARGS+=("--env-var" "consumoBuro=[]")
+    NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${BURO_MONOLITO_BASE}")
+    NEWMAN_BASE_ARGS+=("--working-dir" "${SCRIPTS_DIR}/data")
+    log "Upload Buro MX: 35 iteraciones | monolito: ${BURO_MONOLITO_BASE} | working-dir: ${SCRIPTS_DIR}/data"
 fi
 
 # ----------------------------------------------------------
