@@ -3,6 +3,11 @@ name: QA-Flujos-Criticos
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner a usar (etiqueta del runner)"
+        required: true
+        default: "andresnavia"
+        type: string
       folder:
         description: "Carpeta a ejecutar"
         required: true
@@ -19,7 +24,6 @@ on:
           - "Onboarding Mexico MD / 2. Onboarding"
           - "Onboarding Mexico MD / 3. Create creditrequest"
           - "Onboarding Mexico MD / 4. DecisionCommittee"
-
       pais:
         description: "Variable de país para ejecución"
         required: true
@@ -29,7 +33,6 @@ on:
           - CO
           - MX
           - ALL
-
       ambiente:
         description: "Ambiente de ejecución"
         required: true
@@ -39,9 +42,12 @@ on:
           - Testing
           - Staging
 
-  # Permite que repos de microservicios llamen este workflow
   workflow_call:
     inputs:
+      runner:
+        type: string
+        required: true
+        default: "andresnavia"
       folder:
         type: string
         required: true
@@ -110,11 +116,7 @@ permissions:
 jobs:
   run-qa-flujos-criticos:
     name: "Flujos Críticos: ${{ inputs.folder }} - ${{ inputs.pais }}"
-
-    runs-on:
-      - self-hosted
-      - macOS
-      - X64
+    runs-on: [self-hosted, "${{ inputs.runner }}"]
 
     steps:
       - name: Checkout Repository
@@ -122,7 +124,15 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Check Python
+      # ── Python ───────────────────────────────────────────
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Check Python (macOS / Linux)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           python3 --version
@@ -134,6 +144,21 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install requests psycopg2-binary
 
+      # ── Python3 alias (solo Windows con Git Bash) ────────
+      - name: Create python3 alias for Git Bash (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+          if ($pythonExe) {
+            $dir = Split-Path $pythonExe
+            Copy-Item $pythonExe "$dir\python3.exe" -Force
+            Write-Host "python3.exe creado en: $dir"
+          } else {
+            Write-Error "Python no encontrado en PATH"
+          }
+
+      # ── Node / Newman ────────────────────────────────────
       - name: Check Node
         shell: bash
         run: |
@@ -145,7 +170,9 @@ jobs:
         run: |
           npm install -g newman newman-reporter-htmlextra
 
-      - name: Execute QA Flujos Criticos
+      # ── Ejecución ────────────────────────────────────────
+      - name: Execute QA Flujos Criticos (macOS / Linux)
+        if: runner.os != 'Windows'
         shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -175,7 +202,6 @@ jobs:
           DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
           DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
           DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
-
         run: |
           chmod +x ./scripts/run_all.sh
           ./scripts/run_all.sh \
@@ -184,19 +210,63 @@ jobs:
             "${{ inputs.pais }}" \
             "${{ inputs.ambiente }}"
 
-      - name: Set artifact name
-        if: always()
-        id: artifact-name
+      - name: Execute QA Flujos Criticos (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          CI: "true"
+          PYTHONIOENCODING: "utf-8"
+          DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
+          DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
+          DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
+          DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
+          DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
+          DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
+          DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
+          DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
+          DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
+          DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
+          DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
+          DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
+          DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
+          DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
+          DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
+          DB_HOST_STAGING_MX: ${{ secrets.DB_HOST_STAGING_MX }}
+          DB_PORT_STAGING_MX: ${{ secrets.DB_PORT_STAGING_MX }}
+          DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
+          DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
+          DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
+        run: |
+          $bash = "C:\Program Files\Git\bin\bash.exe"
+          & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'Flows APP' '${{ inputs.folder }}' '${{ inputs.pais }}' '${{ inputs.ambiente }}'"
+
+      # ── Artefactos ───────────────────────────────────────
+      - name: Set artifact name (macOS / Linux)
+        if: always() && runner.os != 'Windows'
+        id: artifact-name-unix
         shell: bash
         run: |
           SAFE=$(echo "${{ inputs.folder }}" | sed 's#[ /]#-#g')
           echo "value=flujos-criticos-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
+      - name: Set artifact name (Windows)
+        if: always() && runner.os == 'Windows'
+        id: artifact-name-win
+        shell: powershell
+        run: |
+          $safe = "${{ inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
+          echo "value=flujos-criticos-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
+
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact-name.outputs.value }}
+          name: flujos-criticos-${{ github.run_id }}
           path: |
             scripts/*.html
             scripts/*.json

@@ -3,38 +3,115 @@ name: QA Integrations - Flows APP
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner a usar (etiqueta del runner)"
+        required: true
+        default: "andresnavia"
+        type: string
       folder:
         description: "Carpeta a ejecutar"
         required: true
         default: "SUPRA / SUPRA INTEGRATION"
         type: choice
-        options: [
-          "SUPRA / SUPRA INTEGRATION",
-          "SUPRA / SUPRA INTEGRATION / Happy path integration",
-          "SUPRA / SUPRA INTEGRATION / Rejected flow",
-          "SUPRA / SUPRA INTEGRATION / Expired flow",
-          "SUPRA / SUPRA WALLET - INTEGRATIONS",
-          "SUPRA / SUPRA WALLET - INTEGRATIONS / Happy path integration wallet",
-          "SUPRA / SUPRA WALLET - INTEGRATIONS / Happy path integration wallet varios documentos",
-          "SUPRA / SUPRA EPAYMENTS",
-          "SUPRA / SUPRA EPAYMENTS / Happy path epayments",
-          "SUPRA / SUPRA WALLET - EPAYMENTS",
-          "SUPRA / SUPRA WALLET - EPAYMENTS / Happy path wallet epayments",
-          "COBRE / COBRE INTEGRATIONS",
-          "COBRE / COBRE INTEGRATIONS / Happy path cobre"
-        ]
+        options:
+          - "SUPRA / SUPRA INTEGRATION"
+          - "SUPRA / SUPRA INTEGRATION / Happy path integration"
+          - "SUPRA / SUPRA INTEGRATION / Rejected flow"
+          - "SUPRA / SUPRA INTEGRATION / Expired flow"
+          - "SUPRA / SUPRA WALLET - INTEGRATIONS"
+          - "SUPRA / SUPRA WALLET - INTEGRATIONS / Happy path integration wallet"
+          - "SUPRA / SUPRA WALLET - INTEGRATIONS / Happy path integration wallet varios documentos"
+          - "SUPRA / SUPRA EPAYMENTS"
+          - "SUPRA / SUPRA EPAYMENTS / Happy path epayments"
+          - "SUPRA / SUPRA WALLET - EPAYMENTS"
+          - "SUPRA / SUPRA WALLET - EPAYMENTS / Happy path wallet epayments"
+          - "COBRE / COBRE INTEGRATIONS"
+          - "COBRE / COBRE INTEGRATIONS / Happy path cobre"
       pais:
         description: "País"
         required: true
         default: "CO"
         type: choice
-        options: [CO, MX, ALL]
+        options:
+          - CO
+          - MX
+          - ALL
       ambiente:
         description: "Ambiente de ejecución"
         required: true
         default: "Testing"
         type: choice
-        options: [Testing, Staging]
+        options:
+          - Testing
+          - Staging
+
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        required: true
+        default: "andresnavia"
+      folder:
+        type: string
+        required: true
+        default: "SUPRA / SUPRA INTEGRATION"
+      pais:
+        type: string
+        required: true
+        default: "CO"
+      ambiente:
+        type: string
+        required: true
+        default: "Testing"
+    secrets:
+      POSTMAN_API_KEY:
+        required: true
+      CONF_TOKEN:
+        required: true
+      CONF_USER:
+        required: true
+      ANTHROPIC_API_KEY:
+        required: false
+      DB_HOST_TESTING_CO:
+        required: false
+      DB_PORT_TESTING_CO:
+        required: false
+      DB_NAME_TESTING_CO:
+        required: false
+      DB_USER_TESTING_CO:
+        required: false
+      DB_PASSWORD_TESTING_CO:
+        required: false
+      DB_HOST_TESTING_MX:
+        required: false
+      DB_PORT_TESTING_MX:
+        required: false
+      DB_NAME_TESTING_MX:
+        required: false
+      DB_USER_TESTING_MX:
+        required: false
+      DB_PASSWORD_TESTING_MX:
+        required: false
+      DB_HOST_STAGING_CO:
+        required: false
+      DB_PORT_STAGING_CO:
+        required: false
+      DB_NAME_STAGING_CO:
+        required: false
+      DB_USER_STAGING_CO:
+        required: false
+      DB_PASSWORD_STAGING_CO:
+        required: false
+      DB_HOST_STAGING_MX:
+        required: false
+      DB_PORT_STAGING_MX:
+        required: false
+      DB_NAME_STAGING_MX:
+        required: false
+      DB_USER_STAGING_MX:
+        required: false
+      DB_PASSWORD_STAGING_MX:
+        required: false
 
 permissions:
   contents: read
@@ -42,23 +119,38 @@ permissions:
 
 jobs:
   run-integrations-pipeline:
-    name: "Integrations: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
-    runs-on: [self-hosted, TROCHACOL]
+    name: "Integrations: ${{ inputs.folder }} - ${{ inputs.pais }}"
+    runs-on: [self-hosted, "${{ inputs.runner }}"]
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Setup Python
+      # ── Python ───────────────────────────────────────────
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install Python dependencies
-        run: pip install requests psycopg2-binary
+      - name: Check Python (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python3 --version
+          which python3
 
-      - name: Create python3 alias for Git Bash
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install requests psycopg2-binary
+
+      # ── Python3 alias (solo Windows con Git Bash) ────────
+      - name: Create python3 alias for Git Bash (Windows)
+        if: runner.os == 'Windows'
         shell: powershell
         run: |
           $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
@@ -70,16 +162,70 @@ jobs:
             Write-Error "Python no encontrado en PATH"
           }
 
+      # ── Node / Newman ────────────────────────────────────
+      - name: Check Node
+        shell: bash
+        run: |
+          node --version
+          npm --version
+
       - name: Install Newman
-        run: npm install -g newman newman-reporter-htmlextra
+        shell: bash
+        run: |
+          npm install -g newman newman-reporter-htmlextra
 
       - name: Install Playwright
-        run: npm install playwright
+        shell: bash
+        run: |
+          npm install playwright
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium
+        shell: bash
+        run: |
+          npx playwright install chromium
 
-      - name: Execute QA Integrations
+      # ── Ejecución ────────────────────────────────────────
+      - name: Execute QA Integrations (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          CI: "true"
+          PYTHONIOENCODING: "utf-8"
+          DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
+          DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
+          DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
+          DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
+          DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
+          DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
+          DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
+          DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
+          DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
+          DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
+          DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
+          DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
+          DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
+          DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
+          DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
+          DB_HOST_STAGING_MX: ${{ secrets.DB_HOST_STAGING_MX }}
+          DB_PORT_STAGING_MX: ${{ secrets.DB_PORT_STAGING_MX }}
+          DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
+          DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
+          DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
+        run: |
+          chmod +x ./scripts/run_all.sh
+          ./scripts/run_all.sh \
+            "INTEGRATIONS" \
+            "${{ inputs.folder }}" \
+            "${{ inputs.pais }}" \
+            "${{ inputs.ambiente }}"
+
+      - name: Execute QA Integrations (Windows)
+        if: runner.os == 'Windows'
         shell: powershell
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -111,21 +257,30 @@ jobs:
           DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
         run: |
           $bash = "C:\Program Files\Git\bin\bash.exe"
-          & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'INTEGRATIONS' '${{ github.event.inputs.folder }}' '${{ github.event.inputs.pais }}' '${{ github.event.inputs.ambiente }}'"
+          & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'INTEGRATIONS' '${{ inputs.folder }}' '${{ inputs.pais }}' '${{ inputs.ambiente }}'"
 
-      - name: Set artifact name
-        if: always()
-        id: artifact-name
+      # ── Artefactos ───────────────────────────────────────
+      - name: Set artifact name (macOS / Linux)
+        if: always() && runner.os != 'Windows'
+        id: artifact-name-unix
+        shell: bash
+        run: |
+          SAFE=$(echo "${{ inputs.folder }}" | sed 's#[ /]#-#g')
+          echo "value=integrations-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set artifact name (Windows)
+        if: always() && runner.os == 'Windows'
+        id: artifact-name-win
         shell: powershell
         run: |
-          $safe = "${{ github.event.inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
+          $safe = "${{ inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
           echo "value=integrations-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
 
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact-name.outputs.value }}
+          name: integrations-${{ github.run_id }}
           path: |
             scripts/*.html
             scripts/*.json
