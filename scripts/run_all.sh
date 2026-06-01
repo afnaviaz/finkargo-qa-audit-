@@ -142,6 +142,10 @@ elif [[ "$NEWMAN_FOLDER" == "upload-buro-mx" ]]; then
     SCENARIO="upload_buro_mx"
     NEWMAN_FOLDER="ea1f69c0-7bf1-4cf1-91e7-427294a69625"
     log "Escenario: UPLOAD BURO MX — 35 RFCs, integrations + monolito"
+elif [[ "$NEWMAN_FOLDER" == "Happy path vertice integrations" ]]; then
+    SCENARIO="vertice_happy_path"
+    NEWMAN_FOLDER="8b3a4385-df77-466a-a356-a4e2fdaf7e9b"
+    log "Escenario: VERTICE HAPPY PATH — Create Insured (9 iter) + Crear Certificado Transporte (11 iter)"
 elif [[ "$NEWMAN_FOLDER" == "Crear Certificado Transporte" ]]; then
     SCENARIO="vertice_cert_transporte"
     NEWMAN_FOLDER="9a19703f-9142-4dc9-8f86-b9e64f7fbb6b"
@@ -313,6 +317,15 @@ elif [[ "$SCENARIO" == "laft_reconsult" ]]; then
     NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${LAFT_MONOLITO_BASE}")
     log "LAFT Reconsult: 36 iteraciones | monolito: ${LAFT_MONOLITO_BASE}"
+elif [[ "$SCENARIO" == "vertice_happy_path" ]]; then
+    if [[ "$AMBIENTE" == "Staging" ]]; then
+        VERTICE_BASE_URL="https://api-staging.finkargo.com/integrations"
+    else
+        VERTICE_BASE_URL="https://api-testing.finkargo.com/integrations"
+    fi
+    NEWMAN_BASE_ARGS+=("--env-var" "services-integrations=${VERTICE_BASE_URL}")
+    log "Vertice base URL : ${VERTICE_BASE_URL}"
+    log "Vertice Happy Path: Create Insured (9 iter) → Crear Certificado Transporte (11 iter)"
 elif [[ "$SCENARIO" == "vertice_cert_transporte" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     if [[ "$AMBIENTE" == "Staging" ]]; then
