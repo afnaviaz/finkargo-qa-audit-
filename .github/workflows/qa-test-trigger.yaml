@@ -11,6 +11,11 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner a usar (etiqueta del runner)"
+        required: true
+        default: "andresnavia"
+        type: string
       modulo:
         description: "Módulo a simular"
         required: true
@@ -33,6 +38,7 @@ jobs:
     if: ${{ github.event.inputs.modulo == 'user' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
+      runner: ${{ github.event.inputs.runner }}
       folder: "Onboarding Colombia MD / 1. Create User"
       pais: "CO"
       ambiente: "Testing"
@@ -43,6 +49,7 @@ jobs:
     if: ${{ github.event.inputs.modulo == 'onboarding' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
+      runner: ${{ github.event.inputs.runner }}
       folder: "Onboarding Colombia MD / 2. Onboarding"
       pais: "CO"
       ambiente: "Testing"
@@ -53,6 +60,7 @@ jobs:
     if: ${{ github.event.inputs.modulo == 'creditrequest' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
+      runner: ${{ github.event.inputs.runner }}
       folder: "Onboarding Colombia MD / 3. Create creditrequest"
       pais: "CO"
       ambiente: "Testing"
@@ -63,6 +71,7 @@ jobs:
     if: ${{ github.event.inputs.modulo == 'committees' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
+      runner: ${{ github.event.inputs.runner }}
       folder: "Onboarding Colombia MD / 4. DecisionCommittee"
       pais: "CO"
       ambiente: "Testing"
@@ -75,6 +84,7 @@ jobs:
     if: ${{ github.event.inputs.modulo == 'financing-co' }}
     uses: ./.github/workflows/qa-financing-orchestrator.yaml
     with:
+      runner: ${{ github.event.inputs.runner }}
       folder: "CO / Operations"
       pais: "CO"
       ambiente: "Testing"
@@ -85,6 +95,7 @@ jobs:
     if: ${{ github.event.inputs.modulo == 'financing-mx' }}
     uses: ./.github/workflows/qa-financing-orchestrator.yaml
     with:
+      runner: ${{ github.event.inputs.runner }}
       folder: "MX / Operations"
       pais: "MX"
       ambiente: "Testing"
