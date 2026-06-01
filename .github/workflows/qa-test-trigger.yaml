@@ -1,0 +1,72 @@
+name: TEST - Simular trigger desde microservicio
+
+on:
+  workflow_dispatch:
+    inputs:
+      modulo:
+        description: "Módulo a simular"
+        required: true
+        default: "onboarding"
+        type: choice
+        options:
+          - user
+          - onboarding
+          - creditrequest
+          - committees
+          - financing-co
+          - financing-mx
+
+jobs:
+  qa-user:
+    if: ${{ github.event.inputs.modulo == 'user' }}
+    uses: ./.github/workflows/qa-flujos-criticos.yaml
+    with:
+      folder: "Onboarding Colombia MD / 1. Create User"
+      pais: "CO"
+      ambiente: "Testing"
+    secrets: inherit
+
+  qa-onboarding:
+    if: ${{ github.event.inputs.modulo == 'onboarding' }}
+    uses: ./.github/workflows/qa-flujos-criticos.yaml
+    with:
+      folder: "Onboarding Colombia MD / 2. Onboarding"
+      pais: "CO"
+      ambiente: "Testing"
+    secrets: inherit
+
+  qa-creditrequest:
+    if: ${{ github.event.inputs.modulo == 'creditrequest' }}
+    uses: ./.github/workflows/qa-flujos-criticos.yaml
+    with:
+      folder: "Onboarding Colombia MD / 3. Create creditrequest"
+      pais: "CO"
+      ambiente: "Testing"
+    secrets: inherit
+
+  qa-committees:
+    if: ${{ github.event.inputs.modulo == 'committees' }}
+    uses: ./.github/workflows/qa-flujos-criticos.yaml
+    with:
+      folder: "Onboarding Colombia MD / 4. DecisionCommittee"
+      pais: "CO"
+      ambiente: "Testing"
+    secrets: inherit
+
+  qa-financing-co:
+    if: ${{ github.event.inputs.modulo == 'financing-co' }}
+    uses: ./.github/workflows/qa-financing-orchestrator.yaml
+    with:
+      folder: "CO / Operations"
+      pais: "CO"
+      ambiente: "Testing"
+    secrets: inherit
+
+  qa-financing-mx:
+    if: ${{ github.event.inputs.modulo == 'financing-mx' }}
+    uses: ./.github/workflows/qa-financing-orchestrator.yaml
+    with:
+      folder: "MX / Operations"
+      pais: "MX"
+      ambiente: "Testing"
+    secrets: inherit

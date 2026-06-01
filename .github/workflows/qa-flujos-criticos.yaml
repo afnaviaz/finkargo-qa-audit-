@@ -21,7 +21,7 @@ on:
           - "Onboarding Mexico MD / 4. DecisionCommittee"
 
       pais:
-        description: "País"
+        description: "Variable de país para ejecución"
         required: true
         default: "CO"
         type: choice
@@ -39,13 +39,77 @@ on:
           - Testing
           - Staging
 
+  # Permite que repos de microservicios llamen este workflow
+  workflow_call:
+    inputs:
+      folder:
+        type: string
+        required: true
+      pais:
+        type: string
+        required: true
+        default: "CO"
+      ambiente:
+        type: string
+        required: true
+        default: "Testing"
+    secrets:
+      POSTMAN_API_KEY:
+        required: true
+      CONF_TOKEN:
+        required: true
+      CONF_USER:
+        required: true
+      ANTHROPIC_API_KEY:
+        required: false
+      DB_HOST_TESTING_CO:
+        required: false
+      DB_PORT_TESTING_CO:
+        required: false
+      DB_NAME_TESTING_CO:
+        required: false
+      DB_USER_TESTING_CO:
+        required: false
+      DB_PASSWORD_TESTING_CO:
+        required: false
+      DB_HOST_TESTING_MX:
+        required: false
+      DB_PORT_TESTING_MX:
+        required: false
+      DB_NAME_TESTING_MX:
+        required: false
+      DB_USER_TESTING_MX:
+        required: false
+      DB_PASSWORD_TESTING_MX:
+        required: false
+      DB_HOST_STAGING_CO:
+        required: false
+      DB_PORT_STAGING_CO:
+        required: false
+      DB_NAME_STAGING_CO:
+        required: false
+      DB_USER_STAGING_CO:
+        required: false
+      DB_PASSWORD_STAGING_CO:
+        required: false
+      DB_HOST_STAGING_MX:
+        required: false
+      DB_PORT_STAGING_MX:
+        required: false
+      DB_NAME_STAGING_MX:
+        required: false
+      DB_USER_STAGING_MX:
+        required: false
+      DB_PASSWORD_STAGING_MX:
+        required: false
+
 permissions:
   contents: read
   actions: read
 
 jobs:
   run-qa-flujos-criticos:
-    name: "Flujos Críticos: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
+    name: "Flujos Críticos: ${{ inputs.folder }} - ${{ inputs.pais }}"
 
     runs-on:
       - self-hosted
@@ -88,30 +152,24 @@ jobs:
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
           CONF_USER: ${{ secrets.CONF_USER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
-
           CI: "true"
           PYTHONIOENCODING: "utf-8"
-
           DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
           DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
           DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
           DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
           DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
-
           DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
           DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
           DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
           DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
           DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
-
           DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
           DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
           DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
           DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
           DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
-
           DB_HOST_STAGING_MX: ${{ secrets.DB_HOST_STAGING_MX }}
           DB_PORT_STAGING_MX: ${{ secrets.DB_PORT_STAGING_MX }}
           DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
@@ -122,16 +180,16 @@ jobs:
           chmod +x ./scripts/run_all.sh
           ./scripts/run_all.sh \
             "Flows APP" \
-            "${{ github.event.inputs.folder }}" \
-            "${{ github.event.inputs.pais }}" \
-            "${{ github.event.inputs.ambiente }}"
+            "${{ inputs.folder }}" \
+            "${{ inputs.pais }}" \
+            "${{ inputs.ambiente }}"
 
       - name: Set artifact name
         if: always()
         id: artifact-name
         shell: bash
         run: |
-          SAFE=$(echo "${{ github.event.inputs.folder }}" | sed 's#[ /]#-#g')
+          SAFE=$(echo "${{ inputs.folder }}" | sed 's#[ /]#-#g')
           echo "value=flujos-criticos-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifacts
