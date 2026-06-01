@@ -444,10 +444,96 @@ else
     log "Carpeta padre encontrada: ID $PROJECT_FOLDER_ID"
 fi
 
+# ----------------------------------------------------------
+# JERARQUÍA CONFLUENCE
+# Nivel 1: Auditorias Testing - Flows APP  (ya creado arriba)
+# Nivel 2: Onboarding Colombia MD          (flujo padre)
+# Nivel 3: CO / MX / ALL                  (país)
+# ----------------------------------------------------------
+
+# Extraer flujo padre desde FOLDER_NAME
+# "Onboarding Colombia MD / 4. DecisionCommittee" → "Onboarding Colombia MD"
+# "Onboarding Colombia MD"                        → "Onboarding Colombia MD"
+if [[ "$FOLDER_NAME" == *" / "* ]]; then
+    CONFLUENCE_FLOW=$(echo "$FOLDER_NAME" | sed 's/ \/ .*//')
+else
+    CONFLUENCE_FLOW="$FOLDER_NAME"
+fi
+log "Confluence Flow : $CONFLUENCE_FLOW"
+
+# Función para buscar o crear página en Confluence
+conf_find_or_create() {
+    local PARENT_ID="$1"
+    local TITLE="$2"
+
+    local CQL_ENC
+    CQL_ENC=$(python3 -c "
+import urllib.parse, sys
+title, parent_id, space = sys.argv[1], sys.argv[2], sys.argv[3]
+cql = 'title=\"{}\" AND parent={} AND space=\"{}\"'.format(title, parent_id, space)
+print(urllib.parse.quote(cql))
+" "$TITLE" "$PARENT_ID" "$SPACE_KEY")
+
+    local SEARCH_RES
+    SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
+        "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5") || SEARCH_RES='{}'
+
+    local PAGE_ID
+    PAGE_ID=$(python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.argv[1])
+    results = d.get('results', [])
+    print(results[0]['id'] if results else '')
+except:
+    print('')
+" "$SEARCH_RES")
+
+    if [[ -z "$PAGE_ID" ]]; then
+        echo "[$(date +'%H:%M:%S')] Creando carpeta Confluence: '$TITLE'..." >&2
+        local CREATE_PAYLOAD
+        CREATE_PAYLOAD=$(python3 -c "
+import json, sys
+print(json.dumps({
+    'type': 'page',
+    'title': sys.argv[1],
+    'space': {'key': sys.argv[2]},
+    'ancestors': [{'id': sys.argv[3]}],
+    'body': {'storage': {
+        'value': '<ac:structured-macro ac:name=\"children\"><ac:parameter ac:name=\"sort\">creation</ac:parameter></ac:structured-macro>',
+        'representation': 'storage'
+    }}
+}))" "$TITLE" "$SPACE_KEY" "$PARENT_ID")
+
+        PAGE_ID=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
+            -X POST -H 'Content-Type: application/json' \
+            -d "$CREATE_PAYLOAD" \
+            "$CONF_BASE_URL/rest/api/content" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
+
+        if [[ -z "$PAGE_ID" ]]; then
+            echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear carpeta '$TITLE'." >&2
+            return 1
+        fi
+        echo "[$(date +'%H:%M:%S')] OK  Carpeta creada: '$TITLE' (ID: $PAGE_ID)" >&2
+    else
+        echo "[$(date +'%H:%M:%S')] Carpeta encontrada: '$TITLE' (ID: $PAGE_ID)" >&2
+    fi
+
+    echo "$PAGE_ID"
+}
+
+# Nivel 2 — Flujo padre (ej. "Onboarding Colombia MD")
+FLOW_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$CONFLUENCE_FLOW") || exit 1
+
+# Nivel 3 — País (ej. "CO")
+COUNTRY_FOLDER_ID=$(conf_find_or_create "$FLOW_FOLDER_ID" "$PAIS_INPUT") || exit 1
+
 python3 "$HELPERS_DIR/build_confluence.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" "$LOG_FILE" \
     "$PROYECTO" "$FOLDER_NAME" "$PAIS_INPUT" "$AMBIENTE" "$NOW" "$EXEC_NUM" \
     "$DB_VALIDATION_FILE" \
+    > "$CONFLUENCE_BODY"
     > "$CONFLUENCE_BODY"
 
 log_ok "HTML de Confluence construido."
@@ -461,7 +547,7 @@ print(json.dumps({
     'space': {'key': sys.argv[2]},
     'ancestors': [{'id': sys.argv[3]}],
     'body': {'storage': {'value': body, 'representation': 'storage'}}
-}))" "$PAGE_TITLE" "$SPACE_KEY" "$PROJECT_FOLDER_ID" "$CONFLUENCE_BODY")
+}))" "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" "$CONFLUENCE_BODY")
 
 RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
