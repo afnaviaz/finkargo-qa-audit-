@@ -142,6 +142,10 @@ elif [[ "$NEWMAN_FOLDER" == "upload-buro-mx" ]]; then
     SCENARIO="upload_buro_mx"
     NEWMAN_FOLDER="ea1f69c0-7bf1-4cf1-91e7-427294a69625"
     log "Escenario: UPLOAD BURO MX — 35 RFCs, integrations + monolito"
+elif [[ "$NEWMAN_FOLDER" == "Crear Certificado Transporte" ]]; then
+    SCENARIO="vertice_cert_transporte"
+    NEWMAN_FOLDER="9a19703f-9142-4dc9-8f86-b9e64f7fbb6b"
+    log "Escenario: VERTICE CREAR CERTIFICADO TRANSPORTE — 11 iteraciones EP/VL/NEG"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -264,8 +268,11 @@ if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO
     log "stripe_payment_method  : $(echo "${NEWMAN_BASE_ARGS[@]}" | grep -o 'stripe_payment_method=[^ ]*' | cut -d= -f2)"
 fi
 
-# Iteraciones para escenarios Stripe (reemplaza pm.setNextRequest)
-if [[ "$SCENARIO" == "stripe_oxxo" ]]; then
+# Iteraciones para escenarios multi-step (reemplaza pm.setNextRequest, no soportado en Newman con --folder)
+if [[ "$SCENARIO" == "expired" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "10")
+    log "Expired flow: 10 iteraciones (EP-01→EP-02, VL-01→VL-03, NEG-01→NEG-05)"
+elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe OXXO: 11 iteraciones"
 elif [[ "$SCENARIO" == "stripe_card" ]]; then
@@ -306,6 +313,16 @@ elif [[ "$SCENARIO" == "laft_reconsult" ]]; then
     NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${LAFT_MONOLITO_BASE}")
     log "LAFT Reconsult: 36 iteraciones | monolito: ${LAFT_MONOLITO_BASE}"
+elif [[ "$SCENARIO" == "vertice_cert_transporte" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
+    if [[ "$AMBIENTE" == "Staging" ]]; then
+        VERTICE_BASE_URL="https://api-staging.finkargo.com/integrations"
+    else
+        VERTICE_BASE_URL="https://api-testing.finkargo.com/integrations"
+    fi
+    NEWMAN_BASE_ARGS+=("--env-var" "services-integrations=${VERTICE_BASE_URL}")
+    log "Vertice base URL : ${VERTICE_BASE_URL}"
+    log "Vertice Crear Certificado Transporte: 11 iteraciones (EP-01→EP-03, VL-01→VL-03, NEG-01→NEG-05)"
 elif [[ "$SCENARIO" == "upload_buro_mx" ]]; then
     if [[ "$AMBIENTE" == "Staging" ]]; then
         BURO_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com.mx"
@@ -314,7 +331,7 @@ elif [[ "$SCENARIO" == "upload_buro_mx" ]]; then
         BURO_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com.mx"
         BURO_INTEGRATIONS_MX="https://msa-integrations-mx-testing.back.finkargo.com.mx"
     fi
-    NEWMAN_BASE_ARGS+=("--iteration-count" "35")
+    NEWMAN_BASE_ARGS+=("--iteration-count" "34")
     NEWMAN_BASE_ARGS+=("--env-var" "rfcIndex=0")
     NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "consumoBuro=[]")

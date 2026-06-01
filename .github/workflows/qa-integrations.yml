@@ -33,7 +33,8 @@ on:
           "STRIPE EPAYMENTS / Create Payment Customer balance recurring",
           "STRIPE EPAYMENTS / Create Payment Customer balance one time",
           "ENDPOINTS MIGRADOS / laft-reconsult-monolito",
-          "ENDPOINTS MIGRADOS / upload-buro-mx"
+          "ENDPOINTS MIGRADOS / upload-buro-mx",
+          "VERTICE / Crear Certificado Transporte"
         ]
       pais:
         description: "País"
