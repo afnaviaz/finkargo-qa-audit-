@@ -1,5 +1,13 @@
 name: TEST - Simular trigger desde microservicio
 
+# Este workflow simula lo que haría un microservicio real al hacer push.
+# Úsalo para validar que workflow_call funciona antes de tocar repos externos.
+# Una vez validado, se puede eliminar o dejar como herramienta de debug.
+
+permissions:
+  contents: read
+  actions: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -17,7 +25,11 @@ on:
           - financing-mx
 
 jobs:
+
+  # ── Flujos Críticos ──────────────────────────────────────────
+
   qa-user:
+    name: "Simular msa-marketplace → 1. Create User"
     if: ${{ github.event.inputs.modulo == 'user' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
@@ -27,6 +39,7 @@ jobs:
     secrets: inherit
 
   qa-onboarding:
+    name: "Simular msa-marketplace → 2. Onboarding"
     if: ${{ github.event.inputs.modulo == 'onboarding' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
@@ -36,6 +49,7 @@ jobs:
     secrets: inherit
 
   qa-creditrequest:
+    name: "Simular msa-marketplace → 3. Create creditrequest"
     if: ${{ github.event.inputs.modulo == 'creditrequest' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
@@ -45,6 +59,7 @@ jobs:
     secrets: inherit
 
   qa-committees:
+    name: "Simular msa-marketplace → 4. DecisionCommittee"
     if: ${{ github.event.inputs.modulo == 'committees' }}
     uses: ./.github/workflows/qa-flujos-criticos.yaml
     with:
@@ -53,7 +68,10 @@ jobs:
       ambiente: "Testing"
     secrets: inherit
 
+  # ── Financing Orchestrator ───────────────────────────────────
+
   qa-financing-co:
+    name: "Simular msa-financing-orch → CO / Operations"
     if: ${{ github.event.inputs.modulo == 'financing-co' }}
     uses: ./.github/workflows/qa-financing-orchestrator.yaml
     with:
@@ -63,6 +81,7 @@ jobs:
     secrets: inherit
 
   qa-financing-mx:
+    name: "Simular msa-financing-orch → MX / Operations"
     if: ${{ github.event.inputs.modulo == 'financing-mx' }}
     uses: ./.github/workflows/qa-financing-orchestrator.yaml
     with:
