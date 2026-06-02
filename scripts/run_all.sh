@@ -457,22 +457,35 @@ except:
 " "$CREATE_RES")
 
         if [[ -z "$PAGE_ID" ]]; then
-            # Sin ID — puede ser 400 por título duplicado o respuesta vacía
-            # En ambos casos: reintentar búsqueda
+            # Sin ID — puede ser 400 por título duplicado
+            # Buscar por título usando API directa (no CQL — evita delays de indexación)
             echo "[$(date +'%H:%M:%S')] WARN No se obtuvo ID. Buscando página existente: '$TITLE'..." >&2
-            local RETRY_RES
-            RETRY_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
-                "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5" 2>/dev/null) || RETRY_RES='{}'
-            [[ -z "$RETRY_RES" ]] && RETRY_RES='{}'
+            local TITLE_ENC
+            TITLE_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$TITLE")
+            local DIRECT_RES
+            DIRECT_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
+                "${CONF_BASE_URL}/rest/api/content?title=${TITLE_ENC}&spaceKey=${SPACE_KEY}&type=page&expand=ancestors" \
+                2>/dev/null) || DIRECT_RES='{}'
+            [[ -z "$DIRECT_RES" ]] && DIRECT_RES='{}'
             PAGE_ID=$(python3 -c "
 import json, sys
 try:
     d = json.loads(sys.argv[1])
+    parent_id = sys.argv[2]
     results = d.get('results', [])
-    print(results[0]['id'] if results else '')
+    # Buscar la página que tiene el padre correcto
+    for r in results:
+        ancestors = r.get('ancestors', [])
+        if any(a.get('id') == parent_id for a in ancestors):
+            print(r['id'])
+            break
+    else:
+        # Si no hay coincidencia de padre, tomar la primera
+        if results:
+            print(results[0]['id'])
 except:
     print('')
-" "$RETRY_RES")
+" "$DIRECT_RES" "$PARENT_ID")
             if [[ -z "$PAGE_ID" ]]; then
                 echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear ni encontrar '$TITLE'. Resp: ${CREATE_RES:0:200}" >&2
                 return 1
