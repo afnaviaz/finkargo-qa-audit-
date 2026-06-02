@@ -446,8 +446,20 @@ print(json.dumps({
             -d "$CREATE_PAYLOAD" \
             "$CONF_BASE_URL/rest/api/content" 2>/dev/null)
 
-        if [[ -z "$CREATE_RES" ]]; then
-            echo "[$(date +'%H:%M:%S')] WARN Respuesta vacía. Reintentando búsqueda..." >&2
+        # Intentar obtener el ID de la respuesta (creación exitosa)
+        PAGE_ID=$(python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.argv[1])
+    print(d.get('id', ''))
+except:
+    print('')
+" "$CREATE_RES")
+
+        if [[ -z "$PAGE_ID" ]]; then
+            # Sin ID — puede ser 400 por título duplicado o respuesta vacía
+            # En ambos casos: reintentar búsqueda
+            echo "[$(date +'%H:%M:%S')] WARN No se obtuvo ID. Buscando página existente: '$TITLE'..." >&2
             local RETRY_RES
             RETRY_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
                 "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5" 2>/dev/null) || RETRY_RES='{}'
@@ -462,23 +474,11 @@ except:
     print('')
 " "$RETRY_RES")
             if [[ -z "$PAGE_ID" ]]; then
-                echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear ni encontrar '$TITLE'." >&2
+                echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear ni encontrar '$TITLE'. Resp: ${CREATE_RES:0:200}" >&2
                 return 1
             fi
-            echo "[$(date +'%H:%M:%S')] OK  Encontrada tras reintento: '$TITLE' (ID: $PAGE_ID)" >&2
+            echo "[$(date +'%H:%M:%S')] OK  Página existente encontrada: '$TITLE' (ID: $PAGE_ID)" >&2
         else
-            PAGE_ID=$(python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.argv[1])
-    print(d.get('id', ''))
-except:
-    print('')
-" "$CREATE_RES")
-            if [[ -z "$PAGE_ID" ]]; then
-                echo "[$(date +'%H:%M:%S')] ERR  Sin ID en respuesta para '$TITLE'. Resp: ${CREATE_RES:0:200}" >&2
-                return 1
-            fi
             echo "[$(date +'%H:%M:%S')] OK  Carpeta creada: '$TITLE' (ID: $PAGE_ID)" >&2
         fi
     else
