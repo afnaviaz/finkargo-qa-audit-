@@ -3,7 +3,7 @@
 claude_analysis.py — Llama a Claude API para generar análisis de causa raíz.
 Uso: python3 claude_analysis.py <metrics_json> <output_html> <proyecto> <folder> <pais> <ambiente> <timestamp>
 """
-import json, subprocess, os, re, sys
+import json, subprocess, os, re, sys, tempfile
 
 def call_claude(api_key: str, prompt: str, max_tokens: int = 4000) -> str:
     payload = {
@@ -11,15 +11,28 @@ def call_claude(api_key: str, prompt: str, max_tokens: int = 4000) -> str:
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}]
     }
-    result = subprocess.run(
-        ["curl", "-s", "--max-time", "60",
-         "https://api.anthropic.com/v1/messages",
-         "-H", f"x-api-key: {api_key}",
-         "-H", "anthropic-version: 2023-06-01",
-         "-H", "content-type: application/json",
-         "-d", json.dumps(payload)],
-        capture_output=True, text=True
-    )
+    # Escribir payload a archivo temporal para evitar "Argument list too long" en Windows
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
+                                     delete=False, encoding='utf-8') as tmp:
+        json.dump(payload, tmp, ensure_ascii=False)
+        tmp_path = tmp.name
+
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "--insecure", "--max-time", "60",
+             "https://api.anthropic.com/v1/messages",
+             "-H", f"x-api-key: {api_key}",
+             "-H", "anthropic-version: 2023-06-01",
+             "-H", "content-type: application/json",
+             "--data", f"@{tmp_path}"],
+            capture_output=True, text=True
+        )
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
     if result.returncode != 0:
         raise RuntimeError(f"curl falló (exit {result.returncode}): {result.stderr}")
     resp = json.loads(result.stdout)
@@ -101,7 +114,7 @@ def main():
         error_html = f'<div style="background:#ffebee;padding:16px;border-left:4px solid #c62828;font-family:sans-serif;"><strong>⚠️ Error leyendo métricas:</strong><pre style="font-size:12px;">{e}</pre></div>'
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(error_html)
-        sys.exit(0)  # No bloquear el pipeline
+        sys.exit(0)
 
     failures = metrics.get('failures', [])
 
@@ -110,7 +123,6 @@ def main():
             html = build_success_html(metrics)
             print("✅ Sin fallos — reporte de éxito generado.")
         elif not api_key:
-            # Sin API key: generar tabla básica sin IA
             rows = ""
             for fail in failures:
                 rows += f"""<tr>
@@ -146,7 +158,6 @@ def main():
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(error_html)
         print(f"ERROR en análisis Claude: {e}", file=sys.stderr)
-        # exit 0 para no bloquear el pipeline por fallo de IA
         sys.exit(0)
 
 if __name__ == '__main__':
