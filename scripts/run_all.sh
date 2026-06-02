@@ -447,17 +447,23 @@ print(json.dumps({
     }}
 }))" "$FOLDER_TITLE" "$SPACE_KEY" "$AMBIENTE_PARENT_ID")
 
-    PROJECT_FOLDER_ID=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
+    _CREATE_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H 'Content-Type: application/json' \
         -d "$CREATE_PAYLOAD" \
-        "$CONF_BASE_URL/rest/api/content" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
+        "$CONF_BASE_URL/rest/api/content" 2>/dev/null)
+    PROJECT_FOLDER_ID=$(python3 -c "
+import json,sys
+try:
+    print(json.loads(sys.argv[1]).get('id',''))
+except:
+    print('')
+" "$_CREATE_RES")
 
     [[ -z "$PROJECT_FOLDER_ID" ]] && { log_err "No se pudo crear carpeta padre en Confluence."; exit 1; }
     log_ok "Carpeta creada: ID $PROJECT_FOLDER_ID"
 else
     log "Carpeta padre encontrada: ID $PROJECT_FOLDER_ID"
 fi
-
 # ----------------------------------------------------------
 # JERARQUÍA CONFLUENCE
 # Nivel 1: Auditorias Testing - Proyecto  (ya creado arriba)
