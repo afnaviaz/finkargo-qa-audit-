@@ -14,7 +14,7 @@ on:
       runner:
         description: "Runner a usar (etiqueta del runner)"
         required: true
-        default: "andresnavia"
+        default: "qa-runner"
         type: string
       modulo:
         description: "Módulo a simular"

@@ -6,7 +6,7 @@ on:
       runner:
         description: "Runner a usar (etiqueta del runner)"
         required: true
-        default: "andresnavia"
+        default: "qa-runner"
         type: string
       folder:
         description: "Carpeta a ejecutar"
@@ -47,7 +47,7 @@ on:
       runner:
         type: string
         required: true
-        default: "andresnavia"
+        default: "qa-runner"
       folder:
         type: string
         required: true
