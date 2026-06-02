@@ -118,11 +118,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-|      - name: Verify run_all.sh version     # ← agregar aquí
+
+      # ── Verificar versión run_all.sh ──────────────────────
+      - name: Verify run_all.sh version (macOS / Linux)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           head -5 scripts/run_all.sh
-          grep -n "json.load(sys.stdin)" scripts/run_all.sh || echo "OK - no encontrado"
+          grep -n "json.load(sys.stdin)" scripts/run_all.sh || echo "OK - json.load(sys.stdin) no encontrado"
+
+      - name: Verify run_all.sh version (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Get-Content scripts/run_all.sh | Select-Object -First 5
+          $match = Select-String -Path scripts/run_all.sh -Pattern "json.load\(sys.stdin\)" -Quiet
+          if ($match) { Write-Host "WARN: json.load(sys.stdin) encontrado" } else { Write-Host "OK - json.load(sys.stdin) no encontrado" }
 
       # ── Python ───────────────────────────────────────────
       - name: Setup Python (Windows)
