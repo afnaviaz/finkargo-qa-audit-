@@ -487,8 +487,9 @@ print(urllib.parse.quote(cql))
 " "$TITLE" "$PARENT_ID" "$SPACE_KEY")
 
     local SEARCH_RES
-    SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
-        "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5") || SEARCH_RES='{}'
+    SEARCH_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
+        "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5" 2>/dev/null) || SEARCH_RES='{}'
+    [[ -z "$SEARCH_RES" ]] && SEARCH_RES='{}'
 
     local PAGE_ID
     PAGE_ID=$(python3 -c "
@@ -517,17 +518,48 @@ print(json.dumps({
     }}
 }))" "$TITLE" "$SPACE_KEY" "$PARENT_ID")
 
-        PAGE_ID=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
+        local CREATE_RES
+        CREATE_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
             -X POST -H 'Content-Type: application/json' \
             -d "$CREATE_PAYLOAD" \
-            "$CONF_BASE_URL/rest/api/content" \
-            | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
+            "$CONF_BASE_URL/rest/api/content" 2>/dev/null)
 
-        if [[ -z "$PAGE_ID" ]]; then
-            echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear carpeta '$TITLE'." >&2
-            return 1
+        if [[ -z "$CREATE_RES" ]]; then
+            echo "[$(date +'%H:%M:%S')] WARN Respuesta vacía al crear '$TITLE'. Reintentando búsqueda..." >&2
+            # Puede que ya exista — reintentar búsqueda
+            local RETRY_RES
+            RETRY_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
+                "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5" 2>/dev/null) || RETRY_RES='{}'
+            [[ -z "$RETRY_RES" ]] && RETRY_RES='{}'
+            PAGE_ID=$(python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.argv[1])
+    results = d.get('results', [])
+    print(results[0]['id'] if results else '')
+except:
+    print('')
+" "$RETRY_RES")
+            if [[ -z "$PAGE_ID" ]]; then
+                echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear ni encontrar carpeta '$TITLE'." >&2
+                return 1
+            fi
+            echo "[$(date +'%H:%M:%S')] OK  Carpeta encontrada tras reintento: '$TITLE' (ID: $PAGE_ID)" >&2
+        else
+            PAGE_ID=$(python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.argv[1])
+    print(d.get('id', ''))
+except:
+    print('')
+" "$CREATE_RES")
+            if [[ -z "$PAGE_ID" ]]; then
+                echo "[$(date +'%H:%M:%S')] ERR  Confluence no devolvio ID para '$TITLE'. Respuesta: ${CREATE_RES:0:200}" >&2
+                return 1
+            fi
+            echo "[$(date +'%H:%M:%S')] OK  Carpeta creada: '$TITLE' (ID: $PAGE_ID)" >&2
         fi
-        echo "[$(date +'%H:%M:%S')] OK  Carpeta creada: '$TITLE' (ID: $PAGE_ID)" >&2
     else
         echo "[$(date +'%H:%M:%S')] Carpeta encontrada: '$TITLE' (ID: $PAGE_ID)" >&2
     fi
