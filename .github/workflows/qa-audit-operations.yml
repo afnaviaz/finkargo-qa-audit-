@@ -3,30 +3,99 @@ name: QA Audit - Operations
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner a usar (etiqueta del runner)"
+        required: true
+        default: "qa-runner"
+        type: string
       folder:
         description: "Directorio a auditar"
         required: true
         default: "Financing Orchestrator API"
         type: choice
-        options: [
-          "Financing Orchestrator API",
-          "MX / Operations"
-        ]
+        options:
+          - "Financing Orchestrator API"
+          - "MX / Operations"
       pais:
-        description: "País contexto de ejecución (ALL ejecutará CO y MX)"
+        description: "País contexto de ejecución"
         required: true
         default: "CO"
         type: choice
         options: [CO, MX, ALL]
       ambiente:
-        description: "Ambiente de ejecución (Testing o Staging)"
+        description: "Ambiente de ejecución"
         required: true
         default: "Testing"
         type: choice
         options: [Testing, Staging]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true 
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        required: true
+        default: "qa-runner"
+      folder:
+        type: string
+        required: true
+        default: "Financing Orchestrator API"
+      pais:
+        type: string
+        required: true
+        default: "CO"
+      ambiente:
+        type: string
+        required: true
+        default: "Testing"
+    secrets:
+      POSTMAN_API_KEY:
+        required: true
+      CONF_TOKEN:
+        required: true
+      CONF_USER:
+        required: true
+      ANTHROPIC_API_KEY:
+        required: false
+      DB_HOST_TESTING_CO:
+        required: false
+      DB_PORT_TESTING_CO:
+        required: false
+      DB_NAME_TESTING_CO:
+        required: false
+      DB_USER_TESTING_CO:
+        required: false
+      DB_PASSWORD_TESTING_CO:
+        required: false
+      DB_HOST_TESTING_MX:
+        required: false
+      DB_PORT_TESTING_MX:
+        required: false
+      DB_NAME_TESTING_MX:
+        required: false
+      DB_USER_TESTING_MX:
+        required: false
+      DB_PASSWORD_TESTING_MX:
+        required: false
+      DB_HOST_STAGING_CO:
+        required: false
+      DB_PORT_STAGING_CO:
+        required: false
+      DB_NAME_STAGING_CO:
+        required: false
+      DB_USER_STAGING_CO:
+        required: false
+      DB_PASSWORD_STAGING_CO:
+        required: false
+      DB_HOST_STAGING_MX:
+        required: false
+      DB_PORT_STAGING_MX:
+        required: false
+      DB_NAME_STAGING_MX:
+        required: false
+      DB_USER_STAGING_MX:
+        required: false
+      DB_PASSWORD_STAGING_MX:
+        required: false
 
 permissions:
   contents: read
@@ -34,8 +103,9 @@ permissions:
 
 jobs:
   run-audit-pipeline:
-    name: "Audit: QA Audit - Operations / ${{ github.event.inputs.folder }} (${{ github.event.inputs.pais }})"
-    runs-on: ubuntu-latest
+    name: "Audit: QA Audit - Operations / ${{ inputs.folder }} (${{ inputs.pais }})"
+    runs-on: [self-hosted, "${{ inputs.runner }}"]
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -43,56 +113,168 @@ jobs:
           fetch-depth: 1
           clean: true
 
-      - name: Debug Inputs
-        run: |
-          echo "🚀 REVISANDO PARÁMETROS DE ENTRADA"
-          echo "FOLDER SELECCIONADA: ${{ github.event.inputs.folder }}"
-          echo "PAIS: ${{ github.event.inputs.pais }}"
-          echo "AMBIENTE: ${{ github.event.inputs.ambiente }}"
-          echo "------------------------------------------"
-          ls -la scripts/
-
-      # --- ESTE ES EL PASO QUE FALTABA ---
-      - name: Setup QA Environment (Node & Newman)
-        uses: actions/setup-node@v4
+      # ── Python ───────────────────────────────────────────
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v5
         with:
-          node-version: '20'
-      
-      - name: Install Newman
-        run: |
-          npm install -g newman
-          # Si tu script genera reportes bonitos, suele usar este reporter:
-          npm install -g newman-reporter-htmlextra 
-      # -----------------------------------
+          python-version: '3.x'
 
-      - name: Execute QA Audit
+      - name: Check Python (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 --version && which python3
+
+      - name: Install Python dependencies (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install requests psycopg2-binary
+
+      - name: Install Python dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install requests psycopg2-binary
+
+      - name: Create python3 alias for Git Bash (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+          if ($pythonExe) {
+            $dir = Split-Path $pythonExe
+            Copy-Item $pythonExe "$dir\python3.exe" -Force
+            Write-Host "python3.exe creado en: $dir"
+          } else {
+            Write-Error "Python no encontrado en PATH"
+          }
+
+      # ── Node / Newman ────────────────────────────────────
+      - name: Check Node (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: node --version && npm --version
+
+      - name: Check Node (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          node --version
+          npm --version
+
+      - name: Install Newman (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Install Newman (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: npm install -g newman newman-reporter-htmlextra
+
+      # ── Ejecución ────────────────────────────────────────
+      - name: Execute QA Audit Operations (macOS / Linux)
+        if: runner.os != 'Windows'
         shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
-          CONF_USER: ${{ secrets.CONF_USER }} 
+          CONF_USER: ${{ secrets.CONF_USER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          CI: "true"
+          PYTHONIOENCODING: "utf-8"
+          DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
+          DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
+          DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
+          DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
+          DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
+          DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
+          DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
+          DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
+          DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
+          DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
+          DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
+          DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
+          DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
+          DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
+          DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
+          DB_HOST_STAGING_MX: ${{ secrets.DB_HOST_STAGING_MX }}
+          DB_PORT_STAGING_MX: ${{ secrets.DB_PORT_STAGING_MX }}
+          DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
+          DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
+          DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
         run: |
           chmod +x scripts/run_all.sh
           ./scripts/run_all.sh \
             "QA Audit - Operations" \
-            "${{ github.event.inputs.folder }}" \
-            "${{ github.event.inputs.pais }}" \
-            "${{ github.event.inputs.ambiente }}"
+            "${{ inputs.folder }}" \
+            "${{ inputs.pais }}" \
+            "${{ inputs.ambiente }}"
 
-      - name: Prepare Artifacts
-        if: always()
+      - name: Execute QA Audit Operations (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          CI: "true"
+          PYTHONIOENCODING: "utf-8"
+          DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
+          DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
+          DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
+          DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
+          DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
+          DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
+          DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
+          DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
+          DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
+          DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
+          DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
+          DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
+          DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
+          DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
+          DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
+          DB_HOST_STAGING_MX: ${{ secrets.DB_HOST_STAGING_MX }}
+          DB_PORT_STAGING_MX: ${{ secrets.DB_PORT_STAGING_MX }}
+          DB_NAME_STAGING_MX: ${{ secrets.DB_NAME_STAGING_MX }}
+          DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
+          DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
+        run: |
+          $bash = "C:\Program Files\Git\bin\bash.exe"
+          & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'QA Audit - Operations' '${{ inputs.folder }}' '${{ inputs.pais }}' '${{ inputs.ambiente }}'"
+
+      # ── Artefactos ───────────────────────────────────────
+      - name: Set artifact name (macOS / Linux)
+        if: always() && runner.os != 'Windows'
+        id: artifact-name-unix
         shell: bash
         run: |
-          mkdir -p artifacts
-          cp *.html *.json *.txt artifacts/ 2>/dev/null || true
-          cp scripts/*.html scripts/*.json scripts/*.txt artifacts/ 2>/dev/null || true
+          SAFE=$(echo "${{ inputs.folder }}" | sed 's#[ /]#-#g')
+          echo "value=operations-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Results to GitHub
+      - name: Set artifact name (Windows)
+        if: always() && runner.os == 'Windows'
+        id: artifact-name-win
+        shell: powershell
+        run: |
+          $safe = "${{ inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
+          echo "value=operations-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: audit-report-${{ github.event.inputs.folder }}-${{ github.run_number }}
-          path: artifacts/
-          retention-days: 5
+          name: operations-${{ github.run_id }}
+          path: |
+            scripts/*.html
+            scripts/*.json
+            scripts/*.txt
+            scripts/*.png
+          retention-days: 7
