@@ -154,6 +154,11 @@ if [[ "$CONFIG_TYPE" == "folder_id" ]]; then
         exit 1
     fi
     log "Folder resuelto: $NEWMAN_FOLDER"
+    # Si es UUID con prefijo Postman (ej. "19198347-0f4bc58c-...") → Newman necesita solo el UUID
+    if [[ "$NEWMAN_FOLDER" =~ ^[0-9]+-[0-9a-f]{8}- ]]; then
+        NEWMAN_FOLDER=$(echo "$NEWMAN_FOLDER" | sed 's/^[0-9]*-//')
+        log "Folder UUID (sin prefijo): $NEWMAN_FOLDER"
+    fi
 
 elif [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
     mapfile -t ITEM_IDS_ARRAY < <(
