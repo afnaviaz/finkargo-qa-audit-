@@ -131,8 +131,16 @@ jobs:
           python3 --version
           which python3
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies (macOS / Linux)
+        if: runner.os != 'Windows'
         shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install requests psycopg2-binary
+
+      - name: Install Python dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install requests psycopg2-binary
@@ -152,16 +160,29 @@ jobs:
           }
 
       # ── Node / Newman ────────────────────────────────────
-      - name: Check Node
+      - name: Check Node (macOS / Linux)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           node --version
           npm --version
 
-      - name: Install Newman
-        shell: bash
+      - name: Check Node (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
         run: |
-          npm install -g newman newman-reporter-htmlextra
+          node --version
+          npm --version
+
+      - name: Install Newman (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Install Newman (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: npm install -g newman newman-reporter-htmlextra
 
       # ── Ejecución ────────────────────────────────────────
       - name: Execute QA Financing Orchestrator (macOS / Linux)
