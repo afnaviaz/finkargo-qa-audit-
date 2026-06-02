@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================
-# FINKARGO QA AUDIT PIPELINE v2.2
+# FINKARGO QA AUDIT PIPELINE v2.3
 # Arquitectura escalable: tipo de colección definido en JSON
 # ============================================================
 
@@ -55,7 +55,8 @@ HELPERS_DIR="$SCRIPTS_DIR/helpers"
 
 # ----------------------------------------------------------
 # MAPEO PROYECTO → ARCHIVO DE CONFIGURACION
-# Para agregar un proyecto nuevo: solo añade una línea al case.
+# Por defecto convierte el nombre del proyecto a kebab-case.
+# Solo se agregan overrides para nombres legacy.
 # ----------------------------------------------------------
 CONFIG_FILE=$(echo "$PROYECTO" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g').json
 
@@ -93,12 +94,9 @@ PROVIDER_PREFIX=""
 FOLDER_NAME="$FOLDER_INPUT_CLEAN"
 
 if [[ "$FOLDER_INPUT_CLEAN" == *" / "* ]]; then
-    # Hay al menos un separador: tomar la última parte como NEWMAN_FOLDER
-    # y el resto como display name (FOLDER_NAME ya está completo)
     NEWMAN_FOLDER=$(echo "$FOLDER_INPUT_CLEAN" | awk -F' / ' '{print $NF}' | xargs)
     PROVIDER_PREFIX=$(echo "$FOLDER_INPUT_CLEAN" | sed 's/ \/ [^/]*$//' | xargs)
 else
-    # Sin separador: ejecutar la carpeta tal cual
     NEWMAN_FOLDER="$FOLDER_INPUT_CLEAN"
 fi
 
@@ -141,7 +139,7 @@ CONF_BASE_URL="https://finkargo.atlassian.net/wiki"
 SPACE_KEY="QA"
 
 log "============================================"
-log " FINKARGO QA AUDIT v2.2"
+log " FINKARGO QA AUDIT v2.3"
 log " Proyecto : $PROYECTO"
 log " Config   : $CONFIG_FILE"
 log " Folder   : $FOLDER_NAME"
@@ -183,10 +181,14 @@ ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API
 
 # ----------------------------------------------------------
 # 5.5 FILTRADO DE COLECCIÓN
-# Detecta el tipo desde el JSON de config:
-#   "type": "folder" → Newman ejecuta carpetas nativas de Postman (default)
-#   "type": "items"  → Newman ejecuta requests filtrados por IDs
-# Para agregar soporte a una colección nueva, solo cambia el JSON de config.
+# Lee "type" desde el JSON de config y decide cómo ejecutar Newman:
+#
+#   "type": "folder"    → --folder "nombre"   (nombres únicos en la colección)
+#   "type": "folder_id" → --folder "valor"    (resuelve alias: "CO" → "🇨🇴 Colombia")
+#   "type": "items"     → descarga y filtra por request IDs
+#
+# Para agregar una colección nueva: solo define el type en su JSON.
+# Este script NO necesita modificarse.
 # ----------------------------------------------------------
 FILTER_MODE=false
 NEWMAN_COLLECTION_SOURCE="$COLLECTION_URL"
@@ -195,7 +197,19 @@ ITEM_IDS_ARRAY=()
 CONFIG_TYPE=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "" "type" 2>/dev/null || echo "folder")
 log "Tipo de coleccion: $CONFIG_TYPE"
 
-if [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
+if [[ "$CONFIG_TYPE" == "folder_id" ]]; then
+    # Resuelve el alias del folder: "CO" → "🇨🇴 Colombia", "MX" → "🇲🇽 Mexico"
+    NEWMAN_FOLDER=$(python3 "$HELPERS_DIR/get_config.py" \
+        "$CONFIG_PATH" "$PROYECTO" "$FOLDER_INPUT_CLEAN" "folder_id" 2>/dev/null || echo "")
+    if [[ -z "$NEWMAN_FOLDER" ]]; then
+        log_err "No se encontro folder_id para '$FOLDER_INPUT_CLEAN' en $CONFIG_FILE"
+        log_err "Carpetas disponibles:"
+        python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "" "all_folders" 2>/dev/null || true
+        exit 1
+    fi
+    log "Folder resuelto: $NEWMAN_FOLDER"
+
+elif [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
     mapfile -t ITEM_IDS_ARRAY < <(
         python3 "$HELPERS_DIR/get_config.py" \
             "$CONFIG_PATH" "$PROYECTO" "$PROVIDER_PREFIX" "all_items" 2>/dev/null
@@ -446,14 +460,12 @@ fi
 
 # ----------------------------------------------------------
 # JERARQUÍA CONFLUENCE
-# Nivel 1: Auditorias Testing - Flows APP  (ya creado arriba)
-# Nivel 2: Onboarding Colombia MD          (flujo padre)
-# Nivel 3: CO / MX / ALL                  (país)
+# Nivel 1: Auditorias Testing - Proyecto  (ya creado arriba)
+# Nivel 2: Flujo padre
+# Nivel 3: CO / MX / ALL  (país)
 # ----------------------------------------------------------
 
 # Extraer flujo padre desde FOLDER_NAME
-# "Onboarding Colombia MD / 4. DecisionCommittee" → "Onboarding Colombia MD"
-# "Onboarding Colombia MD"                        → "Onboarding Colombia MD"
 if [[ "$FOLDER_NAME" == *" / "* ]]; then
     CONFLUENCE_FLOW=$(echo "$FOLDER_NAME" | sed 's/ \/ .*//')
 else
@@ -523,17 +535,16 @@ print(json.dumps({
     echo "$PAGE_ID"
 }
 
-# Nivel 2 — Flujo padre (ej. "Onboarding Colombia MD")
+# Nivel 2 — Flujo padre
 FLOW_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$CONFLUENCE_FLOW") || exit 1
 
-# Nivel 3 — País (ej. "CO")
+# Nivel 3 — País
 COUNTRY_FOLDER_ID=$(conf_find_or_create "$FLOW_FOLDER_ID" "$PAIS_INPUT") || exit 1
 
 python3 "$HELPERS_DIR/build_confluence.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" "$LOG_FILE" \
     "$PROYECTO" "$FOLDER_NAME" "$PAIS_INPUT" "$AMBIENTE" "$NOW" "$EXEC_NUM" \
     "$DB_VALIDATION_FILE" \
-    > "$CONFLUENCE_BODY"
     > "$CONFLUENCE_BODY"
 
 log_ok "HTML de Confluence construido."
