@@ -535,11 +535,15 @@ print(json.dumps({
     echo "$PAGE_ID"
 }
 
-# Nivel 2 — Flujo padre
-FLOW_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$CONFLUENCE_FLOW") || exit 1
-
-# Nivel 3 — País
-COUNTRY_FOLDER_ID=$(conf_find_or_create "$FLOW_FOLDER_ID" "$PAIS_INPUT") || exit 1
+# Nivel 2 — Flujo padre / Nivel 3 — País
+# Si CONFLUENCE_FLOW y PAIS_INPUT son iguales (ej. folder="CO", pais="CO")
+# no se crea el nivel intermedio para evitar páginas duplicadas en Confluence
+if [[ "$CONFLUENCE_FLOW" == "$PAIS_INPUT" ]]; then
+    COUNTRY_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$PAIS_INPUT") || exit 1
+else
+    FLOW_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$CONFLUENCE_FLOW") || exit 1
+    COUNTRY_FOLDER_ID=$(conf_find_or_create "$FLOW_FOLDER_ID" "$PAIS_INPUT") || exit 1
+fi
 
 python3 "$HELPERS_DIR/build_confluence.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" "$LOG_FILE" \
