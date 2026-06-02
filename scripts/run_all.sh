@@ -6,17 +6,11 @@ set -euo pipefail
 # Arquitectura escalable: tipo de colección definido en JSON
 # ============================================================
 
-# ----------------------------------------------------------
-# UTILIDADES: Logging con timestamp
-# ----------------------------------------------------------
 log()     { echo "[$(date +'%H:%M:%S')] $*"; }
 log_ok()  { echo "[$(date +'%H:%M:%S')] OK  $*"; }
 log_warn(){ echo "[$(date +'%H:%M:%S')] WARN $*"; }
 log_err() { echo "[$(date +'%H:%M:%S')] ERR  $*"; }
 
-# ----------------------------------------------------------
-# 1. PARÁMETROS Y VALIDACIONES
-# ----------------------------------------------------------
 PROYECTO="${1:-}"
 FOLDER_INPUT="${2:-}"
 PAIS_INPUT="${3:-}"
@@ -28,7 +22,6 @@ ERRORS=0
 [[ -z "$AMBIENTE"   ]] && { log_err "Param 4 (Testing|Staging) obligatorio."; ERRORS=1; }
 [[ $ERRORS -eq 1 ]] && { log_err "Uso: $0 <PROYECTO> [FOLDER] <CO|MX|ALL> <Testing|Staging>"; exit 1; }
 
-# Si no se especifica folder, ejecutar a nivel país
 [[ -z "$FOLDER_INPUT" ]] && FOLDER_INPUT="$PAIS_INPUT"
 
 if [[ "$PAIS_INPUT" != "CO" && "$PAIS_INPUT" != "MX" && "$PAIS_INPUT" != "ALL" ]]; then
@@ -38,28 +31,17 @@ if [[ "$AMBIENTE" != "Testing" && "$AMBIENTE" != "Staging" ]]; then
     log_err "AMBIENTE invalido: '$AMBIENTE'. Usar Testing o Staging."; exit 1
 fi
 
-# Validar credenciales
 [[ -z "${POSTMAN_API_KEY:-}" ]] && { log_err "POSTMAN_API_KEY no definida en Secrets."; exit 1; }
 [[ -z "${CONF_TOKEN:-}"      ]] && { log_err "CONF_TOKEN no definida en Secrets.";      exit 1; }
 [[ -z "${ANTHROPIC_API_KEY:-}" ]] && log_warn "ANTHROPIC_API_KEY no definida. Analisis IA omitido."
 
-# Debug de credenciales (primeros 8 chars enmascarado)
 log "POSTMAN_API_KEY : ${POSTMAN_API_KEY:0:8}... (${#POSTMAN_API_KEY} chars)"
 log "CONF_TOKEN      : ${CONF_TOKEN:0:8}... (${#CONF_TOKEN} chars)"
 
-# ----------------------------------------------------------
-# 2. RUTAS Y CONFIGURACION
-# ----------------------------------------------------------
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 HELPERS_DIR="$SCRIPTS_DIR/helpers"
 
-# ----------------------------------------------------------
-# MAPEO PROYECTO → ARCHIVO DE CONFIGURACION
-# Por defecto convierte el nombre del proyecto a kebab-case.
-# Solo se agregan overrides para nombres legacy.
-# ----------------------------------------------------------
 CONFIG_FILE=$(echo "$PROYECTO" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g').json
-
 case "$PROYECTO" in
     "Flows APP")       CONFIG_FILE="qa-flujos-criticos.json" ;;
     "ms-communicator") CONFIG_FILE="ms-communicator.json" ;;
@@ -75,20 +57,14 @@ FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
     ls "$SCRIPTS_DIR/config/" 2>/dev/null || echo "  (directorio vacio)"
     exit 1
 }
-[[ ! -f "$HELPERS_DIR/get_config.py"      ]] && { log_err "No se encontro: $HELPERS_DIR/get_config.py";      exit 1; }
-[[ ! -f "$HELPERS_DIR/extract_metrics.py" ]] && { log_err "No se encontro: $HELPERS_DIR/extract_metrics.py"; exit 1; }
-[[ ! -f "$HELPERS_DIR/claude_analysis.py" ]] && { log_err "No se encontro: $HELPERS_DIR/claude_analysis.py"; exit 1; }
+[[ ! -f "$HELPERS_DIR/get_config.py"       ]] && { log_err "No se encontro: $HELPERS_DIR/get_config.py";       exit 1; }
+[[ ! -f "$HELPERS_DIR/extract_metrics.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/extract_metrics.py";  exit 1; }
+[[ ! -f "$HELPERS_DIR/claude_analysis.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/claude_analysis.py";  exit 1; }
 [[ ! -f "$HELPERS_DIR/build_confluence.py" ]] && { log_err "No se encontro: $HELPERS_DIR/build_confluence.py"; exit 1; }
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
 NOW="$(date +'%Y-%m-%d %H:%M:%S')"
 
-# ----------------------------------------------------------
-# PROCESAMIENTO DEL FOLDER INPUT
-# Soporta dos formatos:
-#   "Onboarding Colombia MD"           → ejecuta carpeta completa en Postman
-#   "Onboarding Colombia MD / 1. Create User" → ejecuta solo ese subfolder
-# ----------------------------------------------------------
 FOLDER_INPUT_CLEAN=$(echo "$FOLDER_INPUT" | sed 's/^[- ]*//')
 PROVIDER_PREFIX=""
 FOLDER_NAME="$FOLDER_INPUT_CLEAN"
@@ -100,26 +76,19 @@ else
     NEWMAN_FOLDER="$FOLDER_INPUT_CLEAN"
 fi
 
-# Detectar escenario según subfolder
 SCENARIO="happy_path"
 if [[ "$NEWMAN_FOLDER" == "Rejected flow" ]]; then
-    SCENARIO="rejected"
-    log "Escenario: REJECTED"
+    SCENARIO="rejected"; log "Escenario: REJECTED"
 elif [[ "$NEWMAN_FOLDER" == "Expired flow" ]]; then
-    SCENARIO="expired"
-    log "Escenario: EXPIRED"
+    SCENARIO="expired"; log "Escenario: EXPIRED"
 elif [[ "$NEWMAN_FOLDER" == "Happy path epayments" ]]; then
-    SCENARIO="epayments_happy"
-    log "Escenario: EPAYMENTS HAPPY PATH"
+    SCENARIO="epayments_happy"; log "Escenario: EPAYMENTS HAPPY PATH"
 elif [[ "$NEWMAN_FOLDER" == "Happy path wallet epayments" ]]; then
-    SCENARIO="wallet_epayments_happy"
-    log "Escenario: WALLET EPAYMENTS HAPPY PATH"
+    SCENARIO="wallet_epayments_happy"; log "Escenario: WALLET EPAYMENTS HAPPY PATH"
 elif [[ "$NEWMAN_FOLDER" == "Happy path integration wallet" || "$NEWMAN_FOLDER" == "Happy path integration wallet varios documentos" ]]; then
-    SCENARIO="wallet_happy"
-    log "Escenario: WALLET INTEGRATIONS HAPPY PATH"
+    SCENARIO="wallet_happy"; log "Escenario: WALLET INTEGRATIONS HAPPY PATH"
 elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
-    SCENARIO="cobre_happy"
-    log "Escenario: COBRE HAPPY PATH"
+    SCENARIO="cobre_happy"; log "Escenario: COBRE HAPPY PATH"
 fi
 
 JSON_REPORT="$SCRIPTS_DIR/results_final.json"
@@ -149,19 +118,12 @@ log " Ambiente : $AMBIENTE"
 log " Run #    : $EXEC_NUM"
 log "============================================"
 
-# ----------------------------------------------------------
-# 3. OBTENER COLLECTION UID
-# ----------------------------------------------------------
 COLLECTION_UID=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "" "id") || {
     log_err "Proyecto '$PROYECTO' no encontrado en $CONFIG_PATH."
-    log_err "Proyectos disponibles: $(python3 -c "import json; d=json.load(open('$CONFIG_PATH')); print(list(d.keys()))" 2>/dev/null || echo 'N/A')"
     exit 1
 }
 log_ok "Collection UID: ${COLLECTION_UID:0:20}..."
 
-# ----------------------------------------------------------
-# 4. MAPPING DE ENVIRONMENTS
-# ----------------------------------------------------------
 case "${PAIS_INPUT}:${AMBIENTE}" in
     CO:Testing)  ENV_UID="19103266-4be86e2c-b894-4577-95c4-f4b827281933" ;;
     CO:Staging)  ENV_UID="19456853-9abeee01-9104-4f55-84b1-a7424aa6aedf" ;;
@@ -173,23 +135,9 @@ case "${PAIS_INPUT}:${AMBIENTE}" in
 esac
 log "Environment UID : $ENV_UID"
 
-# ----------------------------------------------------------
-# 5. CONSTRUCCION DE ARGUMENTOS NEWMAN
-# ----------------------------------------------------------
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
 
-# ----------------------------------------------------------
-# 5.5 FILTRADO DE COLECCIÓN
-# Lee "type" desde el JSON de config y decide cómo ejecutar Newman:
-#
-#   "type": "folder"    → --folder "nombre"   (nombres únicos en la colección)
-#   "type": "folder_id" → --folder "valor"    (resuelve alias: "CO" → "🇨🇴 Colombia")
-#   "type": "items"     → descarga y filtra por request IDs
-#
-# Para agregar una colección nueva: solo define el type en su JSON.
-# Este script NO necesita modificarse.
-# ----------------------------------------------------------
 FILTER_MODE=false
 NEWMAN_COLLECTION_SOURCE="$COLLECTION_URL"
 ITEM_IDS_ARRAY=()
@@ -198,12 +146,10 @@ CONFIG_TYPE=$(python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" ""
 log "Tipo de coleccion: $CONFIG_TYPE"
 
 if [[ "$CONFIG_TYPE" == "folder_id" ]]; then
-    # Resuelve el alias del folder: "CO" → "🇨🇴 Colombia", "MX" → "🇲🇽 Mexico"
     NEWMAN_FOLDER=$(python3 "$HELPERS_DIR/get_config.py" \
         "$CONFIG_PATH" "$PROYECTO" "$FOLDER_INPUT_CLEAN" "folder_id" 2>/dev/null || echo "")
     if [[ -z "$NEWMAN_FOLDER" ]]; then
         log_err "No se encontro folder_id para '$FOLDER_INPUT_CLEAN' en $CONFIG_FILE"
-        log_err "Carpetas disponibles:"
         python3 "$HELPERS_DIR/get_config.py" "$CONFIG_PATH" "$PROYECTO" "" "all_folders" 2>/dev/null || true
         exit 1
     fi
@@ -215,19 +161,19 @@ elif [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
             "$CONFIG_PATH" "$PROYECTO" "$PROVIDER_PREFIX" "all_items" 2>/dev/null
     )
     if [[ ${#ITEM_IDS_ARRAY[@]} -gt 0 ]]; then
-        log "Modo filtrado: ${#ITEM_IDS_ARRAY[@]} item(s) en '$PROVIDER_PREFIX'. Descargando coleccion..."
+        log "Modo filtrado: ${#ITEM_IDS_ARRAY[@]} item(s). Descargando coleccion..."
         COLLECTION_FULL="$SCRIPTS_DIR/collection_full.json"
         curl -sf --insecure \
             "https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}" \
             -o "$COLLECTION_FULL" \
-            || { log_err "No se pudo descargar la coleccion desde Postman API."; exit 1; }
+            || { log_err "No se pudo descargar la coleccion."; exit 1; }
         COLLECTION_FILTERED="$SCRIPTS_DIR/collection_filtered.json"
         python3 "$HELPERS_DIR/filter_collection.py" \
             "$COLLECTION_FULL" "$COLLECTION_FILTERED" "${ITEM_IDS_ARRAY[@]}" \
             || { log_err "Error al filtrar la coleccion."; exit 1; }
         NEWMAN_COLLECTION_SOURCE="$COLLECTION_FILTERED"
         FILTER_MODE=true
-        log_ok "Coleccion filtrada lista: ${#ITEM_IDS_ARRAY[@]} request(s) seleccionado(s)."
+        log_ok "Coleccion filtrada: ${#ITEM_IDS_ARRAY[@]} request(s)."
     fi
 fi
 
@@ -251,9 +197,6 @@ if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
     log "Data-driven: $DATA_FILE"
 fi
 
-# ----------------------------------------------------------
-# 7. EJECUCION NEWMAN
-# ----------------------------------------------------------
 NEWMAN_EXIT=0
 set +e
 
@@ -263,7 +206,6 @@ if [[ "$FILTER_MODE" == "true" ]]; then
         --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
-
 elif [[ "$PAIS_INPUT" == "ALL" ]]; then
     log "Iniciando Newman (ALL): Colombia + Mexico"
     newman run "${NEWMAN_BASE_ARGS[@]}" \
@@ -272,7 +214,6 @@ elif [[ "$PAIS_INPUT" == "ALL" ]]; then
         --reporter-htmlextra-title "QA Audit | ALL | $AMBIENTE | $NOW" \
         2>&1 | tee "$LOG_FILE"
     NEWMAN_EXIT=${PIPESTATUS[0]}
-
 else
     log "Iniciando Newman | Folder: '$NEWMAN_FOLDER' | Pais: $PAIS_INPUT"
     newman run "${NEWMAN_BASE_ARGS[@]}" \
@@ -295,9 +236,6 @@ if [[ ! -f "$JSON_REPORT" ]]; then
 fi
 log_ok "Newman finalizado. Reporte JSON generado."
 
-# ----------------------------------------------------------
-# 7.5 EJECUCIÓN PLAYWRIGHT
-# ----------------------------------------------------------
 if [[ "$SCENARIO" == "expired" ]]; then
     log "Escenario EXPIRED — saltando Playwright."
 elif [[ "$SCENARIO" == "rejected" ]]; then
@@ -306,9 +244,6 @@ else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
 fi
 
-# ----------------------------------------------------------
-# 7.6 NEWMAN FASE 2 — Post payment (solo si hubo payment_link)
-# ----------------------------------------------------------
 PAYMENT_LINK_FOUND=$(python3 -c "
 import json, sys
 try:
@@ -333,12 +268,11 @@ try:
 except:
     print('')
 " "$ENV_EXPORT" 2>/dev/null)
-
     if [[ -n "$PAYIN_ID" ]]; then
         log "Transaction creada: $PAYIN_ID"
-        log "Esperando 34 minutos para que el proveedor expire la transaccion automaticamente..."
+        log "Esperando 34 minutos..."
         sleep 2040
-        log "Espera finalizada. Procediendo a validar estado en BD..."
+        log "Espera finalizada."
     else
         log_warn "No se encontro payin_id en el environment export."
     fi
@@ -378,22 +312,13 @@ else
     log "Sin payment_link — saltando Newman Fase 2."
 fi
 
-# ----------------------------------------------------------
-# 7.8 VALIDACION DE ESTADOS EN BD
-# ----------------------------------------------------------
 log "Validando estados en base de datos..."
 python3 "$HELPERS_DIR/validate_db_states.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" "$DB_VALIDATION_FILE" "$SCENARIO" || true
 
-# ----------------------------------------------------------
-# 8. EXTRACCION DE METRICAS
-# ----------------------------------------------------------
 log "Extrayendo metricas del reporte..."
 python3 "$HELPERS_DIR/extract_metrics.py" "$JSON_REPORT" "$METRICS_FILE"
 log_ok "Metricas extraidas -> $METRICS_FILE"
 
-# ----------------------------------------------------------
-# 9. ANALISIS CON CLAUDE AI
-# ----------------------------------------------------------
 log "Analizando con Claude AI..."
 python3 "$HELPERS_DIR/claude_analysis.py" \
     "$METRICS_FILE" "$CLAUDE_REPORT" \
@@ -418,8 +343,6 @@ SEARCH_URL="${CONF_BASE_URL}/rest/api/content?title=${FOLDER_TITLE// /%20}&space
 SEARCH_RES=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" "$SEARCH_URL") || {
     CURL_CODE=$?
     log_err "Error conectando a Confluence (curl exit: $CURL_CODE)."
-    log_err "URL intentada: $SEARCH_URL"
-    log_err "Verifica CONF_USER ('${CONF_USER}') y CONF_TOKEN (${#CONF_TOKEN} chars)."
     exit 1
 }
 
@@ -458,18 +381,11 @@ try:
 except:
     print('')
 " "$_CREATE_RES")
-
     [[ -z "$PROJECT_FOLDER_ID" ]] && { log_err "No se pudo crear carpeta padre en Confluence."; exit 1; }
     log_ok "Carpeta creada: ID $PROJECT_FOLDER_ID"
 else
     log "Carpeta padre encontrada: ID $PROJECT_FOLDER_ID"
 fi
-# ----------------------------------------------------------
-# JERARQUÍA CONFLUENCE
-# Nivel 1: Auditorias Testing - Proyecto  (ya creado arriba)
-# Nivel 2: Flujo padre
-# Nivel 3: CO / MX / ALL  (país)
-# ----------------------------------------------------------
 
 # Extraer flujo padre desde FOLDER_NAME
 if [[ "$FOLDER_NAME" == *" / "* ]]; then
@@ -479,7 +395,7 @@ else
 fi
 log "Confluence Flow : $CONFLUENCE_FLOW"
 
-# Función para buscar o crear página en Confluence
+# Función para buscar o crear página en Confluence — versión robusta
 conf_find_or_create() {
     local PARENT_ID="$1"
     local TITLE="$2"
@@ -531,8 +447,7 @@ print(json.dumps({
             "$CONF_BASE_URL/rest/api/content" 2>/dev/null)
 
         if [[ -z "$CREATE_RES" ]]; then
-            echo "[$(date +'%H:%M:%S')] WARN Respuesta vacía al crear '$TITLE'. Reintentando búsqueda..." >&2
-            # Puede que ya exista — reintentar búsqueda
+            echo "[$(date +'%H:%M:%S')] WARN Respuesta vacía. Reintentando búsqueda..." >&2
             local RETRY_RES
             RETRY_RES=$(curl -s --insecure -u "$CONF_USER:$CONF_TOKEN" \
                 "${CONF_BASE_URL}/rest/api/content/search?cql=${CQL_ENC}&limit=5" 2>/dev/null) || RETRY_RES='{}'
@@ -547,10 +462,10 @@ except:
     print('')
 " "$RETRY_RES")
             if [[ -z "$PAGE_ID" ]]; then
-                echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear ni encontrar carpeta '$TITLE'." >&2
+                echo "[$(date +'%H:%M:%S')] ERR  No se pudo crear ni encontrar '$TITLE'." >&2
                 return 1
             fi
-            echo "[$(date +'%H:%M:%S')] OK  Carpeta encontrada tras reintento: '$TITLE' (ID: $PAGE_ID)" >&2
+            echo "[$(date +'%H:%M:%S')] OK  Encontrada tras reintento: '$TITLE' (ID: $PAGE_ID)" >&2
         else
             PAGE_ID=$(python3 -c "
 import json, sys
@@ -561,7 +476,7 @@ except:
     print('')
 " "$CREATE_RES")
             if [[ -z "$PAGE_ID" ]]; then
-                echo "[$(date +'%H:%M:%S')] ERR  Confluence no devolvio ID para '$TITLE'. Respuesta: ${CREATE_RES:0:200}" >&2
+                echo "[$(date +'%H:%M:%S')] ERR  Sin ID en respuesta para '$TITLE'. Resp: ${CREATE_RES:0:200}" >&2
                 return 1
             fi
             echo "[$(date +'%H:%M:%S')] OK  Carpeta creada: '$TITLE' (ID: $PAGE_ID)" >&2
@@ -573,9 +488,7 @@ except:
     echo "$PAGE_ID"
 }
 
-# Nivel 2 — Flujo padre / Nivel 3 — País
-# Si CONFLUENCE_FLOW y PAIS_INPUT son iguales (ej. folder="CO", pais="CO")
-# no se crea el nivel intermedio para evitar páginas duplicadas en Confluence
+# Si CONFLUENCE_FLOW == PAIS_INPUT evita crear nivel duplicado en Confluence
 if [[ "$CONFLUENCE_FLOW" == "$PAIS_INPUT" ]]; then
     COUNTRY_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$PAIS_INPUT") || exit 1
 else
@@ -614,9 +527,6 @@ NEW_PAGE_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('id
 [[ -z "$NEW_PAGE_ID" ]] && { log_err "Confluence no devolvio ID de pagina."; exit 1; }
 log_ok "Pagina publicada. ID: $NEW_PAGE_ID"
 
-# ----------------------------------------------------------
-# 11. ADJUNTAR ARCHIVOS
-# ----------------------------------------------------------
 if [[ -f "$HTML_NEWMAN" ]]; then
     curl -sf -u "$CONF_USER:$CONF_TOKEN" \
         -X POST -H "X-Atlassian-Token: nocheck" \
@@ -635,9 +545,6 @@ if [[ -f "$METRICS_FILE" ]]; then
         || log_warn "No se pudo adjuntar metrics_summary.json."
 fi
 
-# ----------------------------------------------------------
-# 12. RESUMEN FINAL
-# ----------------------------------------------------------
 FINAL_FAILURES=$(python3 -c "
 import json
 try:
