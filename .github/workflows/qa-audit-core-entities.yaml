@@ -118,6 +118,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+|      - name: Verify run_all.sh version     # ← agregar aquí
+        shell: bash
+        run: |
+          head -5 scripts/run_all.sh
+          grep -n "json.load(sys.stdin)" scripts/run_all.sh || echo "OK - no encontrado"
 
       # ── Python ───────────────────────────────────────────
       - name: Setup Python (Windows)
