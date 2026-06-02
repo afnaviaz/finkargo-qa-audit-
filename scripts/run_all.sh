@@ -528,13 +528,18 @@ print(json.dumps({
     'body': {'storage': {'value': body, 'representation': 'storage'}}
 }))" "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" "$CONFLUENCE_BODY")
 
+# Escribir payload a archivo para evitar "Argument list too long" en Windows
+PAYLOAD_FILE="$SCRIPTS_DIR/confluence_payload.json"
+echo "$FINAL_PAYLOAD" > "$PAYLOAD_FILE"
 RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
-    -d "$FINAL_PAYLOAD" \
+    --data @"$PAYLOAD_FILE" \
     "$CONF_BASE_URL/rest/api/content") || {
+    rm -f "$PAYLOAD_FILE"
     log_err "Error publicando en Confluence."
     exit 1
 }
+rm -f "$PAYLOAD_FILE"
 
 NEW_PAGE_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('id',''))" "$RESPONSE_PUB")
 [[ -z "$NEW_PAGE_ID" ]] && { log_err "Confluence no devolvio ID de pagina."; exit 1; }
