@@ -1,4 +1,4 @@
-name: core-entities
+name: QA Audit - core-entities
 
 on:
   workflow_dispatch:
