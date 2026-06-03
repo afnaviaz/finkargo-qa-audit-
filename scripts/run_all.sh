@@ -150,6 +150,14 @@ elif [[ "$NEWMAN_FOLDER" == "Crear Certificado Transporte" ]]; then
     SCENARIO="vertice_cert_transporte"
     NEWMAN_FOLDER="9a19703f-9142-4dc9-8f86-b9e64f7fbb6b"
     log "Escenario: VERTICE CREAR CERTIFICADO TRANSPORTE — 11 iteraciones EP/VL/NEG"
+elif [[ "$NEWMAN_FOLDER" == "common-nit-dates" ]]; then
+    SCENARIO="common_nit_dates"
+    NEWMAN_FOLDER="ff93f1b8-4369-451b-96c0-b3cdbb4300dc"
+    log "Escenario: COMMON NIT DATES — 36 NITs, GET /v1/common/{{nit}}/dates"
+elif [[ "$NEWMAN_FOLDER" == "sarlaft-last-date" ]]; then
+    SCENARIO="sarlaft_last_date"
+    NEWMAN_FOLDER="354e9e44-359b-432f-b382-50cd1b8e7f4a"
+    log "Escenario: SARLAFT LAST DATE METAMAP — 36 NITs"
 fi
 [[ -n "$PROVIDER_PREFIX" ]] && log "Proveedor : $PROVIDER_PREFIX"
 
@@ -318,6 +326,7 @@ elif [[ "$SCENARIO" == "laft_reconsult" ]]; then
     NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${LAFT_MONOLITO_BASE}")
     log "LAFT Reconsult: 36 iteraciones | monolito: ${LAFT_MONOLITO_BASE}"
 elif [[ "$SCENARIO" == "vertice_happy_path" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     if [[ "$AMBIENTE" == "Staging" ]]; then
         VERTICE_BASE_URL="https://api-staging.finkargo.com/integrations"
     else
@@ -325,7 +334,7 @@ elif [[ "$SCENARIO" == "vertice_happy_path" ]]; then
     fi
     NEWMAN_BASE_ARGS+=("--env-var" "services-integrations=${VERTICE_BASE_URL}")
     log "Vertice base URL : ${VERTICE_BASE_URL}"
-    log "Vertice Happy Path: Create Insured (9 iter) → Crear Certificado Transporte (11 iter)"
+    log "Vertice Happy Path: 11 iteraciones — Create Insured + Crear Certificado Transporte"
 elif [[ "$SCENARIO" == "vertice_cert_transporte" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     if [[ "$AMBIENTE" == "Staging" ]]; then
@@ -352,6 +361,19 @@ elif [[ "$SCENARIO" == "upload_buro_mx" ]]; then
     NEWMAN_BASE_ARGS+=("--env-var" "api-integrations-mx=${BURO_INTEGRATIONS_MX}")
     NEWMAN_BASE_ARGS+=("--working-dir" "${SCRIPTS_DIR}/data")
     log "Upload Buro MX: 35 iteraciones | monolito: ${BURO_MONOLITO_BASE} | integrations-mx: ${BURO_INTEGRATIONS_MX} | working-dir: ${SCRIPTS_DIR}/data"
+elif [[ "$SCENARIO" == "common_nit_dates" || "$SCENARIO" == "sarlaft_last_date" ]]; then
+    if [[ "$AMBIENTE" == "Staging" ]]; then
+        NIT_DATES_MONOLITO="https://msa-api-staging.back.finkargo.com"
+    else
+        NIT_DATES_MONOLITO="https://msa-api-testing.back.finkargo.com"
+    fi
+    NEWMAN_BASE_ARGS+=("--iteration-count" "36")
+    NEWMAN_BASE_ARGS+=("--env-var" "nitDatesIndex=0")
+    NEWMAN_BASE_ARGS+=("--env-var" "nitDatesSummary=[]")
+    NEWMAN_BASE_ARGS+=("--env-var" "consumoDates=[]")
+    NEWMAN_BASE_ARGS+=("--env-var" "nit=0")
+    NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${NIT_DATES_MONOLITO}")
+    log "${SCENARIO}: 36 iteraciones | monolito: ${NIT_DATES_MONOLITO}"
 fi
 
 # ----------------------------------------------------------

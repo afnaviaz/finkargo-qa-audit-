@@ -34,6 +34,8 @@ on:
           "STRIPE EPAYMENTS / Create Payment Customer balance one time",
           "ENDPOINTS MIGRADOS / laft-reconsult-monolito",
           "ENDPOINTS MIGRADOS / upload-buro-mx",
+          "ENDPOINTS MIGRADOS / common-nit-dates",
+          "ENDPOINTS MIGRADOS / sarlaft-last-date",
           "VERTICE / Happy path vertice integrations",
           "VERTICE / Crear Certificado Transporte"
         ]
