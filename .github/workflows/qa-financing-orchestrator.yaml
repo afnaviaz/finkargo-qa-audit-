@@ -14,26 +14,19 @@ on:
         default: "CO"
         type: choice
         options:
-          - "CO"
           - "CO / Operations"
-          - "MX"
           - "MX / Operations"
-      pais:
-        description: "País"
-        required: true
-        default: "CO"
-        type: choice
-        options:
-          - CO
-          - MX
+    
       ambiente:
         description: "Ambiente de ejecución"
         required: true
         default: "Testing"
         type: choice
         options:
-          - Testing
-          - Staging
+          - Testing Co
+          - Staging Co
+          - Testing Mx
+          - Staging Mx
 
   workflow_call:
     inputs:
