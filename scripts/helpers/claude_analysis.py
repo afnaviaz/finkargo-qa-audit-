@@ -25,7 +25,10 @@ def call_claude(api_key: str, prompt: str, max_tokens: int = 4000) -> str:
              "-H", "anthropic-version: 2023-06-01",
              "-H", "content-type: application/json",
              "--data", f"@{tmp_path}"],
-            capture_output=True, text=True
+            capture_output=True, 
+            text=True,
+            encoding='utf-8',
+            errors='replace'
         )
     finally:
         try:
