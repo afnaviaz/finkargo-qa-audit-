@@ -136,7 +136,7 @@ elif [[ "$NEWMAN_FOLDER" == "Create Payment Oxxo one time epayments" ]]; then
     log "Escenario: STRIPE OXXO ONE TIME EPAYMENTS (PG005)"
 elif [[ "$NEWMAN_FOLDER" == "laft-reconsult-monolito" ]]; then
     SCENARIO="laft_reconsult"
-    NEWMAN_FOLDER="ENDPOINTS MIGRADOS"
+    NEWMAN_FOLDER="RECONSULT"
     log "Escenario: LAFT RECONSULT — 36 compañías, corre monolito + integrations en orden"
 elif [[ "$NEWMAN_FOLDER" == "upload-buro-mx" ]]; then
     SCENARIO="upload_buro_mx"
@@ -315,16 +315,21 @@ elif [[ "$SCENARIO" == "stripe_balance_one_time_epayments" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     log "Stripe Balance one time epayments: 11 iteraciones"
 elif [[ "$SCENARIO" == "laft_reconsult" ]]; then
-    if [[ "$AMBIENTE" == "Staging" ]]; then
-        LAFT_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com"
-    else
-        LAFT_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com"
-    fi
-    NEWMAN_BASE_ARGS+=("--iteration-count" "36")
+    case "${PAIS_INPUT}:${AMBIENTE}" in
+        CO:Testing)  LAFT_COUNT=36;  LAFT_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com" ;;
+        CO:Staging)  LAFT_COUNT=36;  LAFT_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com" ;;
+        MX:Testing)  LAFT_COUNT=40;  LAFT_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com.mx" ;;
+        MX:Staging)  LAFT_COUNT=23;  LAFT_MONOLITO_BASE="https://msa-api-staging.back.finkargo.com.mx" ;;
+        *)           LAFT_COUNT=36;  LAFT_MONOLITO_BASE="https://msa-api-testing.back.finkargo.com" ;;
+    esac
+    NEWMAN_BASE_ARGS+=("--iteration-count" "${LAFT_COUNT}")
     NEWMAN_BASE_ARGS+=("--env-var" "companyIndex=0")
     NEWMAN_BASE_ARGS+=("--env-var" "querySummary=[]")
+    NEWMAN_BASE_ARGS+=("--env-var" "consumoLaft=[]")
+    NEWMAN_BASE_ARGS+=("--env-var" "pais=${PAIS_INPUT}")
+    NEWMAN_BASE_ARGS+=("--env-var" "ambiente=${AMBIENTE}")
     NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${LAFT_MONOLITO_BASE}")
-    log "LAFT Reconsult: 36 iteraciones | monolito: ${LAFT_MONOLITO_BASE}"
+    log "LAFT Reconsult: ${LAFT_COUNT} iteraciones | ${PAIS_INPUT}:${AMBIENTE} | monolito: ${LAFT_MONOLITO_BASE}"
 elif [[ "$SCENARIO" == "vertice_happy_path" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "11")
     if [[ "$AMBIENTE" == "Staging" ]]; then
