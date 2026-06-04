@@ -135,6 +135,40 @@ case "${PAIS_INPUT}:${AMBIENTE}" in
 esac
 log "Environment UID : $ENV_UID"
 
+# ============================================================
+# FIX: Normalizar api-core-entities — quitar trailing slash
+# La API de Postman devuelve el Initial Value que puede tener
+# "/" al final, causando doble slash en todas las URLs.
+# Se descarga el environment, se limpia y se inyecta via
+# --env-var con prioridad sobre el environment descargado.
+# ============================================================
+_ENV_JSON=$(curl -sf --insecure \
+    "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}" \
+    2>/dev/null || echo '{}')
+
+API_CORE_ENTITIES_RAW=$(python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.argv[1])
+    values = d.get('environment', {}).get('values', [])
+    match = next(
+        (v.get('value', '') for v in values if v.get('key') == 'api-core-entities'),
+        ''
+    )
+    print(match.rstrip('/'))
+except Exception:
+    print('')
+" "$_ENV_JSON")
+
+NEWMAN_ENV_OVERRIDE=()
+if [[ -n "$API_CORE_ENTITIES_RAW" ]]; then
+    NEWMAN_ENV_OVERRIDE=(--env-var "api-core-entities=${API_CORE_ENTITIES_RAW}")
+    log_ok "api-core-entities normalizado: ${API_CORE_ENTITIES_RAW}"
+else
+    log_warn "No se pudo leer api-core-entities del environment. Double slash posible."
+fi
+# ============================================================
+
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
 
@@ -154,7 +188,6 @@ if [[ "$CONFIG_TYPE" == "folder_id" ]]; then
         exit 1
     fi
     log "Folder resuelto: $NEWMAN_FOLDER"
-    # Si es UUID con prefijo Postman (ej. "19198347-0f4bc58c-...") → Newman necesita solo el UUID
     if [[ "$NEWMAN_FOLDER" =~ ^[0-9]+-[0-9a-f]{8}- ]]; then
         NEWMAN_FOLDER=$(echo "$NEWMAN_FOLDER" | sed 's/^[0-9]*-//')
         log "Folder UUID (sin prefijo): $NEWMAN_FOLDER"
@@ -195,6 +228,7 @@ NEWMAN_BASE_ARGS=(
     --suppress-exit-code
     --timeout-request 30000
     --timeout-script  10000
+    "${NEWMAN_ENV_OVERRIDE[@]}"
 )
 
 if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
@@ -331,7 +365,7 @@ python3 "$HELPERS_DIR/claude_analysis.py" \
 log_ok "Reporte Claude -> $CLAUDE_REPORT"
 
 # ----------------------------------------------------------
-# 10. PUBLICACION EN CONFLUENCE
+# PUBLICACION EN CONFLUENCE
 # ----------------------------------------------------------
 log "Publicando en Confluence..."
 
@@ -392,7 +426,6 @@ else
     log "Carpeta padre encontrada: ID $PROJECT_FOLDER_ID"
 fi
 
-# Extraer flujo padre desde FOLDER_NAME
 if [[ "$FOLDER_NAME" == *" / "* ]]; then
     CONFLUENCE_FLOW=$(echo "$FOLDER_NAME" | sed 's/ \/ .*//')
 else
@@ -400,7 +433,6 @@ else
 fi
 log "Confluence Flow : $CONFLUENCE_FLOW"
 
-# Función para buscar o crear página en Confluence — versión robusta
 conf_find_or_create() {
     local PARENT_ID="$1"
     local TITLE="$2"
@@ -451,7 +483,6 @@ print(json.dumps({
             -d "$CREATE_PAYLOAD" \
             "$CONF_BASE_URL/rest/api/content" 2>/dev/null)
 
-        # Intentar obtener el ID de la respuesta (creación exitosa)
         PAGE_ID=$(python3 -c "
 import json, sys
 try:
@@ -462,8 +493,6 @@ except:
 " "$CREATE_RES")
 
         if [[ -z "$PAGE_ID" ]]; then
-            # Sin ID — puede ser 400 por título duplicado
-            # Buscar por título usando API directa (no CQL — evita delays de indexación)
             echo "[$(date +'%H:%M:%S')] WARN No se obtuvo ID. Buscando página existente: '$TITLE'..." >&2
             local TITLE_ENC
             TITLE_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$TITLE")
@@ -478,14 +507,12 @@ try:
     d = json.loads(sys.argv[1])
     parent_id = sys.argv[2]
     results = d.get('results', [])
-    # Buscar la página que tiene el padre correcto
     for r in results:
         ancestors = r.get('ancestors', [])
         if any(a.get('id') == parent_id for a in ancestors):
             print(r['id'])
             break
     else:
-        # Si no hay coincidencia de padre, tomar la primera
         if results:
             print(results[0]['id'])
 except:
@@ -506,7 +533,6 @@ except:
     echo "$PAGE_ID"
 }
 
-# Si CONFLUENCE_FLOW == PAIS_INPUT evita crear nivel duplicado en Confluence
 if [[ "$CONFLUENCE_FLOW" == "$PAIS_INPUT" ]]; then
     COUNTRY_FOLDER_ID=$(conf_find_or_create "$PROJECT_FOLDER_ID" "$PAIS_INPUT") || exit 1
 else
@@ -533,7 +559,6 @@ print(json.dumps({
     'body': {'storage': {'value': body, 'representation': 'storage'}}
 }))" "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" "$CONFLUENCE_BODY")
 
-# Escribir payload a archivo para evitar "Argument list too long" en Windows
 PAYLOAD_FILE="$SCRIPTS_DIR/confluence_payload.json"
 echo "$FINAL_PAYLOAD" > "$PAYLOAD_FILE"
 RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
