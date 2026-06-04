@@ -103,7 +103,11 @@ elif [[ "$NEWMAN_FOLDER" == "Happy path integration wallet" || "$NEWMAN_FOLDER" 
     log "Escenario: WALLET INTEGRATIONS HAPPY PATH"
 elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
     SCENARIO="cobre_happy"
-    log "Escenario: COBRE HAPPY PATH"
+    NEWMAN_FOLDER="925d11ef-abf1-4786-8910-3d6a4585d4f1"
+    log "Escenario: COBRE HAPPY PATH — Quote + Transaction + Debit + Payment Notification (2 fases)"
+elif [[ "$NEWMAN_FOLDER" == "Happy path cobre fondos insuficientes" ]]; then
+    SCENARIO="cobre_fondos_insuficientes"
+    log "Escenario: COBRE FONDOS INSUFICIENTES — Quote + Transaction + Debit (3 pasos)"
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Card one time" ]]; then
     SCENARIO="stripe_card"
     log "Escenario: STRIPE CARD ONE TIME — Playwright llenará el checkout"
@@ -480,8 +484,42 @@ elif [[ "$NEWMAN_FOLDER" == "Happy path integration" ]]; then
 elif [[ "$SCENARIO" == "supra_epayments" || "$SCENARIO" == "epayments_happy" ]]; then
     log "Escenario SUPRA EPAYMENTS — Playwright para cada happy path link..."
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" "supra_integration" || true
+elif [[ "$SCENARIO" == "cobre_happy" || "$SCENARIO" == "cobre_fondos_insuficientes" ]]; then
+    log "Cobre — sin Playwright."
 else
     bash "$SCRIPTS_DIR/playwright/run_playwright.sh" "$ENV_EXPORT" "$SCRIPTS_DIR" || true
+fi
+
+# ----------------------------------------------------------
+# 7.55 COBRE FASE 2 — Inyectar cobre_movement_id + payment notification
+# ----------------------------------------------------------
+if [[ "$SCENARIO" == "cobre_happy" ]]; then
+    log "Cobre Fase 2: consultando cobre_movement_id en BD ${PAIS_INPUT}/${AMBIENTE}..."
+    python3 "$HELPERS_DIR/cobre_db_inject.py" "$ENV_EXPORT" "$PAIS_INPUT" "$AMBIENTE" || {
+        log_warn "cobre_db_inject: no se pudo inyectar cobre_movement_id. El payment notification puede fallar."
+    }
+
+    log "Iniciando Newman Cobre Fase 2 | Folder: 'payment notification' | Pais: $PAIS_INPUT"
+    JSON_REPORT_COBRE_P2="$SCRIPTS_DIR/results_cobre_phase2.json"
+    HTML_NEWMAN_COBRE_P2="$SCRIPTS_DIR/reporte_cobre_phase2.html"
+    ENV_EXPORT_COBRE_P2="$SCRIPTS_DIR/environment_export_cobre_phase2.json"
+    set +e
+    newman run "$COLLECTION_URL" \
+        --environment "$ENV_EXPORT" \
+        --insecure \
+        -r cli,json,htmlextra \
+        --reporter-json-export      "$JSON_REPORT_COBRE_P2" \
+        --reporter-htmlextra-export "$HTML_NEWMAN_COBRE_P2" \
+        --export-environment        "$ENV_EXPORT_COBRE_P2" \
+        --suppress-exit-code \
+        --timeout-request 30000 \
+        --timeout-script  10000 \
+        --folder "payment notification" \
+        --reporter-htmlextra-title "QA Audit | Cobre payment notification | $PAIS_INPUT | $AMBIENTE | $NOW" \
+        2>&1 | tee -a "$LOG_FILE"
+    NEWMAN_COBRE_P2_EXIT=${PIPESTATUS[0]}
+    set -e
+    log "Newman Cobre Fase 2 exit code: $NEWMAN_COBRE_P2_EXIT"
 fi
 
 # ----------------------------------------------------------

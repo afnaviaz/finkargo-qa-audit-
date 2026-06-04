@@ -22,6 +22,7 @@ on:
           "SUPRA / SUPRA WALLET - EPAYMENTS / Happy path wallet epayments",
           "COBRE / COBRE INTEGRATIONS",
           "COBRE / COBRE INTEGRATIONS / Happy path cobre",
+          "COBRE / COBRE INTEGRATIONS / Happy path cobre fondos insuficientes",
           "STRIPE / Create Payment Card one time",
           "STRIPE / Create Payment Card recurring",
           "STRIPE / Create Payment Oxxo one time",
@@ -59,7 +60,7 @@ permissions:
 jobs:
   run-integrations-pipeline:
     name: "Integrations: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
-    runs-on: [self-hosted, TROCHACOL]
+    runs-on: [self-hosted, qa-runner]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

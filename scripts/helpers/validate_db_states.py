@@ -51,10 +51,11 @@ def main():
     output_path     = sys.argv[4]
     scenario        = sys.argv[5] if len(sys.argv) > 5 else 'happy_path'
 
-    supra_quote_id = get_env_var(env_export, 'supra_quote_id')
-    payin_id       = get_env_var(env_export, 'payin_id')
+    supra_quote_id    = get_env_var(env_export, 'supra_quote_id')
+    payin_id          = get_env_var(env_export, 'payin_id')
+    cobre_quote_ext   = get_env_var(env_export, 'cobre_quote_external_id')
 
-    if not supra_quote_id and not payin_id:
+    if not supra_quote_id and not payin_id and not cobre_quote_ext:
         print('INFO No se encontraron IDs en el environment. Saltando validacion DB.')
         write_result(output_path, False, pais, ambiente, [])
         sys.exit(0)
@@ -87,9 +88,64 @@ def main():
         print('=' * 55)
 
         # ============================================================
+        # COBRE: cobre."transaction" → status completed + movement_id
+        # ============================================================
+        if scenario == 'cobre_happy':
+            if cobre_quote_ext:
+                POLL_INTERVAL = 15
+                POLL_TIMEOUT  = 120
+                elapsed       = 0
+                status        = None
+                movement_id   = None
+
+                print(f'INFO Esperando status completed en cobre.transaction (timeout: {POLL_TIMEOUT}s)...')
+                while elapsed <= POLL_TIMEOUT:
+                    cur.execute(
+                        '''SELECT cobre_movement_id, status
+                           FROM cobre."transaction"
+                           WHERE exchange_quote_id = %s
+                           LIMIT 1''',
+                        (cobre_quote_ext,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        movement_id = row[0]
+                        status      = row[1]
+                        print(f'  [{elapsed}s] cobre.transaction status: {status} | movement_id: {movement_id}')
+                        if status == 'completed':
+                            break
+                        if status in ('failed', 'rejected', 'error'):
+                            break
+                    else:
+                        status = 'NOT FOUND'
+                        break
+                    time.sleep(POLL_INTERVAL)
+                    elapsed += POLL_INTERVAL
+
+                if status == 'completed':
+                    result = 'OK'
+                elif status in ('NOT FOUND', 'failed', 'rejected', 'error'):
+                    result = 'FAIL'
+                    errors += 1
+                else:
+                    result = 'WARN'
+
+                print(f'[{result}] cobre.transaction | exchange_quote_id: {cobre_quote_ext[:12]}... | status: {status} (esperado: completed) | movement_id: {movement_id}')
+                results.append({
+                    'table': 'cobre.transaction',
+                    'external_id': cobre_quote_ext,
+                    'status': status,
+                    'expected': 'completed',
+                    'result': result,
+                    'movement_id': movement_id
+                })
+            else:
+                print('WARN No se encontró cobre_quote_external_id para validar cobre.transaction.')
+
+        # ============================================================
         # EPAYMENTS: epayment."transaction" → status SUCCESSFUL
         # ============================================================
-        if scenario == 'epayments_happy':
+        elif scenario == 'epayments_happy':
             if payin_id:
                 POLL_INTERVAL = 15
                 POLL_TIMEOUT  = 120
