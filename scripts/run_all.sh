@@ -136,11 +136,10 @@ esac
 log "Environment UID : $ENV_UID"
 
 # ============================================================
-# FIX: Normalizar api-core-entities — quitar trailing slash
+# FIX 1: Normalizar api-core-entities — quitar trailing slash
 # La API de Postman devuelve el Initial Value que puede tener
-# "/" al final, causando doble slash en todas las URLs.
-# Se descarga el environment, se limpia y se inyecta via
-# --env-var con prioridad sobre el environment descargado.
+# "/" al final. Se inyecta via --env-var con prioridad sobre
+# el environment descargado.
 # ============================================================
 _ENV_JSON=$(curl -sf --insecure \
     "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}" \
@@ -214,6 +213,62 @@ elif [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
         log_ok "Coleccion filtrada: ${#ITEM_IDS_ARRAY[@]} request(s)."
     fi
 fi
+
+# ============================================================
+# FIX 2: Eliminar double slash — descargar colección y reescribir
+# URLs con api-core-entities como string (raw) en lugar de objeto.
+#
+# Causa raíz: Newman construye la URL desde el objeto {host, path}
+# cuando la variable api-core-entities resuelve a una URL completa
+# con https://, agrega un "/" extra entre host y path[0], produciendo
+# https://...finkargo.com//v1/co/...
+#
+# Fix: convertir url de objeto a string (el campo raw). Cuando url
+# es string, Newman lo resuelve directamente sin construir nada.
+# Aplica solo a requests con {{api-core-entities}} en la URL.
+# ============================================================
+COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
+log "Descargando coleccion para fix de double slash..."
+
+curl -sf --insecure "$COLLECTION_URL" -o "$COLLECTION_LOCAL" || {
+    log_err "No se pudo descargar la coleccion desde Postman API."
+    exit 1
+}
+
+python3 - "$COLLECTION_LOCAL" "$COLLECTION_LOCAL" << 'PYEOF'
+import json, sys
+
+src = sys.argv[1]
+dst = sys.argv[2]
+
+with open(src, encoding='utf-8') as f:
+    col = json.load(f)
+
+def fix_urls(items):
+    count = 0
+    for item in items:
+        if 'item' in item:
+            count += fix_urls(item['item'])
+        elif 'request' in item:
+            url = item['request'].get('url', {})
+            if isinstance(url, dict) and 'api-core-entities' in url.get('raw', ''):
+                # Reemplazar objeto URL por string raw
+                # Newman usa el raw directamente — sin construir desde host+path
+                item['request']['url'] = url['raw']
+                count += 1
+    return count
+
+fixed = fix_urls(col.get('item', []))
+
+with open(dst, 'w', encoding='utf-8') as f:
+    json.dump(col, f, ensure_ascii=False)
+
+print(f"[FIX2] {fixed} URLs corregidas — double slash eliminado.")
+PYEOF
+
+NEWMAN_COLLECTION_SOURCE="$COLLECTION_LOCAL"
+log_ok "Coleccion local lista: $COLLECTION_LOCAL"
+# ============================================================
 
 ENV_EXPORT="$SCRIPTS_DIR/environment_export.json"
 
@@ -331,7 +386,7 @@ if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
     JSON_REPORT_P2="$SCRIPTS_DIR/results_phase2.json"
     HTML_NEWMAN_P2="$SCRIPTS_DIR/reporte_visual_phase2.html"
     set +e
-    newman run "$COLLECTION_URL" \
+    newman run "$COLLECTION_LOCAL" \
         --environment "$ENV_EXPORT" \
         --insecure \
         -r cli,json,htmlextra \
