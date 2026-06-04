@@ -11,22 +11,23 @@ on:
       folder:
         description: "Carpeta a ejecutar"
         required: true
-        default: "CO"
+        default: "CO / Operations"
         type: choice
         options:
           - "CO / Operations"
           - "MX / Operations"
-    
+      pais:
+        description: "País de ejecución"
+        required: true
+        default: "CO"
+        type: choice
+        options: [CO, MX, ALL]
       ambiente:
         description: "Ambiente de ejecución"
         required: true
         default: "Testing"
         type: choice
-        options:
-          - Testing Co
-          - Staging Co
-          - Testing Mx
-          - Staging Mx
+        options: [Testing, Staging]
 
   workflow_call:
     inputs:
@@ -120,9 +121,7 @@ jobs:
       - name: Check Python (macOS / Linux)
         if: runner.os != 'Windows'
         shell: bash
-        run: |
-          python3 --version
-          which python3
+        run: python3 --version && which python3
 
       - name: Install Python dependencies (macOS / Linux)
         if: runner.os != 'Windows'
@@ -138,7 +137,6 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install requests psycopg2-binary
 
-      # ── Python3 alias (solo Windows con Git Bash) ────────
       - name: Create python3 alias for Git Bash (Windows)
         if: runner.os == 'Windows'
         shell: powershell
@@ -156,9 +154,7 @@ jobs:
       - name: Check Node (macOS / Linux)
         if: runner.os != 'Windows'
         shell: bash
-        run: |
-          node --version
-          npm --version
+        run: node --version && npm --version
 
       - name: Check Node (Windows)
         if: runner.os == 'Windows'
