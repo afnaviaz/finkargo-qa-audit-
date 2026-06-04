@@ -147,12 +147,15 @@ jobs:
         shell: bash
         run: python3 --version && which python3
 
+      # FIX: Python 3.12+ en Debian/Ubuntu bloquea pip install global.
+      # Se usa --break-system-packages para el runner self-hosted
+      # donde no hay riesgo de romper el OS del agente.
       - name: Install Python dependencies (macOS / Linux)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install requests psycopg2-binary
+          python3 -m pip install --upgrade pip --break-system-packages
+          python3 -m pip install requests psycopg2-binary --break-system-packages
 
       - name: Install Python dependencies (Windows)
         if: runner.os == 'Windows'
@@ -209,6 +212,9 @@ jobs:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           CI: "true"
           PYTHONIOENCODING: "utf-8"
+          # FIX: fuerza UTF-8 en Windows también para evitar
+          # UnicodeDecodeError con emojis en output de Newman
+          PYTHONUTF8: "1"
           DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
           DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
           DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
@@ -248,6 +254,9 @@ jobs:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           CI: "true"
           PYTHONIOENCODING: "utf-8"
+          # FIX: fuerza UTF-8 en Windows para evitar UnicodeDecodeError
+          # con emojis (🇨🇴, ✅, ⚠️) en el output de Newman → claude_analysis.py
+          PYTHONUTF8: "1"
           DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
           DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
           DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
@@ -256,7 +265,7 @@ jobs:
           DB_HOST_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
           DB_PORT_TESTING_MX: ${{ secrets.DB_PORT_TESTING_MX }}
           DB_NAME_TESTING_MX: ${{ secrets.DB_NAME_TESTING_MX }}
-          DB_USER_TESTING_MX: ${{ secrets.DB_USER_TESTING_MX }}
+          DB_USER_TESTING_MX: ${{ secrets.DB_HOST_TESTING_MX }}
           DB_PASSWORD_TESTING_MX: ${{ secrets.DB_PASSWORD_TESTING_MX }}
           DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
           DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
