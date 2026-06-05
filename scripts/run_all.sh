@@ -49,7 +49,6 @@ esac
 
 CONFIG_PATH="$SCRIPTS_DIR/config/$CONFIG_FILE"
 DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
-FIXTURES_DIR="$(dirname "$SCRIPTS_DIR")/test/fixtures"
 
 [[ ! -f "$CONFIG_PATH" ]] && {
     log_err "No se encontro config para '$PROYECTO': $CONFIG_PATH"
@@ -138,8 +137,7 @@ log "Environment UID : $ENV_UID"
 # ============================================================
 # FIX 1: Normalizar api-core-entities — quitar trailing slash
 # La API de Postman devuelve el Initial Value que puede tener
-# "/" al final. Se inyecta via --env-var con prioridad sobre
-# el environment descargado.
+# "/" al final. Se inyecta via --env-var con prioridad.
 # ============================================================
 _ENV_JSON=$(curl -sf --insecure \
     "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}" \
@@ -164,7 +162,7 @@ if [[ -n "$API_CORE_ENTITIES_RAW" ]]; then
     NEWMAN_ENV_OVERRIDE=(--env-var "api-core-entities=${API_CORE_ENTITIES_RAW}")
     log_ok "api-core-entities normalizado: ${API_CORE_ENTITIES_RAW}"
 else
-    log_warn "No se pudo leer api-core-entities del environment. Double slash posible."
+    log_warn "No se pudo leer api-core-entities del environment."
 fi
 # ============================================================
 
@@ -218,14 +216,13 @@ fi
 # FIX 2: Eliminar double slash — descargar colección y reescribir
 # URLs con api-core-entities como string (raw) en lugar de objeto.
 #
-# Causa raíz: Newman construye la URL desde el objeto {host, path}
-# cuando la variable api-core-entities resuelve a una URL completa
-# con https://, agrega un "/" extra entre host y path[0], produciendo
-# https://...finkargo.com//v1/co/...
+# Causa raíz: Newman construye URL desde {host, path} cuando la
+# variable resuelve a una URL completa con https://, agrega un "/"
+# extra produciendo https://...finkargo.com//v1/co/...
 #
-# Fix: convertir url de objeto a string (el campo raw). Cuando url
-# es string, Newman lo resuelve directamente sin construir nada.
-# Aplica solo a requests con {{api-core-entities}} en la URL.
+# La API de Postman envuelve la colección en:
+#   { collection: { info: {...}, item: [...] } }
+# El fix detecta ambas estructuras (API wrapper y export directo).
 # ============================================================
 COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
 log "Descargando coleccion para fix de double slash..."
@@ -242,7 +239,19 @@ src = sys.argv[1]
 dst = sys.argv[2]
 
 with open(src, encoding='utf-8') as f:
-    col = json.load(f)
+    raw_data = json.load(f)
+
+# La API de Postman envuelve la colección:
+# { "collection": { "info": {...}, "item": [...] } }
+# La exportación manual tiene:
+# { "info": {...}, "item": [...] }
+# Detectar ambas estructuras.
+if 'collection' in raw_data:
+    col = raw_data['collection']
+    wrapper = True
+else:
+    col = raw_data
+    wrapper = False
 
 def fix_urls(items):
     count = 0
@@ -251,19 +260,28 @@ def fix_urls(items):
             count += fix_urls(item['item'])
         elif 'request' in item:
             url = item['request'].get('url', {})
-            if isinstance(url, dict) and 'api-core-entities' in url.get('raw', ''):
-                # Reemplazar objeto URL por string raw
-                # Newman usa el raw directamente — sin construir desde host+path
-                item['request']['url'] = url['raw']
-                count += 1
+            if isinstance(url, dict):
+                raw = url.get('raw', '')
+                if 'api-core-entities' in raw:
+                    # Reemplazar objeto URL por string raw
+                    # Newman usa el raw directamente — sin construir desde host+path
+                    item['request']['url'] = raw
+                    count += 1
     return count
 
 fixed = fix_urls(col.get('item', []))
 
-with open(dst, 'w', encoding='utf-8') as f:
-    json.dump(col, f, ensure_ascii=False)
+# Reconstruir con la misma estructura que se recibió
+if wrapper:
+    raw_data['collection'] = col
+    output = raw_data
+else:
+    output = col
 
-print(f"[FIX2] {fixed} URLs corregidas — double slash eliminado.")
+with open(dst, 'w', encoding='utf-8') as f:
+    json.dump(output, f, ensure_ascii=False)
+
+print(f"[FIX2] {fixed} URLs corregidas (wrapper={wrapper}) — double slash eliminado.")
 PYEOF
 
 NEWMAN_COLLECTION_SOURCE="$COLLECTION_LOCAL"
@@ -603,19 +621,27 @@ python3 "$HELPERS_DIR/build_confluence.py" \
 
 log_ok "HTML de Confluence construido."
 
-FINAL_PAYLOAD=$(python3 -c "
-import json, sys
-body = open(sys.argv[4], encoding='utf-8').read()
-print(json.dumps({
-    'type': 'page',
-    'title': sys.argv[1],
-    'space': {'key': sys.argv[2]},
-    'ancestors': [{'id': sys.argv[3]}],
-    'body': {'storage': {'value': body, 'representation': 'storage'}}
-}))" "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" "$CONFLUENCE_BODY")
-
+# ============================================================
+# FIX 3: Evitar "Argument list too long" al publicar en Confluence
+# El payload HTML puede superar el límite de args del OS en Windows.
+# Se escribe a archivo y se pasa con --data @ en lugar de -d.
+# ============================================================
 PAYLOAD_FILE="$SCRIPTS_DIR/confluence_payload.json"
-echo "$FINAL_PAYLOAD" > "$PAYLOAD_FILE"
+python3 - "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" "$CONFLUENCE_BODY" "$PAYLOAD_FILE" << 'PYEOF'
+import json, sys
+page_title, space_key, parent_id, body_file, out_file = sys.argv[1:]
+body = open(body_file, encoding='utf-8').read()
+payload = {
+    'type': 'page',
+    'title': page_title,
+    'space': {'key': space_key},
+    'ancestors': [{'id': parent_id}],
+    'body': {'storage': {'value': body, 'representation': 'storage'}}
+}
+with open(out_file, 'w', encoding='utf-8') as f:
+    json.dump(payload, f, ensure_ascii=False)
+PYEOF
+
 RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
     --data @"$PAYLOAD_FILE" \
@@ -625,6 +651,7 @@ RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     exit 1
 }
 rm -f "$PAYLOAD_FILE"
+# ============================================================
 
 NEW_PAGE_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('id',''))" "$RESPONSE_PUB")
 [[ -z "$NEW_PAGE_ID" ]] && { log_err "Confluence no devolvio ID de pagina."; exit 1; }
