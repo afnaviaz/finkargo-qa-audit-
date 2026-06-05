@@ -68,13 +68,14 @@ def main():
     pais       = sys.argv[2]
     ambiente   = sys.argv[3]
 
-    exchange_quote_id = get_env_var(env_export, 'cobre_quote_external_id')
+    # exchange_quote_id en BD es tipo UUID → usar internal_id (UUID), no external_id (fxq_mocked_*)
+    exchange_quote_id = get_env_var(env_export, 'cobre_quote_internal_id')
     if not exchange_quote_id:
-        print('ERROR: cobre_quote_external_id no encontrado en el env export.')
+        print('ERROR: cobre_quote_internal_id no encontrado en el env export.')
         print('       Verificar que el test script de Exchange Quote guardó el valor.')
         sys.exit(1)
 
-    print(f'Buscando cobre_movement_id para exchange_quote_id: {exchange_quote_id}')
+    print(f'Buscando cobre_movement_id para exchange_quote_id (UUID): {exchange_quote_id}')
 
     db_config = get_db_config(pais, ambiente)
     if not db_config['host']:

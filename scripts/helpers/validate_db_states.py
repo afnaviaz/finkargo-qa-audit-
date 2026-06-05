@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 validate_db_states.py — Valida estados en PostgreSQL después de Newman.
 Uso: python3 validate_db_states.py <env_export_path> <pais> <ambiente>
@@ -53,7 +53,8 @@ def main():
 
     supra_quote_id    = get_env_var(env_export, 'supra_quote_id')
     payin_id          = get_env_var(env_export, 'payin_id')
-    cobre_quote_ext   = get_env_var(env_export, 'cobre_quote_external_id')
+    # exchange_quote_id en BD es tipo UUID -> usar internal_id, no external_id (fxq_mocked_*)
+    cobre_quote_ext   = get_env_var(env_export, 'cobre_quote_internal_id')
 
     if not supra_quote_id and not payin_id and not cobre_quote_ext:
         print('INFO No se encontraron IDs en el environment. Saltando validacion DB.')
