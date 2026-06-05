@@ -60,7 +60,6 @@ DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 [[ ! -f "$HELPERS_DIR/extract_metrics.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/extract_metrics.py";  exit 1; }
 [[ ! -f "$HELPERS_DIR/claude_analysis.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/claude_analysis.py";  exit 1; }
 [[ ! -f "$HELPERS_DIR/build_confluence.py" ]] && { log_err "No se encontro: $HELPERS_DIR/build_confluence.py"; exit 1; }
-[[ ! -f "$HELPERS_DIR/fix_urls.py"       ]] && { log_err "No se encontro: $HELPERS_DIR/fix_urls.py";       exit 1; }
 [[ ! -f "$HELPERS_DIR/build_payload.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/build_payload.py";  exit 1; }
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
@@ -137,30 +136,7 @@ case "${PAIS_INPUT}:${AMBIENTE}" in
 esac
 log "Environment UID : $ENV_UID"
 
-# ============================================================
-# FIX double slash: leer api-core-entities del environment
-# para reemplazarlo en el campo 'raw' de la colección.
-# ============================================================
-_ENV_JSON=$(curl -sf --insecure \
-    "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}" \
-    2>/dev/null || echo '{}')
-
-API_CORE_FULL=$(python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.argv[1])
-    values = d.get('environment', {}).get('values', [])
-    v = next((v.get('value','') for v in values if v.get('key')=='api-core-entities'), '')
-    print(v.rstrip('/'))
-except: print('')
-" "$_ENV_JSON")
-
 NEWMAN_ENV_OVERRIDE=()
-if [[ -n "$API_CORE_FULL" ]]; then
-    log_ok "api-core-entities: ${API_CORE_FULL}"
-else
-    log_warn "No se pudo leer api-core-entities del environment. Double slash posible."
-fi
 
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
@@ -208,55 +184,8 @@ elif [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
     fi
 fi
 
-# ============================================================
-# FIX definitivo double slash:
-# Descarga la colección, reemplaza {{api-core-entities}} por
-# el valor real en el campo 'raw' de cada request afectado.
-# Newman usa 'raw' directamente → sin doble slash.
-# ============================================================
-COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
-log "Descargando coleccion y aplicando fix de double slash..."
-
-curl -sf --insecure "$COLLECTION_URL" -o "$COLLECTION_LOCAL" || {
-    log_err "No se pudo descargar la coleccion desde Postman API."
-    exit 1
-}
-
-# FIX: llamada directa al helper (evita CRLF con heredoc en Windows/Git Bash)
-python3 "$HELPERS_DIR/fix_urls.py" "$COLLECTION_LOCAL" "$COLLECTION_LOCAL" "$API_CORE_FULL"
-PYEXIT=$?
-
-if [[ $PYEXIT -ne 0 ]]; then
-    log_err "Fix de URLs falló (exit $PYEXIT). Verificar Python y paths."
-    exit 1
-fi
-
-# Verificar que el fix se aplicó correctamente
-SAMPLE_URL=$(python3 -c "
-import json, sys
-try:
-    with open(sys.argv[1], encoding='utf-8') as f:
-        d = json.load(f)
-    col = d.get('collection', d)
-    def find_first(items):
-        for item in items:
-            if 'item' in item:
-                r = find_first(item['item'])
-                if r: return r
-            elif 'request' in item:
-                url = item['request'].get('url', {})
-                raw = url if isinstance(url, str) else url.get('raw','')
-                if 'api-core-entities' in raw or 'finkargo.com' in raw:
-                    return raw
-    print(find_first(col.get('item', [])) or 'NOT FOUND')
-except Exception as e:
-    print('ERROR: ' + str(e))
-" "$COLLECTION_LOCAL" 2>/dev/null)
-log "URL muestra post-fix: ${SAMPLE_URL:0:100}"
-
-NEWMAN_COLLECTION_SOURCE="$COLLECTION_LOCAL"
-log_ok "Coleccion lista con fix de double slash."
-# ============================================================
+# FIX double slash: resuelto via pre-request a nivel de coleccion en Postman
+# (limpia trailing slash de variables de URL antes de cada request)
 
 ENV_EXPORT="$SCRIPTS_DIR/environment_export.json"
 
@@ -374,7 +303,7 @@ if [[ "$PAYMENT_LINK_FOUND" == "yes" && "$SCENARIO" != "rejected" ]]; then
     JSON_REPORT_P2="$SCRIPTS_DIR/results_phase2.json"
     HTML_NEWMAN_P2="$SCRIPTS_DIR/reporte_visual_phase2.html"
     set +e
-    newman run "$COLLECTION_LOCAL" \
+    newman run "$COLLECTION_URL" \
         --environment "$ENV_EXPORT" \
         --insecure \
         -r cli,json,htmlextra \
@@ -611,7 +540,11 @@ RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
 rm -f "$PAYLOAD_FILE"
 # ============================================================
 
-NEW_PAGE_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('id',''))" "$RESPONSE_PUB")
+# FIX: evitar "Argument list too long" con RESPONSE_PUB en Windows
+_RESP_TMP="$SCRIPTS_DIR/_response_pub.json"
+echo "$RESPONSE_PUB" > "$_RESP_TMP"
+NEW_PAGE_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('id',''))" "$_RESP_TMP")
+rm -f "$_RESP_TMP"
 [[ -z "$NEW_PAGE_ID" ]] && { log_err "Confluence no devolvio ID de pagina."; exit 1; }
 log_ok "Pagina publicada. ID: $NEW_PAGE_ID"
 

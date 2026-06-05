@@ -28,6 +28,7 @@ on:
           - committees
           - financing-co
           - financing-mx
+          - SUPRA
 
 jobs:
 
@@ -98,5 +99,17 @@ jobs:
       runner: ${{ github.event.inputs.runner }}
       folder: "MX / Operations"
       pais: "MX"
+      ambiente: "Testing"
+    secrets: inherit
+
+  # ── Financing Orchestrator ───────────────────────────────────
+qa-SUPRA-co:
+    name: "Simular msa-SUPRA-orch → CO / Operations"
+    if: ${{ github.event.inputs.modulo == 'financing-co' }}
+    uses: ./.github/workflows/qa-financing-orchestrator.yaml
+    with:
+      runner: ${{ github.event.inputs.runner }}
+      folder: "CO / Operations"
+      pais: "CO"
       ambiente: "Testing"
     secrets: inherit
