@@ -136,7 +136,6 @@ esac
 log "Environment UID : $ENV_UID"
 
 # ============================================================
-# ============================================================
 # FIX double slash: leer api-core-entities del environment
 # para reemplazarlo en el campo 'raw' de la colección.
 # ============================================================
@@ -144,7 +143,6 @@ _ENV_JSON=$(curl -sf --insecure \
     "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}" \
     2>/dev/null || echo '{}')
 
-# Leer valor completo (con https://) para logs
 API_CORE_FULL=$(python3 -c "
 import json, sys
 try:
@@ -210,12 +208,9 @@ fi
 
 # ============================================================
 # FIX definitivo double slash:
-# Newman usa el campo 'raw' del objeto URL para la request real,
-# NO reconstruye desde protocol+host+path.
-# Reemplazamos {{api-core-entities}} por el valor resuelto
-# directamente en el campo 'raw' de cada request afectado.
-# Resultado: raw = 'https://...finkargo.com/{{api_version}}/co/...'
-# Newman resuelve {{api_version}} y usa el raw → sin doble slash.
+# Descarga la colección, reemplaza {{api-core-entities}} por
+# el valor real en el campo 'raw' de cada request afectado.
+# Newman usa 'raw' directamente → sin doble slash.
 # ============================================================
 COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
 log "Descargando coleccion y aplicando fix de double slash..."
@@ -275,7 +270,36 @@ print(f"[FIX] {fixed} URLs corregidas en raw (wrapper={wrapper}) — double slas
 PYEOF
 
 python3 "$FIX_SCRIPT" "$COLLECTION_LOCAL" "$COLLECTION_LOCAL" "$API_CORE_FULL"
+PYEXIT=$?
 rm -f "$FIX_SCRIPT"
+
+if [[ $PYEXIT -ne 0 ]]; then
+    log_err "Fix de URLs falló (exit $PYEXIT). Verificar Python y paths."
+    exit 1
+fi
+
+# Verificar que el fix se aplicó correctamente
+SAMPLE_URL=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        d = json.load(f)
+    col = d.get('collection', d)
+    def find_first(items):
+        for item in items:
+            if 'item' in item:
+                r = find_first(item['item'])
+                if r: return r
+            elif 'request' in item:
+                url = item['request'].get('url', {})
+                raw = url if isinstance(url, str) else url.get('raw','')
+                if 'api-core-entities' in raw or 'finkargo.com' in raw:
+                    return raw
+    print(find_first(col.get('item', [])) or 'NOT FOUND')
+except Exception as e:
+    print('ERROR: ' + str(e))
+" "$COLLECTION_LOCAL" 2>/dev/null)
+log "URL muestra post-fix: ${SAMPLE_URL:0:100}"
 
 NEWMAN_COLLECTION_SOURCE="$COLLECTION_LOCAL"
 log_ok "Coleccion lista con fix de double slash."
@@ -616,8 +640,6 @@ log_ok "HTML de Confluence construido."
 
 # ============================================================
 # FIX Confluence: Evitar "Argument list too long"
-# Construir el payload JSON con Python escribiendo a archivo,
-# luego pasar con --data @archivo a curl.
 # ============================================================
 PAYLOAD_FILE="$SCRIPTS_DIR/confluence_payload.json"
 CONF_SCRIPT="$SCRIPTS_DIR/_build_payload.py"
