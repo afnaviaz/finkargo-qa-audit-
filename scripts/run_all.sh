@@ -98,7 +98,8 @@ METRICS_FILE="$SCRIPTS_DIR/metrics_summary.json"
 CONFLUENCE_BODY="$SCRIPTS_DIR/confluence_body.html"
 DB_VALIDATION_FILE="$SCRIPTS_DIR/db_validation.json"
 
-rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$CLAUDE_REPORT" "$METRICS_FILE" "$CONFLUENCE_BODY" "$DB_VALIDATION_FILE"
+rm -f "$JSON_REPORT" "$HTML_NEWMAN" "$LOG_FILE" "$CLAUDE_REPORT" "$METRICS_FILE" \
+      "$CONFLUENCE_BODY" "$DB_VALIDATION_FILE"
 
 CONF_USER="${CONF_USER:-}"
 CONF_USER=$(echo "$CONF_USER" | tr -d '\n\r')
@@ -135,36 +136,59 @@ esac
 log "Environment UID : $ENV_UID"
 
 # ============================================================
-# FIX 1: Normalizar api-core-entities — quitar trailing slash
-# La API de Postman devuelve el Initial Value que puede tener
-# "/" al final. Se inyecta via --env-var con prioridad.
+# FIX: Double slash en URLs de api-core-entities
+#
+# CAUSA RAÍZ: Newman siempre agrega '/' entre host y path[].
+# Cuando host=['{{api-core-entities}}'] resuelve a
+# 'https://...finkargo.com', Newman construye:
+#   'https://...finkargo.com' + '/' + 'v1/co/...'
+#   = 'https://...finkargo.com//v1/co/...'  ← DOUBLE SLASH
+#
+# SOLUCIÓN: Descargar la colección y reescribir los requests
+# con api-core-entities para que:
+#   - protocol = 'https'  (Newman usa esto como prefijo)
+#   - host = ['{{api-core-entities}}']  (sin cambios)
+# Y pasar --env-var api-core-entities=SIN_HTTPS
+# (solo el hostname, sin protocolo)
+#
+# Newman construye: 'https://' + 'api-core-entities-staging...'
+#   + '/' + 'v1/co/...'
+#   = 'https://api-core-entities-staging.back.finkargo.com/v1/co/...'
 # ============================================================
 _ENV_JSON=$(curl -sf --insecure \
     "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}" \
     2>/dev/null || echo '{}')
 
-API_CORE_ENTITIES_RAW=$(python3 -c "
+# Leer valor completo (con https://) para logs
+API_CORE_FULL=$(python3 -c "
 import json, sys
 try:
     d = json.loads(sys.argv[1])
     values = d.get('environment', {}).get('values', [])
-    match = next(
-        (v.get('value', '') for v in values if v.get('key') == 'api-core-entities'),
-        ''
-    )
-    print(match.rstrip('/'))
-except Exception:
-    print('')
+    v = next((v.get('value','') for v in values if v.get('key')=='api-core-entities'), '')
+    print(v.rstrip('/'))
+except: print('')
 " "$_ENV_JSON")
 
+# Versión sin protocolo para --env-var (Newman agrega https:// desde protocol field)
+API_CORE_HOST=$(python3 -c "
+import sys
+v = sys.argv[1]
+v = v.rstrip('/')
+for prefix in ('https://', 'http://'):
+    if v.startswith(prefix):
+        v = v[len(prefix):]
+        break
+print(v)
+" "$API_CORE_FULL")
+
 NEWMAN_ENV_OVERRIDE=()
-if [[ -n "$API_CORE_ENTITIES_RAW" ]]; then
-    NEWMAN_ENV_OVERRIDE=(--env-var "api-core-entities=${API_CORE_ENTITIES_RAW}")
-    log_ok "api-core-entities normalizado: ${API_CORE_ENTITIES_RAW}"
+if [[ -n "$API_CORE_HOST" ]]; then
+    NEWMAN_ENV_OVERRIDE=(--env-var "api-core-entities=${API_CORE_HOST}")
+    log_ok "api-core-entities host (sin protocolo): ${API_CORE_HOST}"
 else
     log_warn "No se pudo leer api-core-entities del environment."
 fi
-# ============================================================
 
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"
@@ -212,40 +236,26 @@ elif [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
     fi
 fi
 
-# ============================================================
-# FIX 2: Eliminar double slash — descargar colección y reescribir
-# URLs con api-core-entities como string (raw) en lugar de objeto.
-#
-# Causa raíz: Newman construye URL desde {host, path} cuando la
-# variable resuelve a una URL completa con https://, agrega un "/"
-# extra produciendo https://...finkargo.com//v1/co/...
-#
-# La API de Postman envuelve la colección en:
-#   { collection: { info: {...}, item: [...] } }
-# El fix detecta ambas estructuras (API wrapper y export directo).
-# ============================================================
+# Descargar colección y agregar protocol='https' a los requests afectados
 COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
-log "Descargando coleccion para fix de double slash..."
+log "Descargando coleccion y aplicando fix de double slash..."
 
 curl -sf --insecure "$COLLECTION_URL" -o "$COLLECTION_LOCAL" || {
     log_err "No se pudo descargar la coleccion desde Postman API."
     exit 1
 }
 
-python3 - "$COLLECTION_LOCAL" "$COLLECTION_LOCAL" << 'PYEOF'
+# Script Python guardado en archivo para evitar problemas con heredoc en Windows/Git Bash
+FIX_SCRIPT="$SCRIPTS_DIR/_fix_urls.py"
+cat > "$FIX_SCRIPT" << 'PYEOF'
 import json, sys
 
-src = sys.argv[1]
-dst = sys.argv[2]
+src, dst = sys.argv[1], sys.argv[2]
 
 with open(src, encoding='utf-8') as f:
     raw_data = json.load(f)
 
-# La API de Postman envuelve la colección:
-# { "collection": { "info": {...}, "item": [...] } }
-# La exportación manual tiene:
-# { "info": {...}, "item": [...] }
-# Detectar ambas estructuras.
+# Detectar wrapper de API vs exportación directa
 if 'collection' in raw_data:
     col = raw_data['collection']
     wrapper = True
@@ -260,18 +270,17 @@ def fix_urls(items):
             count += fix_urls(item['item'])
         elif 'request' in item:
             url = item['request'].get('url', {})
-            if isinstance(url, dict):
-                raw = url.get('raw', '')
-                if 'api-core-entities' in raw:
-                    # Reemplazar objeto URL por string raw
-                    # Newman usa el raw directamente — sin construir desde host+path
-                    item['request']['url'] = raw
-                    count += 1
+            if isinstance(url, dict) and 'api-core-entities' in url.get('raw', ''):
+                # Agregar protocol='https' al objeto URL
+                # Newman usará protocol + '://' + host + '/' + path
+                # Con --env-var api-core-entities=SIN_HTTPS, el resultado es correcto
+                url['protocol'] = 'https'
+                item['request']['url'] = url
+                count += 1
     return count
 
 fixed = fix_urls(col.get('item', []))
 
-# Reconstruir con la misma estructura que se recibió
 if wrapper:
     raw_data['collection'] = col
     output = raw_data
@@ -281,11 +290,14 @@ else:
 with open(dst, 'w', encoding='utf-8') as f:
     json.dump(output, f, ensure_ascii=False)
 
-print(f"[FIX2] {fixed} URLs corregidas (wrapper={wrapper}) — double slash eliminado.")
+print(f"[FIX] {fixed} URLs con protocol='https' (wrapper={wrapper})")
 PYEOF
 
+python3 "$FIX_SCRIPT" "$COLLECTION_LOCAL" "$COLLECTION_LOCAL"
+rm -f "$FIX_SCRIPT"
+
 NEWMAN_COLLECTION_SOURCE="$COLLECTION_LOCAL"
-log_ok "Coleccion local lista: $COLLECTION_LOCAL"
+log_ok "Coleccion lista con fix de double slash."
 # ============================================================
 
 ENV_EXPORT="$SCRIPTS_DIR/environment_export.json"
@@ -622,15 +634,23 @@ python3 "$HELPERS_DIR/build_confluence.py" \
 log_ok "HTML de Confluence construido."
 
 # ============================================================
-# FIX 3: Evitar "Argument list too long" al publicar en Confluence
-# El payload HTML puede superar el límite de args del OS en Windows.
-# Se escribe a archivo y se pasa con --data @ en lugar de -d.
+# FIX Confluence: Evitar "Argument list too long"
+# Construir el payload JSON con Python escribiendo a archivo,
+# luego pasar con --data @archivo a curl.
 # ============================================================
 PAYLOAD_FILE="$SCRIPTS_DIR/confluence_payload.json"
-python3 - "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" "$CONFLUENCE_BODY" "$PAYLOAD_FILE" << 'PYEOF'
+CONF_SCRIPT="$SCRIPTS_DIR/_build_payload.py"
+cat > "$CONF_SCRIPT" << 'PYEOF'
 import json, sys
-page_title, space_key, parent_id, body_file, out_file = sys.argv[1:]
-body = open(body_file, encoding='utf-8').read()
+page_title  = sys.argv[1]
+space_key   = sys.argv[2]
+parent_id   = sys.argv[3]
+body_file   = sys.argv[4]
+out_file    = sys.argv[5]
+
+with open(body_file, encoding='utf-8') as f:
+    body = f.read()
+
 payload = {
     'type': 'page',
     'title': page_title,
@@ -638,9 +658,17 @@ payload = {
     'ancestors': [{'id': parent_id}],
     'body': {'storage': {'value': body, 'representation': 'storage'}}
 }
+
 with open(out_file, 'w', encoding='utf-8') as f:
     json.dump(payload, f, ensure_ascii=False)
+
+print(f"[CONF] Payload escrito: {out_file} ({len(body)} chars de HTML)")
 PYEOF
+
+python3 "$CONF_SCRIPT" \
+    "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" \
+    "$CONFLUENCE_BODY" "$PAYLOAD_FILE"
+rm -f "$CONF_SCRIPT"
 
 RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
