@@ -516,7 +516,7 @@ if [[ "$SCENARIO" == "cobre_happy" ]]; then
         --timeout-request 30000 \
         --timeout-script  10000 \
         --iteration-count 3 \
-        --folder "payment notification" \
+        --folder "14020e82-8225-44a0-8f8a-fa0b8d3ea832" \
         --reporter-htmlextra-title "QA Audit | Cobre payment notification | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee -a "$LOG_FILE"
     NEWMAN_COBRE_P2_EXIT=${PIPESTATUS[0]}
