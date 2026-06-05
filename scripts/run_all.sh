@@ -60,6 +60,8 @@ DATA_FILE="$(dirname "$SCRIPTS_DIR")/test/data/scenarios.json"
 [[ ! -f "$HELPERS_DIR/extract_metrics.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/extract_metrics.py";  exit 1; }
 [[ ! -f "$HELPERS_DIR/claude_analysis.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/claude_analysis.py";  exit 1; }
 [[ ! -f "$HELPERS_DIR/build_confluence.py" ]] && { log_err "No se encontro: $HELPERS_DIR/build_confluence.py"; exit 1; }
+[[ ! -f "$HELPERS_DIR/fix_urls.py"       ]] && { log_err "No se encontro: $HELPERS_DIR/fix_urls.py";       exit 1; }
+[[ ! -f "$HELPERS_DIR/build_payload.py"  ]] && { log_err "No se encontro: $HELPERS_DIR/build_payload.py";  exit 1; }
 
 EXEC_NUM="${GITHUB_RUN_NUMBER:-local-$(date +'%Y%m%d%H%M%S')}"
 NOW="$(date +'%Y-%m-%d %H:%M:%S')"
@@ -215,67 +217,14 @@ fi
 COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
 log "Descargando coleccion y aplicando fix de double slash..."
 
-HTTP_CODE=$(curl -s --insecure -w "%{http_code}" \
-    "$COLLECTION_URL" -o "$COLLECTION_LOCAL")
-log "Curl HTTP code: $HTTP_CODE"
-if [[ "$HTTP_CODE" != "200" ]]; then
-    log_err "No se pudo descargar la coleccion. HTTP: $HTTP_CODE"
-    cat "$COLLECTION_LOCAL" 2>/dev/null | head -c 200 || true
+curl -sf --insecure "$COLLECTION_URL" -o "$COLLECTION_LOCAL" || {
+    log_err "No se pudo descargar la coleccion desde Postman API."
     exit 1
-fi
+}
 
-FIX_SCRIPT="$SCRIPTS_DIR/_fix_urls.py"
-cat > "$FIX_SCRIPT" << 'PYEOF'
-import json, sys
-
-src, dst, base_url = sys.argv[1], sys.argv[2], sys.argv[3]
-
-with open(src, encoding='utf-8') as f:
-    raw_data = json.load(f)
-
-if 'collection' in raw_data:
-    col = raw_data['collection']
-    wrapper = True
-else:
-    col = raw_data
-    wrapper = False
-
-def fix_urls(items):
-    count = 0
-    for item in items:
-        if 'item' in item:
-            count += fix_urls(item['item'])
-        elif 'request' in item:
-            url = item['request'].get('url', {})
-            if not isinstance(url, dict):
-                continue
-            raw = url.get('raw', '')
-            if '{{api-core-entities}}' not in raw:
-                continue
-            url['raw'] = raw.replace('{{api-core-entities}}', base_url)
-            url['protocol'] = 'https'
-            url['host'] = [base_url.replace('https://', '').replace('http://', '')]
-            item['request']['url'] = url
-            count += 1
-    return count
-
-fixed = fix_urls(col.get('item', []))
-
-if wrapper:
-    raw_data['collection'] = col
-    output = raw_data
-else:
-    output = col
-
-with open(dst, 'w', encoding='utf-8') as f:
-    json.dump(output, f, ensure_ascii=False)
-
-print(f"[FIX] {fixed} URLs corregidas en raw (wrapper={wrapper}) — double slash eliminado")
-PYEOF
-
-python3 "$FIX_SCRIPT" "$COLLECTION_LOCAL" "$COLLECTION_LOCAL" "$API_CORE_FULL"
+# FIX: llamada directa al helper (evita CRLF con heredoc en Windows/Git Bash)
+python3 "$HELPERS_DIR/fix_urls.py" "$COLLECTION_LOCAL" "$COLLECTION_LOCAL" "$API_CORE_FULL"
 PYEXIT=$?
-rm -f "$FIX_SCRIPT"
 
 if [[ $PYEXIT -ne 0 ]]; then
     log_err "Fix de URLs falló (exit $PYEXIT). Verificar Python y paths."
@@ -349,7 +298,6 @@ elif [[ "$PAIS_INPUT" == "ALL" ]]; then
     NEWMAN_EXIT=${PIPESTATUS[0]}
 else
     log "Iniciando Newman | Folder: '$NEWMAN_FOLDER' | Pais: $PAIS_INPUT"
-    log "Fuente coleccion: $NEWMAN_COLLECTION_SOURCE"
     newman run "${NEWMAN_BASE_ARGS[@]}" \
         --folder "$NEWMAN_FOLDER" \
         --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
@@ -647,36 +595,10 @@ log_ok "HTML de Confluence construido."
 # FIX Confluence: Evitar "Argument list too long"
 # ============================================================
 PAYLOAD_FILE="$SCRIPTS_DIR/confluence_payload.json"
-CONF_SCRIPT="$SCRIPTS_DIR/_build_payload.py"
-cat > "$CONF_SCRIPT" << 'PYEOF'
-import json, sys
-page_title  = sys.argv[1]
-space_key   = sys.argv[2]
-parent_id   = sys.argv[3]
-body_file   = sys.argv[4]
-out_file    = sys.argv[5]
-
-with open(body_file, encoding='utf-8') as f:
-    body = f.read()
-
-payload = {
-    'type': 'page',
-    'title': page_title,
-    'space': {'key': space_key},
-    'ancestors': [{'id': parent_id}],
-    'body': {'storage': {'value': body, 'representation': 'storage'}}
-}
-
-with open(out_file, 'w', encoding='utf-8') as f:
-    json.dump(payload, f, ensure_ascii=False)
-
-print(f"[CONF] Payload escrito: {out_file} ({len(body)} chars de HTML)")
-PYEOF
-
-python3 "$CONF_SCRIPT" \
+# FIX: llamada directa al helper (evita CRLF con heredoc en Windows/Git Bash)
+python3 "$HELPERS_DIR/build_payload.py" \
     "$PAGE_TITLE" "$SPACE_KEY" "$COUNTRY_FOLDER_ID" \
     "$CONFLUENCE_BODY" "$PAYLOAD_FILE"
-rm -f "$CONF_SCRIPT"
 
 RESPONSE_PUB=$(curl -sf --insecure -u "$CONF_USER:$CONF_TOKEN" \
     -X POST -H 'Content-Type: application/json' \
