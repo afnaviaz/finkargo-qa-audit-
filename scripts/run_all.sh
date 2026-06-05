@@ -157,7 +157,7 @@ elif [[ "$NEWMAN_FOLDER" == "Crear Certificado Transporte" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "common-nit-dates" ]]; then
     SCENARIO="common_nit_dates"
     NEWMAN_FOLDER="ff93f1b8-4369-451b-96c0-b3cdbb4300dc"
-    log "Escenario: COMMON NIT DATES — 36 NITs, GET /v1/common/{{nit}}/dates"
+    log "Escenario: COMMON NIT DATES — 40 docs (16 NITs + 24 CCs), GET /v1/common/{{nit}}/dates"
 elif [[ "$NEWMAN_FOLDER" == "sarlaft-last-date" ]]; then
     SCENARIO="sarlaft_last_date"
     NEWMAN_FOLDER="354e9e44-359b-432f-b382-50cd1b8e7f4a"
@@ -376,13 +376,14 @@ elif [[ "$SCENARIO" == "common_nit_dates" || "$SCENARIO" == "sarlaft_last_date" 
     else
         NIT_DATES_MONOLITO="https://msa-api-testing.back.finkargo.com"
     fi
-    NEWMAN_BASE_ARGS+=("--iteration-count" "36")
+    NEWMAN_BASE_ARGS+=("--iteration-count" "40")
     NEWMAN_BASE_ARGS+=("--env-var" "nitDatesIndex=0")
     NEWMAN_BASE_ARGS+=("--env-var" "nitDatesSummary=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "consumoDates=[]")
     NEWMAN_BASE_ARGS+=("--env-var" "nit=0")
+    NEWMAN_BASE_ARGS+=("--env-var" "document_type=NIT")
     NEWMAN_BASE_ARGS+=("--env-var" "api-monolito=${NIT_DATES_MONOLITO}")
-    log "${SCENARIO}: 36 iteraciones | monolito: ${NIT_DATES_MONOLITO}"
+    log "${SCENARIO}: 40 iteraciones (16 NITs + 24 CCs) | monolito: ${NIT_DATES_MONOLITO}"
 fi
 
 # ----------------------------------------------------------
@@ -514,6 +515,7 @@ if [[ "$SCENARIO" == "cobre_happy" ]]; then
         --suppress-exit-code \
         --timeout-request 30000 \
         --timeout-script  10000 \
+        --iteration-count 3 \
         --folder "payment notification" \
         --reporter-htmlextra-title "QA Audit | Cobre payment notification | $PAIS_INPUT | $AMBIENTE | $NOW" \
         2>&1 | tee -a "$LOG_FILE"
