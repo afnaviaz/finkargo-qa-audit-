@@ -1,22 +1,13 @@
 {
   "ms-core-entities-k8s": {
     "type": "folder_id",
-    "collection_id": "28918329-0c40a473-fcd2-4042-a731-c684819aa5cc",
+    "collection_id": "28918329-df9dcacc-16...",
     "folders": {
       "CO":    "28918329-298f5763-a617-4496-a48d-2e67305d7ea9",
       "MX":    "28918329-323a0d4d-2324-432d-9021-7bb96f17e144",
       "ALL":   "28918329-0c40a473-fcd2-4042-a731-c684819aa5cc",
       "Cross": "28918329-50b44578-f4a0-4af6-859c-ba2950ea1c5c",
-      "01-Register Company":      "01-Register Company",
-      "02-Legal info CO":         "02-Legal info CO",
-      "03-Update company":        "03-Update company",
-      "Suppliers":                "Suppliers",
-      "Economic Activities":      "Economic Activities",
-      "Contactos de Proveedores": "Contactos de Proveedores",
-      "Companies MX":             "Companies MX",
-      "Company Legal MX":         "Company Legal MX",
-      "Verifications":            "Verifications",
-      "Companies - Linking":      "Companies - Linking"
+    
     }
   }
 }
