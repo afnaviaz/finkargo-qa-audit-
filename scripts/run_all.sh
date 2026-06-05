@@ -349,6 +349,7 @@ elif [[ "$PAIS_INPUT" == "ALL" ]]; then
     NEWMAN_EXIT=${PIPESTATUS[0]}
 else
     log "Iniciando Newman | Folder: '$NEWMAN_FOLDER' | Pais: $PAIS_INPUT"
+    log "Fuente coleccion: $NEWMAN_COLLECTION_SOURCE"
     newman run "${NEWMAN_BASE_ARGS[@]}" \
         --folder "$NEWMAN_FOLDER" \
         --reporter-htmlextra-title "QA Audit | $FOLDER_NAME | $PAIS_INPUT | $AMBIENTE | $NOW" \
