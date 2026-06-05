@@ -136,24 +136,9 @@ esac
 log "Environment UID : $ENV_UID"
 
 # ============================================================
-# FIX: Double slash en URLs de api-core-entities
-#
-# CAUSA RAÍZ: Newman siempre agrega '/' entre host y path[].
-# Cuando host=['{{api-core-entities}}'] resuelve a
-# 'https://...finkargo.com', Newman construye:
-#   'https://...finkargo.com' + '/' + 'v1/co/...'
-#   = 'https://...finkargo.com//v1/co/...'  ← DOUBLE SLASH
-#
-# SOLUCIÓN: Descargar la colección y reescribir los requests
-# con api-core-entities para que:
-#   - protocol = 'https'  (Newman usa esto como prefijo)
-#   - host = ['{{api-core-entities}}']  (sin cambios)
-# Y pasar --env-var api-core-entities=SIN_HTTPS
-# (solo el hostname, sin protocolo)
-#
-# Newman construye: 'https://' + 'api-core-entities-staging...'
-#   + '/' + 'v1/co/...'
-#   = 'https://api-core-entities-staging.back.finkargo.com/v1/co/...'
+# ============================================================
+# FIX double slash: leer api-core-entities del environment
+# para reemplazarlo en el campo 'raw' de la colección.
 # ============================================================
 _ENV_JSON=$(curl -sf --insecure \
     "https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}" \
@@ -170,24 +155,11 @@ try:
 except: print('')
 " "$_ENV_JSON")
 
-# Versión sin protocolo para --env-var (Newman agrega https:// desde protocol field)
-API_CORE_HOST=$(python3 -c "
-import sys
-v = sys.argv[1]
-v = v.rstrip('/')
-for prefix in ('https://', 'http://'):
-    if v.startswith(prefix):
-        v = v[len(prefix):]
-        break
-print(v)
-" "$API_CORE_FULL")
-
 NEWMAN_ENV_OVERRIDE=()
-if [[ -n "$API_CORE_HOST" ]]; then
-    NEWMAN_ENV_OVERRIDE=(--env-var "api-core-entities=${API_CORE_HOST}")
-    log_ok "api-core-entities host (sin protocolo): ${API_CORE_HOST}"
+if [[ -n "$API_CORE_FULL" ]]; then
+    log_ok "api-core-entities: ${API_CORE_FULL}"
 else
-    log_warn "No se pudo leer api-core-entities del environment."
+    log_warn "No se pudo leer api-core-entities del environment. Double slash posible."
 fi
 
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
@@ -236,7 +208,15 @@ elif [[ "$CONFIG_TYPE" == "items" && -n "$PROVIDER_PREFIX" ]]; then
     fi
 fi
 
-# Descargar colección y agregar protocol='https' a los requests afectados
+# ============================================================
+# FIX definitivo double slash:
+# Newman usa el campo 'raw' del objeto URL para la request real,
+# NO reconstruye desde protocol+host+path.
+# Reemplazamos {{api-core-entities}} por el valor resuelto
+# directamente en el campo 'raw' de cada request afectado.
+# Resultado: raw = 'https://...finkargo.com/{{api_version}}/co/...'
+# Newman resuelve {{api_version}} y usa el raw → sin doble slash.
+# ============================================================
 COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
 log "Descargando coleccion y aplicando fix de double slash..."
 
@@ -245,17 +225,15 @@ curl -sf --insecure "$COLLECTION_URL" -o "$COLLECTION_LOCAL" || {
     exit 1
 }
 
-# Script Python guardado en archivo para evitar problemas con heredoc en Windows/Git Bash
 FIX_SCRIPT="$SCRIPTS_DIR/_fix_urls.py"
 cat > "$FIX_SCRIPT" << 'PYEOF'
 import json, sys
 
-src, dst = sys.argv[1], sys.argv[2]
+src, dst, base_url = sys.argv[1], sys.argv[2], sys.argv[3]
 
 with open(src, encoding='utf-8') as f:
     raw_data = json.load(f)
 
-# Detectar wrapper de API vs exportación directa
 if 'collection' in raw_data:
     col = raw_data['collection']
     wrapper = True
@@ -270,13 +248,16 @@ def fix_urls(items):
             count += fix_urls(item['item'])
         elif 'request' in item:
             url = item['request'].get('url', {})
-            if isinstance(url, dict) and 'api-core-entities' in url.get('raw', ''):
-                # Agregar protocol='https' al objeto URL
-                # Newman usará protocol + '://' + host + '/' + path
-                # Con --env-var api-core-entities=SIN_HTTPS, el resultado es correcto
-                url['protocol'] = 'https'
-                item['request']['url'] = url
-                count += 1
+            if not isinstance(url, dict):
+                continue
+            raw = url.get('raw', '')
+            if '{{api-core-entities}}' not in raw:
+                continue
+            url['raw'] = raw.replace('{{api-core-entities}}', base_url)
+            url['protocol'] = 'https'
+            url['host'] = [base_url.replace('https://', '').replace('http://', '')]
+            item['request']['url'] = url
+            count += 1
     return count
 
 fixed = fix_urls(col.get('item', []))
@@ -290,10 +271,10 @@ else:
 with open(dst, 'w', encoding='utf-8') as f:
     json.dump(output, f, ensure_ascii=False)
 
-print(f"[FIX] {fixed} URLs con protocol='https' (wrapper={wrapper})")
+print(f"[FIX] {fixed} URLs corregidas en raw (wrapper={wrapper}) — double slash eliminado")
 PYEOF
 
-python3 "$FIX_SCRIPT" "$COLLECTION_LOCAL" "$COLLECTION_LOCAL"
+python3 "$FIX_SCRIPT" "$COLLECTION_LOCAL" "$COLLECTION_LOCAL" "$API_CORE_FULL"
 rm -f "$FIX_SCRIPT"
 
 NEWMAN_COLLECTION_SOURCE="$COLLECTION_LOCAL"
