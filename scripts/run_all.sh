@@ -294,7 +294,7 @@ NEWMAN_BASE_ARGS=(
     --suppress-exit-code
     --timeout-request 30000
     --timeout-script  10000
-    "${NEWMAN_ENV_OVERRIDE[@]}"
+    ${NEWMAN_ENV_OVERRIDE[@]+"${NEWMAN_ENV_OVERRIDE[@]}"}
 )
 
 if [[ "$PROYECTO" == "ms-communicator" && -f "$DATA_FILE" ]]; then
