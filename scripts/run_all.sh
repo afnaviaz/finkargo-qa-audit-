@@ -215,10 +215,14 @@ fi
 COLLECTION_LOCAL="$SCRIPTS_DIR/collection_local.json"
 log "Descargando coleccion y aplicando fix de double slash..."
 
-curl -sf --insecure "$COLLECTION_URL" -o "$COLLECTION_LOCAL" || {
-    log_err "No se pudo descargar la coleccion desde Postman API."
+HTTP_CODE=$(curl -s --insecure -w "%{http_code}" \
+    "$COLLECTION_URL" -o "$COLLECTION_LOCAL")
+log "Curl HTTP code: $HTTP_CODE"
+if [[ "$HTTP_CODE" != "200" ]]; then
+    log_err "No se pudo descargar la coleccion. HTTP: $HTTP_CODE"
+    cat "$COLLECTION_LOCAL" 2>/dev/null | head -c 200 || true
     exit 1
-}
+fi
 
 FIX_SCRIPT="$SCRIPTS_DIR/_fix_urls.py"
 cat > "$FIX_SCRIPT" << 'PYEOF'
