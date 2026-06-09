@@ -129,8 +129,8 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install requests psycopg2-binary
+          python3 -m pip install --upgrade pip --break-system-packages
+          python3 -m pip install requests psycopg2-binary --break-system-packages
 
       - name: Install Python dependencies (Windows)
         if: runner.os == 'Windows'
