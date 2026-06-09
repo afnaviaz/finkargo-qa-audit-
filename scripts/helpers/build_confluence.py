@@ -7,6 +7,95 @@ Imprime el HTML resultante por stdout.
 """
 import json, sys, html as htmllib
 
+
+def build_failures_callout(metrics):
+    """Panel de alerta nativo de Confluence — visible inmediatamente al abrir la página."""
+    failures = metrics.get('failures', [])
+    failed_tests = metrics.get('failed_tests', 0)
+    if not failures and failed_tests == 0:
+        return ''
+
+    seen = set()
+    items_html = ''
+    for f in failures[:15]:
+        scenario = htmllib.escape(f.get('escenario', 'N/A'))
+        method   = htmllib.escape(f.get('method', ''))
+        url      = htmllib.escape(f.get('url', 'N/A'))
+        error    = htmllib.escape(f.get('error', 'Sin detalle'))
+        key      = f"{scenario}|{error}"
+        if key in seen:
+            continue
+        seen.add(key)
+        items_html += (
+            f'<li><strong>{scenario}</strong>'
+            + (f' — <code>{method} {url}</code>' if method or url else '')
+            + f'<br/><em style="color:#b71c1c;">{error}</em></li>'
+        )
+
+    extra = len(failures) - len(seen)
+    if extra > 0:
+        items_html += f'<li>... y {extra} fallo(s) adicional(es) — ver sección "Detalle de Fallos" abajo.</li>'
+
+    return f"""<ac:structured-macro ac:name="warning" ac:schema-version="1">
+  <ac:parameter ac:name="title">&#10060; {failed_tests} prueba(s) fallaron — se requiere acción del equipo</ac:parameter>
+  <ac:rich-text-body>
+    <ul>{items_html}</ul>
+  </ac:rich-text-body>
+</ac:structured-macro>"""
+
+
+def build_failures_detail_section(breakdown):
+    """Sección expandible con el detalle completo de errores por endpoint fallado."""
+    failing = [ep for ep in breakdown if ep.get('failed_tests', 0) > 0]
+    if not failing:
+        return ''
+
+    method_styles = {
+        'GET':    ('#e3f2fd', '#1565c0'),
+        'POST':   ('#e8f5e9', '#1b5e20'),
+        'PUT':    ('#fff3e0', '#e65100'),
+        'PATCH':  ('#f3e5f5', '#6a1b9a'),
+        'DELETE': ('#ffebee', '#c62828'),
+    }
+
+    cards = ''
+    for ep in failing:
+        name   = htmllib.escape(ep.get('name', 'N/A'))
+        method = ep.get('method', '').upper()
+        errors = ep.get('errors', [])
+        failed = ep.get('failed_tests', 0)
+        total  = ep.get('total_tests', 0)
+        mbg, mcolor = method_styles.get(method, ('#f5f5f5', '#333'))
+
+        error_items = ''.join(
+            f'<li style="margin-bottom:8px;">'
+            f'<code style="background:#fce8e8; padding:3px 8px; border-radius:4px; '
+            f'font-size:12px; color:#b71c1c; display:block; white-space:pre-wrap;">'
+            f'{htmllib.escape(e)}</code></li>'
+            for e in errors
+        ) or '<li>Sin detalle de error disponible.</li>'
+
+        cards += f"""<ac:structured-macro ac:name="expand" ac:schema-version="1">
+  <ac:parameter ac:name="title">&#10060; {name} — {failed}/{total} tests fallados</ac:parameter>
+  <ac:rich-text-body>
+    <p><strong>Método:</strong>
+       <code style="background:{mbg}; color:{mcolor}; padding:2px 8px; border-radius:3px; font-weight:700;">{method}</code>
+    </p>
+    <p><strong>Errores detectados:</strong></p>
+    <ul style="padding-left:20px;">{error_items}</ul>
+  </ac:rich-text-body>
+</ac:structured-macro>
+"""
+
+    return f"""<div style="margin-bottom:24px;">
+  <h2 style="font-size:14px; font-weight:700; color:#b71c1c; border-bottom:2px solid #ef9a9a;
+             padding-bottom:6px; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">
+    &#128269; Detalle de Fallos por Endpoint
+  </h2>
+  {cards}
+</div>"""
+
+
 def build_endpoint_breakdown_section(breakdown):
     if not breakdown:
         return ''
@@ -35,28 +124,25 @@ def build_endpoint_breakdown_section(breakdown):
         fail_weight  = '700' if failed > 0 else '400'
         mbg, mcolor  = method_styles.get(method, ('#f5f5f5', '#333'))
 
-        error_detail = ''
-        if errors:
-            items = ''.join(
-                f'<div style="font-size:10px; color:#b71c1c; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:340px;">▸ {htmllib.escape(e)}</div>'
-                for e in errors[:3]
+        error_note = ''
+        if errors and failed > 0:
+            error_note = (
+                f'<div style="margin-top:4px; font-size:11px; color:#b71c1c; font-style:italic;">'
+                f'&#9660; Ver detalle en sección "Detalle de Fallos" abajo</div>'
             )
-            if len(errors) > 3:
-                items += f'<div style="font-size:10px; color:#9e9e9e;">+{len(errors)-3} más</div>'
-            error_detail = f'<div style="margin-top:2px; line-height:1.3;">{items}</div>'
 
         border = '1px solid #fce8e8' if failed > 0 else '1px solid #f0f0f0'
         rows += f"""
         <tr style="background:{row_bg};">
-          <td style="padding:4px 6px; text-align:center; color:#bdbdbd; font-size:10px; border-bottom:{border};">{i}</td>
-          <td style="padding:4px 8px; font-size:11px; border-bottom:{border}; line-height:1.4;">{name}{error_detail}</td>
-          <td style="padding:4px 6px; text-align:center; border-bottom:{border};">
-            <span style="background:{mbg}; color:{mcolor}; padding:1px 5px; border-radius:3px; font-size:9px; font-weight:700; font-family:monospace; white-space:nowrap;">{method}</span>
+          <td style="padding:5px 8px; text-align:center; color:#bdbdbd; font-size:12px; border-bottom:{border};">{i}</td>
+          <td style="padding:5px 10px; font-size:13px; border-bottom:{border}; line-height:1.5;">{name}{error_note}</td>
+          <td style="padding:5px 8px; text-align:center; border-bottom:{border};">
+            <span style="background:{mbg}; color:{mcolor}; padding:2px 7px; border-radius:3px; font-size:11px; font-weight:700; font-family:monospace; white-space:nowrap;">{method}</span>
           </td>
-          <td style="padding:4px 6px; text-align:center; font-size:11px; font-weight:600; color:#546e7a; border-bottom:{border};">{total}</td>
-          <td style="padding:4px 6px; text-align:center; font-size:11px; color:#2e7d32; font-weight:700; border-bottom:{border};">{passed}</td>
-          <td style="padding:4px 6px; text-align:center; font-size:11px; color:{fail_color}; font-weight:{fail_weight}; border-bottom:{border};">{failed}</td>
-          <td style="padding:4px 6px; text-align:center; font-size:12px; border-bottom:{border};">
+          <td style="padding:5px 8px; text-align:center; font-size:13px; font-weight:600; color:#546e7a; border-bottom:{border};">{total}</td>
+          <td style="padding:5px 8px; text-align:center; font-size:13px; color:#2e7d32; font-weight:700; border-bottom:{border};">{passed}</td>
+          <td style="padding:5px 8px; text-align:center; font-size:13px; color:{fail_color}; font-weight:{fail_weight}; border-bottom:{border};">{failed}</td>
+          <td style="padding:5px 8px; text-align:center; font-size:14px; border-bottom:{border};">
             <span style="color:{status_color};">{status_icon}</span>
           </td>
         </tr>"""
@@ -67,23 +153,23 @@ def build_endpoint_breakdown_section(breakdown):
     badge_col  = '#c62828' if failed_eps > 0 else '#1b5e20'
 
     return f"""<div style="margin-bottom:20px;">
-    <h2 style="font-size:13px; font-weight:700; color:#37474f; border-bottom:2px solid #cfd8dc;
-               padding-bottom:6px; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
-      📋 Desglose por Endpoint &nbsp;
-      <span style="font-size:11px; font-weight:400; color:#78909c; text-transform:none; letter-spacing:0;">
+    <h2 style="font-size:14px; font-weight:700; color:#37474f; border-bottom:2px solid #cfd8dc;
+               padding-bottom:6px; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px;">
+      &#128203; Desglose por Endpoint &nbsp;
+      <span style="font-size:12px; font-weight:400; color:#78909c; text-transform:none; letter-spacing:0;">
         {total_eps} requests &nbsp;·&nbsp;
-        <span style="background:{badge_bg}; color:{badge_col}; padding:1px 7px; border-radius:10px; font-weight:700;">{failed_eps} con fallos</span>
+        <span style="background:{badge_bg}; color:{badge_col}; padding:2px 9px; border-radius:10px; font-weight:700;">{failed_eps} con fallos</span>
       </span>
     </h2>
-    <table style="width:100%; border-collapse:collapse; font-size:11px;">
-      <tr style="background:#546e7a; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:0.3px;">
-        <th style="padding:5px 6px; text-align:center; width:3%; font-weight:600;">#</th>
-        <th style="padding:5px 8px; text-align:left; font-weight:600;">Endpoint / Escenario</th>
-        <th style="padding:5px 6px; text-align:center; width:7%; font-weight:600;">Método</th>
-        <th style="padding:5px 6px; text-align:center; width:8%; font-weight:600;">Total</th>
-        <th style="padding:5px 6px; text-align:center; width:8%; font-weight:600;">✅ Pass</th>
-        <th style="padding:5px 6px; text-align:center; width:8%; font-weight:600;">❌ Fail</th>
-        <th style="padding:5px 6px; text-align:center; width:7%; font-weight:600;">OK?</th>
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <tr style="background:#546e7a; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:0.3px;">
+        <th style="padding:7px 8px; text-align:center; width:3%; font-weight:600;">#</th>
+        <th style="padding:7px 10px; text-align:left; font-weight:600;">Endpoint / Escenario</th>
+        <th style="padding:7px 8px; text-align:center; width:7%; font-weight:600;">Método</th>
+        <th style="padding:7px 8px; text-align:center; width:8%; font-weight:600;">Total</th>
+        <th style="padding:7px 8px; text-align:center; width:8%; font-weight:600;">&#10003; Pass</th>
+        <th style="padding:7px 8px; text-align:center; width:8%; font-weight:600;">&#10007; Fail</th>
+        <th style="padding:7px 8px; text-align:center; width:7%; font-weight:600;">OK?</th>
       </tr>
       {rows}
     </table>
@@ -105,26 +191,26 @@ def build_db_section(db_data):
         bg, color, icon = result_colors.get(r['result'], ('#f5f5f5', '#333', '❓'))
         rows += f"""
         <tr style="background:{bg};">
-          <td style="padding:4px 8px; font-weight:600; color:#37474f; font-size:11px; border-bottom:1px solid #e8f5e9;">{r['table']}</td>
-          <td style="padding:4px 8px; font-family:monospace; font-size:10px; color:#546e7a; border-bottom:1px solid #e8f5e9;">{r['external_id']}</td>
-          <td style="padding:4px 8px; font-weight:600; color:{color}; font-size:11px; border-bottom:1px solid #e8f5e9;">{r['status']}</td>
-          <td style="padding:4px 8px; color:#757575; font-size:11px; border-bottom:1px solid #e8f5e9;">{r['expected']}</td>
-          <td style="padding:4px 8px; font-weight:700; color:{color}; text-align:center; font-size:11px; border-bottom:1px solid #e8f5e9;">{icon} {r['result']}</td>
+          <td style="padding:6px 10px; font-weight:600; color:#37474f; font-size:13px; border-bottom:1px solid #e8f5e9;">{r['table']}</td>
+          <td style="padding:6px 10px; font-family:monospace; font-size:12px; color:#546e7a; border-bottom:1px solid #e8f5e9;">{r['external_id']}</td>
+          <td style="padding:6px 10px; font-weight:600; color:{color}; font-size:13px; border-bottom:1px solid #e8f5e9;">{r['status']}</td>
+          <td style="padding:6px 10px; color:#757575; font-size:13px; border-bottom:1px solid #e8f5e9;">{r['expected']}</td>
+          <td style="padding:6px 10px; font-weight:700; color:{color}; text-align:center; font-size:13px; border-bottom:1px solid #e8f5e9;">{icon} {r['result']}</td>
         </tr>"""
 
     return f"""<div style="margin-bottom:20px;">
-    <h2 style="font-size:13px; font-weight:700; color:#1b5e20; border-bottom:2px solid #a5d6a7;
-               padding-bottom:6px; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
-      🗄️ Validación BD &nbsp;
-      <span style="font-size:11px; font-weight:400; color:#78909c; text-transform:none; letter-spacing:0;">{db_data.get('ambiente','')}/{db_data.get('pais','')}</span>
+    <h2 style="font-size:14px; font-weight:700; color:#1b5e20; border-bottom:2px solid #a5d6a7;
+               padding-bottom:6px; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px;">
+      &#128193; Validación BD &nbsp;
+      <span style="font-size:12px; font-weight:400; color:#78909c; text-transform:none; letter-spacing:0;">{db_data.get('ambiente','')}/{db_data.get('pais','')}</span>
     </h2>
-    <table style="width:100%; border-collapse:collapse; font-size:11px;">
-      <tr style="background:#2e7d32; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:0.3px;">
-        <th style="padding:5px 8px; text-align:left; font-weight:600;">Tabla</th>
-        <th style="padding:5px 8px; text-align:left; font-weight:600;">external_id</th>
-        <th style="padding:5px 8px; text-align:left; font-weight:600;">Status BD</th>
-        <th style="padding:5px 8px; text-align:left; font-weight:600;">Esperado</th>
-        <th style="padding:5px 8px; text-align:center; font-weight:600;">Resultado</th>
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <tr style="background:#2e7d32; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:0.3px;">
+        <th style="padding:7px 10px; text-align:left; font-weight:600;">Tabla</th>
+        <th style="padding:7px 10px; text-align:left; font-weight:600;">external_id</th>
+        <th style="padding:7px 10px; text-align:left; font-weight:600;">Status BD</th>
+        <th style="padding:7px 10px; text-align:left; font-weight:600;">Esperado</th>
+        <th style="padding:7px 10px; text-align:center; font-weight:600;">Resultado</th>
       </tr>
       {rows}
     </table>
@@ -231,6 +317,9 @@ def main():
     </tr>
   </table>
 
+  <!-- PANEL DE ALERTA (solo si hay fallos) -->
+  {build_failures_callout(m)}
+
   <!-- TARJETAS DE MÉTRICAS -->
   <table style="width:100%; border-collapse:separate; border-spacing:8px; margin-bottom:24px;">
     <tr>
@@ -262,6 +351,9 @@ def main():
 
   <!-- VALIDACIÓN BASE DE DATOS -->
   {build_db_section(db_data)}
+
+  <!-- DETALLE DE FALLOS POR ENDPOINT (expandible) -->
+  {build_failures_detail_section(m.get('endpoint_breakdown', []))}
 
   <!-- ANÁLISIS CLAUDE AI -->
   <div style="margin-bottom:24px;">

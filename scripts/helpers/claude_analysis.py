@@ -7,7 +7,7 @@ import json, subprocess, os, re, sys, tempfile
 
 def call_claude(api_key: str, prompt: str, max_tokens: int = 4000) -> str:
     payload = {
-        "model": "claude-sonnet-4-5",
+        "model": "claude-sonnet-4-6",
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}]
     }
@@ -67,7 +67,19 @@ def build_success_html(metrics: dict) -> str:
 def build_rca_prompt(metrics: dict, proyecto: str, folder: str,
                      pais: str, ambiente: str, timestamp: str) -> str:
     failures = metrics.get('failures', [])
+    pass_rate = metrics.get('pass_rate', 0)
+    if pass_rate < 50:
+        severidad = 'CRÍTICO'
+        sev_color = '#c62828'
+    elif pass_rate < 80:
+        severidad = 'ALTO'
+        sev_color = '#e65100'
+    else:
+        severidad = 'MEDIO'
+        sev_color = '#f9a825'
+
     return f"""Eres un Auditor Senior de QA especializado en APIs REST y microservicios financieros (Finkargo).
+Este reporte es leído por el DESARROLLADOR responsable de corregir los fallos. Sé técnico, específico y directo.
 
 Contexto de ejecución:
 - Proyecto  : {proyecto}
@@ -75,25 +87,41 @@ Contexto de ejecución:
 - País      : {pais}
 - Ambiente  : {ambiente}
 - Fecha     : {timestamp}
-- Pass Rate : {metrics.get('pass_rate', 0)}%
+- Pass Rate : {pass_rate}%
+- Severidad : {severidad}
 - Fallados  : {metrics.get('failed_tests', 0)} de {metrics.get('total_tests', 0)} tests
 
 Fallos detectados:
 {json.dumps(failures, ensure_ascii=False, indent=2)}
 
-Genera un reporte técnico de análisis de causa raíz en HTML.
-REGLAS ESTRICTAS:
+Genera un reporte HTML de causa raíz. REGLAS ESTRICTAS:
 - Devuelve SOLO el contenido del div principal. Sin DOCTYPE, sin <html>, sin <body>.
-- Usa únicamente estilos CSS inline.
-- Estructura requerida:
-  1. Encabezado con badge de severidad (CRÍTICO si pass_rate < 50%, ALTO si < 80%, MEDIO si >= 80%).
-  2. Tabla de fallos: Escenario | Endpoint | Tipo | Causa Raíz | Impacto | Acción.
-  3. Sección "Patrones detectados" si hay fallos similares.
-  4. Sección "Próximos pasos" priorizados por impacto.
-- Colores: CRÍTICO=#c62828, ALTO=#e65100, MEDIO=#f9a825.
-- Headers de tabla: fondo #1a237e (azul Finkargo), texto blanco.
-- Fuente: 'Segoe UI', sans-serif.
-- Sé técnico, específico y accionable."""
+- Usa únicamente CSS inline. Fuente: 'Segoe UI', sans-serif.
+- Máximo 4000 tokens.
+
+ESTRUCTURA OBLIGATORIA (en este orden exacto):
+
+1. TL;DR CARD — caja con borde izquierdo color {sev_color}, fondo suave:
+   - Título: "⚡ Resumen para el desarrollador — Severidad: {severidad}"
+   - 2-3 bullets que respondan: ¿qué falló? ¿por qué? ¿qué hay que hacer primero?
+   - Una línea: "Tiempo estimado de resolución: X horas/días"
+
+2. TABLA DE FALLOS (una fila por fallo único):
+   Columnas: Escenario | Endpoint | Qué falló exactamente | Causa raíz específica | Fix sugerido | Owner
+   - "Qué falló": copia el mensaje de error tal cual, en etiqueta <code>
+   - "Causa raíz": SÉ ESPECÍFICO. No digas "error de validación". Di "el campo X debe ser tipo Y pero llega Z" o "falta el header Authorization" o "la entidad no existe en {ambiente}"
+   - "Fix sugerido": acción concreta. Ej: "Enviar campo 'status' como string, no como integer" o "Crear registro en tabla X antes de ejecutar este test"
+   - "Owner": [Backend | Config | Datos de prueba | Infra | Desconocido]
+   - Headers: fondo #1a237e, texto blanco, padding 10px
+
+3. CHECKLIST DE CORRECCIONES (solo si hay más de 1 fallo):
+   Lista numerada ordenada por prioridad/impacto:
+   ☐ [ALTA/MEDIA/BAJA] Descripción accionable — Owner responsable
+
+IMPORTANTE:
+- Si no puedes determinar la causa raíz exacta, escribe "📋 Requiere revisión de logs adicionales" en lugar de especular.
+- Evita frases genéricas: no "revisar la implementación", no "verificar el endpoint".
+- Los colores de severidad son: CRÍTICO={sev_color}, ALTO=#e65100, MEDIO=#f9a825."""
 
 def main():
     if len(sys.argv) < 8:
