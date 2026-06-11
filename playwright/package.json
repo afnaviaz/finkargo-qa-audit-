@@ -1,0 +1,23 @@
+{
+  "name": "finkargo-qa-playwright",
+  "version": "1.0.0",
+  "description": "Playwright — flujos UI para finkargo-qa-audit",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "registro:testing-co": "ENV=testing-co cucumber-js --tags @registro_completo",
+    "registro:testing-mx": "ENV=testing-mx cucumber-js --tags @registro_completo",
+    "registro:staging-co": "ENV=staging-co cucumber-js --tags @registro_completo",
+    "registro:staging-mx": "ENV=staging-mx cucumber-js --tags @registro_completo"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^12.6.0",
+    "@types/node": "^22.13.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0",
+    "playwright-core": "^1.50.0"
+  }
+}

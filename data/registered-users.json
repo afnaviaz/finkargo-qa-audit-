@@ -1,0 +1,22 @@
+[
+  {
+    "email": "autopw1781218538576528@yopmail.com",
+    "password": "Finkargo2026#",
+    "nombre": "Auto",
+    "apellido": "QA",
+    "empresa": "AutoQA1781218538576",
+    "nit": "39268742",
+    "timestamp": 1781218619518,
+    "scenario": "registro_ob2"
+  },
+  {
+    "email": "autopw1781219091365394@yopmail.com",
+    "password": "Finkargo2026#",
+    "nombre": "Auto",
+    "apellido": "QA",
+    "empresa": "AutoQA1781219091365",
+    "nit": "10574408",
+    "timestamp": 1781219172856,
+    "scenario": "registro_ob2"
+  }
+]
