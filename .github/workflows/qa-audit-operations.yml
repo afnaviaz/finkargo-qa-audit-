@@ -256,7 +256,7 @@ jobs:
         id: artifact-name-unix
         shell: bash
         run: |
-          SAFE=$(echo "${{ inputs.folder }}" | sed 's/[ \/]/-/g' | sed 's/[^a-zA-Z0-9._-]//g')
+          SAFE=$(echo "${{ inputs.folder }}" | sed 's|[ /]|-|g' | sed 's|[^a-zA-Z0-9._-]||g')
           echo "value=operations-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
       - name: Set artifact name (Windows)
