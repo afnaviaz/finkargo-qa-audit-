@@ -1,0 +1,83 @@
+name: QA Híbrido — Registro UI + OB2 API
+
+on:
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: 'Ambiente'
+        required: true
+        type: choice
+        options: [Testing, Staging]
+        default: Testing
+      pais:
+        description: 'País'
+        required: true
+        type: choice
+        options: [CO, MX]
+        default: CO
+
+jobs:
+  registro-y-ob2:
+    name: "🎭 Playwright → �� Newman OB2"
+    runs-on: ip-192-168-1-9
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Instalar dependencias Playwright
+        working-directory: playwright
+        run: npm ci
+
+      - name: Configurar ambiente
+        id: config
+        run: |
+          PAIS_LOWER=$(echo "${{ inputs.pais }}" | tr '[:upper:]' '[:lower:]')
+          AMB_LOWER=$(echo "${{ inputs.ambiente }}" | tr '[:upper:]' '[:lower:]')
+          ENV_KEY="${AMB_LOWER}-${PAIS_LOWER}"
+          if [ "${{ inputs.pais }}" = "MX" ]; then
+            DOMAIN="finkargo.com.mx"
+          else
+            DOMAIN="finkargo.com.co"
+          fi
+          BASE_URL="https://app-${AMB_LOWER}.${DOMAIN}"
+          echo "env_key=${ENV_KEY}" >> $GITHUB_OUTPUT
+          echo "base_url=${BASE_URL}" >> $GITHUB_OUTPUT
+
+      - name: 🎭 Playwright — Registro con OTP
+        working-directory: playwright
+        env:
+          ENV: ${{ steps.config.outputs.env_key }}
+        run: npx cucumber-js --tags @registro_completo
+
+      - name: 🔗 Generar environment Newman
+        run: |
+          node scripts/playwright_to_newman_bridge.js \
+            --input  ./data/registered-users.json \
+            --output ./scripts/playwright_env_export.json \
+            --base-url ${{ steps.config.outputs.base_url }} \
+            --pais ${{ inputs.pais }}
+
+      - name: Instalar Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: 📮 Newman — OB2
+        run: |
+          newman run scripts/ob2_collection.json \
+            --environment scripts/playwright_env_export.json \
+            --reporters cli,htmlextra \
+            --reporter-htmlextra-export scripts/report_ob2.html \
+            --insecure || true
+
+      - name: Subir reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-ob2-${{ inputs.ambiente }}-${{ inputs.pais }}
+          path: scripts/report_ob2.html
+          retention-days: 14
