@@ -15,6 +15,9 @@ on:
         type: choice
         options:
           - "Flow"
+          - "Internal"
+          - "Mesa de Control"
+          - "KAM"
       pais:
         description: "País contexto de ejecución"
         required: true

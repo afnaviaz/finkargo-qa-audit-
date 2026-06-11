@@ -1,10 +1,13 @@
-
 {
   "OB v2 - MX": {
-    "collection_id": "17667316-05ad1217-bf7a-47d2-8e5d-0d8aaac0c9ce",
+    "type": "folder_id",
+    "collection_id": "17667316-0c00fabe-d3b5-462f-9186-c8cdcd6c7658",
     "description": "OB v2 - MX",
     "folders": {
-      "Flow": "17667316-05ad1217-bf7a-47d2-8e5d-0d8aaac0c9ce"
+      "Flow":            "17667316-05ad1217-bf7a-47d2-8e5d-0d8aaac0c9ce",
+      "Internal":        "17667316-0a53455a-b8f4-4777-8cb6-489bf71669de",
+      "Mesa de Control": "17667316-e761bb92-e3df-41d7-8c09-1ad3fc47c01e",
+      "KAM":             "17667316-6830c0c2-7aa3-4145-91b0-f2f80bf2f79f"
     }
   }
 }
