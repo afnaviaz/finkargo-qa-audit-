@@ -45,6 +45,8 @@ CONFIG_FILE=$(echo "$PROYECTO" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g').jso
 case "$PROYECTO" in
     "Flows APP")       CONFIG_FILE="qa-flujos-criticos.json" ;;
     "ms-communicator") CONFIG_FILE="ms-communicator.json" ;;
+    "OB v2 - MX")      CONFIG_FILE="ob-v2-mx.json" ;;
+
 esac
 
 CONFIG_PATH="$SCRIPTS_DIR/config/$CONFIG_FILE"
