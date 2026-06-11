@@ -256,7 +256,7 @@ jobs:
         id: artifact-name-unix
         shell: bash
         run: |
-          SAFE=$(echo "${{ inputs.folder }}" | sed 's#[ /]#-#g')
+          SAFE=$(echo "${{ inputs.folder }}" | sed 's/[ \/]/-/g' | sed 's/[^a-zA-Z0-9._-]//g')
           echo "value=operations-${SAFE}-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
       - name: Set artifact name (Windows)
@@ -264,8 +264,8 @@ jobs:
         id: artifact-name-win
         shell: powershell
         run: |
-          $safe = "${{ inputs.folder }}" -replace '\s*\/\s*', '-' -replace '[^a-zA-Z0-9._-]', ''
-          echo "value=operations-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
+          $safe = "${{ inputs.folder }}" -replace '\s+|\/', '-' -replace '[^a-zA-Z0-9._-]', ''
+          "value=operations-${safe}-${{ github.run_id }}" | Add-Content $env:GITHUB_OUTPUT
 
       - name: Upload Artifacts
         if: always()
