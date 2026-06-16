@@ -33,6 +33,9 @@ jobs:
       - name: Instalar dependencias Playwright
         working-directory: playwright
         run: npm install
+      - name: Instalar Chromium
+        working-directory: playwright
+        run: npx playwright install chromium
 
       - name: Configurar ambiente
         id: config
