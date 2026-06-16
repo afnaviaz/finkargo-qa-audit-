@@ -33,7 +33,7 @@ export class YopmailInteractions {
       'li.m',
     ].join(', ');
 
-    const MAX_WAIT_MS = 90_000;
+    const MAX_WAIT_MS = 150_000; // Increased from 90s to 150s (2.5 minutes)
     const POLL_MS     = 8_000;
     const start       = Date.now();
     let   emailFound  = false;
