@@ -1,0 +1,81 @@
+{
+  "id": "playwright-ob2-1781219350011",
+  "name": "OB2 — autopw1781219091365394@yopmail.com",
+  "values": [
+    {
+      "key": "user_email",
+      "value": "autopw1781219091365394@yopmail.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "user_password",
+      "value": "Finkargo2026#",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "user_nombre",
+      "value": "Auto",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "user_apellido",
+      "value": "QA",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "user_empresa",
+      "value": "AutoQA1781219091365",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "user_nit",
+      "value": "10574408",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "base_url",
+      "value": "https://app-testing.finkargo.com.co",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "pais",
+      "value": "CO",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "company_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2026-06-11T23:09:10.011Z",
+  "_postman_exported_using": "finkargo-qa-bridge/1.0"
+}
