@@ -53,6 +53,11 @@ console.log(`\n✓ Usuario encontrado: ${user.email}`);
 console.log(`  Empresa:   ${user.empresa || 'N/A'}`);
 console.log(`  NIT:       ${user.nit || 'N/A'}`);
 console.log(`  Timestamp: ${new Date(user.timestamp).toISOString()}`);
+if (user.auth_token) {
+  console.log(`  auth_token: ${user.auth_token.substring(0, 30)}... ✓`);
+} else {
+  console.warn('  auth_token: NO capturado — Newman necesitará Login en la colección');
+}
 
 // ── Construir environment Newman ─────────────────────────────────────────────
 const v = (key, value) => ({
@@ -78,13 +83,14 @@ const environment = {
     v('base_url', BASE_URL),
     v('pais',     PAIS),
 
-    // Variables que Newman pobla durante la ejecución
-    // (el request de login las setea con pm.environment.set)
-    v('auth_token',    ''),
+    // JWT capturado por Playwright — Newman lo usa directamente sin hacer login
+    v('auth_token',    user.auth_token || ''),
     v('refresh_token', ''),
-    // user_id capturado por Playwright durante el registro; si es '', Newman lo obtiene vía Login
-    v('user_id',       user.user_id  || ''),
-    v('company_id',    ''),
+
+    // user_id y company_id: Newman los extrae del primer endpoint que los retorne
+    // (via pm.environment.set en los test scripts de la colección)
+    v('user_id',    ''),
+    v('company_id', ''),
   ],
   _postman_variable_scope: 'environment',
   _postman_exported_at:    new Date().toISOString(),

@@ -68,7 +68,7 @@ jobs:
       - name: 🔗 Generar environment Newman
         run: |
           node scripts/playwright_to_newman_bridge.js \
-            --input  ./data/registered-users.json \
+            --input  ./playwright/data/registered-users.json \
             --output ./scripts/playwright_env_export.json \
             --base-url ${{ steps.config.outputs.base_url }} \
             --pais ${{ inputs.pais }}

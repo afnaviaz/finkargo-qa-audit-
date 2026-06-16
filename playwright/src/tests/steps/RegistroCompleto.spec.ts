@@ -56,57 +56,58 @@ When('verifico mi cuenta con el código recibido', { timeout: 30000 }, async fun
 });
 
 Then('debería ver que el registro fue exitoso', { timeout: 90000 }, async function (this: CustomWorld) {
-  // Intercepta la respuesta de autenticación para capturar user_id
-  let capturedUserId: string | null = null;
+  let capturedToken: string | null = null;
 
+  // Estrategia 1: interceptar respuesta de red — el JWT llega antes de la redirección
   const responseHandler = async (response: any) => {
+    if (capturedToken) return;
     if (response.status() !== 200) return;
     try {
-      const url: string = response.url();
-      if (!url.includes('/auth/') && !url.includes('/users/') && !url.includes('/login')) return;
       const body = await response.json().catch(() => null);
       if (!body) return;
-      const uid = body?.user?.id ?? body?.userId ?? body?.user_id ?? body?.data?.id ?? body?.id ?? null;
-      if (uid && !capturedUserId) {
-        capturedUserId = String(uid);
-        console.log(`✓ user_id capturado vía red: ${capturedUserId}`);
+      const token = body?.access_token ?? body?.token ?? body?.jwt
+                 ?? body?.data?.access_token ?? body?.data?.token
+                 ?? body?.auth?.token ?? null;
+      if (token && typeof token === 'string' && token.startsWith('ey')) {
+        capturedToken = token;
+        console.log(`✓ JWT capturado vía red: ${response.url()}`);
       }
     } catch {}
   };
 
   this.page.on('response', responseHandler);
-
   await RegistroCompletoTask.esperarYValidarRegistroExitoso(this.page);
-
   this.page.off('response', responseHandler);
 
-  // Fallback: intentar extraer user_id de la URL final
-  if (!capturedUserId) {
-    const finalUrl = this.page.url();
-    const match = finalUrl.match(/\/users\/([a-zA-Z0-9_-]+)/);
-    if (match) {
-      capturedUserId = match[1];
-      console.log(`✓ user_id extraído de URL: ${capturedUserId}`);
-    }
+  // Estrategia 2: leer localStorage / sessionStorage (SPA guarda el token aquí tras la redirección)
+  if (!capturedToken) {
+    capturedToken = await this.page.evaluate(() => {
+      const keys = ['access_token', 'token', 'jwt', 'authToken', 'auth_token', 'id_token'];
+      for (const k of keys) {
+        const v = localStorage.getItem(k) ?? sessionStorage.getItem(k) ?? null;
+        if (v && v.startsWith('ey')) return v;
+      }
+      return null;
+    }).catch(() => null);
+    if (capturedToken) console.log('✓ JWT capturado vía localStorage');
   }
 
   const currentUrl = this.page.url();
   console.log(`✓ Registro exitoso. URL final: ${currentUrl}`);
-  if (capturedUserId) console.log(`  user_id: ${capturedUserId}`);
-  else console.log('  user_id: no capturado — Newman lo obtendrá vía Login');
+  if (capturedToken) console.log(`  auth_token: ${capturedToken.substring(0, 30)}...`);
+  else              console.log('  auth_token: no capturado — ajustar key de localStorage o patrón de respuesta');
 
-  // Guardar usuario para que Newman lo consuma
   if (this.datosRegistro) {
     UserDataStore.saveUser({
-      email:    this.datosRegistro.correo,
-      password: this.datosRegistro.contrasena,
-      nombre:   this.datosRegistro.nombre,
-      apellido: this.datosRegistro.apellido,
-      empresa:  this.datosRegistro.nombreEmpresa,
-      nit:      this.datosRegistro.nit,
-      user_id:  capturedUserId ?? undefined,
-      timestamp: Date.now(),
-      scenario: 'registro_ob2'
+      email:      this.datosRegistro.correo,
+      password:   this.datosRegistro.contrasena,
+      nombre:     this.datosRegistro.nombre,
+      apellido:   this.datosRegistro.apellido,
+      empresa:    this.datosRegistro.nombreEmpresa,
+      nit:        this.datosRegistro.nit,
+      auth_token: capturedToken ?? undefined,
+      timestamp:  Date.now(),
+      scenario:   'registro_ob2'
     });
     console.log('✓ Datos guardados para Newman → OB2 Flow');
   }

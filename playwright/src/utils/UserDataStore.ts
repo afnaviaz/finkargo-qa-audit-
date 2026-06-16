@@ -8,7 +8,7 @@ export interface StoredUserData {
   apellido?: string;
   empresa?: string;
   nit?: string;
-  user_id?: string;
+  auth_token?: string;
   timestamp: number;
   scenario?: string;
 }
