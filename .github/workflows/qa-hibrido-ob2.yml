@@ -18,7 +18,7 @@ on:
 
 jobs:
   registro-y-ob2:
-    name: "🎭 Playwright → �� Newman OB2"
+    name: "🎭 Playwright → 📮 Newman OB2"
     runs-on: [self-hosted, qa-runner]
 
     steps:
@@ -33,6 +33,7 @@ jobs:
       - name: Instalar dependencias Playwright
         working-directory: playwright
         run: npm install
+
       - name: Instalar Chromium
         working-directory: playwright
         run: npx playwright install chromium
@@ -66,21 +67,55 @@ jobs:
             --base-url ${{ steps.config.outputs.base_url }} \
             --pais ${{ inputs.pais }}
 
-      - name: Instalar Newman
+      - name: Check Python
+        shell: bash
+        run: python3 --version && which python3
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install requests psycopg2-binary
+
+      - name: Install Newman
+        shell: bash
         run: npm install -g newman newman-reporter-htmlextra
 
       - name: 📮 Newman — OB2
+        shell: bash
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          CONF_TOKEN: ${{ secrets.CONF_TOKEN }}
+          CONF_USER: ${{ secrets.CONF_USER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          CI: "true"
+          PYTHONIOENCODING: "utf-8"
+          DB_HOST_TESTING_CO: ${{ secrets.DB_HOST_TESTING_CO }}
+          DB_PORT_TESTING_CO: ${{ secrets.DB_PORT_TESTING_CO }}
+          DB_NAME_TESTING_CO: ${{ secrets.DB_NAME_TESTING_CO }}
+          DB_USER_TESTING_CO: ${{ secrets.DB_USER_TESTING_CO }}
+          DB_PASSWORD_TESTING_CO: ${{ secrets.DB_PASSWORD_TESTING_CO }}
+          DB_HOST_STAGING_CO: ${{ secrets.DB_HOST_STAGING_CO }}
+          DB_PORT_STAGING_CO: ${{ secrets.DB_PORT_STAGING_CO }}
+          DB_NAME_STAGING_CO: ${{ secrets.DB_NAME_STAGING_CO }}
+          DB_USER_STAGING_CO: ${{ secrets.DB_USER_STAGING_CO }}
+          DB_PASSWORD_STAGING_CO: ${{ secrets.DB_PASSWORD_STAGING_CO }}
         run: |
-          newman run scripts/ob2_collection.json \
-            --environment scripts/playwright_env_export.json \
-            --reporters cli,htmlextra \
-            --reporter-htmlextra-export scripts/report_ob2.html \
-            --insecure || true
+          chmod +x scripts/run_all.sh
+          ./scripts/run_all.sh \
+            "OB v2 - MX" \
+            "" \
+            "${{ inputs.pais }}" \
+            "${{ inputs.ambiente }}"
 
       - name: Subir reporte
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reporte-ob2-${{ inputs.ambiente }}-${{ inputs.pais }}
-          path: scripts/report_ob2.html
+          path: |
+            scripts/*.html
+            scripts/*.json
+            scripts/*.txt
           retention-days: 14
