@@ -32,7 +32,7 @@ jobs:
 
       - name: Instalar dependencias Playwright
         working-directory: playwright
-        run: npm ci
+        run: npm install
 
       - name: Configurar ambiente
         id: config
