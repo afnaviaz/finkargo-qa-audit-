@@ -23,15 +23,13 @@ export class YopmailInteractions {
     const newPage = await context.newPage();
     await YopmailInteractions.cargarInbox(newPage, email);
 
-    // Yopmail usa clases distintas según la versión — probamos todas
+    // Yopmail usa clases distintas según la versión.
+    // EXCLUIR: #msgundo (div oculto de "deshacer") — matchea #mails > div pero no es un email.
     const EMAIL_ITEM_SELECTOR = [
       'button.lm',
       'div.lm',
       'div.m',
       '.mail .m',
-      '#mails > div',
-      '#mails button',
-      'div[id^="msg"]',
       'li.m',
     ].join(', ');
 
@@ -42,15 +40,18 @@ export class YopmailInteractions {
     let   foundSel    = '';
 
     while (Date.now() - start < MAX_WAIT_MS) {
-      // Buscar cualquier item de email con todos los selectores
+      // Buscar item visible (isVisible filtra #msgundo que es hidden)
       const items = newPage.locator(EMAIL_ITEM_SELECTOR);
-      const count  = await items.count().catch(() => 0);
-
-      if (count > 0) {
-        emailFound = true;
-        foundSel   = EMAIL_ITEM_SELECTOR;
-        break;
+      const count = await items.count().catch(() => 0);
+      for (let i = 0; i < count; i++) {
+        const visible = await items.nth(i).isVisible().catch(() => false);
+        if (visible) {
+          emailFound = true;
+          foundSel   = EMAIL_ITEM_SELECTOR;
+          break;
+        }
       }
+      if (emailFound) break;
 
       // Diagnóstico: loguear qué tiene realmente el inbox
       const elapsed     = Math.round((Date.now() - start) / 1000);
@@ -81,8 +82,28 @@ export class YopmailInteractions {
       throw new Error(`Email de Finkargo no llegó a ${email} en ${MAX_WAIT_MS / 1000}s`);
     }
 
-    console.log(`Email encontrado — abriendo...`);
-    await newPage.locator(EMAIL_ITEM_SELECTOR).first().click();
+    // Buscar el primer item visible (excluye #msgundo y elementos hidden)
+    const allItems    = newPage.locator(EMAIL_ITEM_SELECTOR);
+    const totalCount  = await allItems.count();
+    let   clicked     = false;
+
+    for (let i = 0; i < totalCount; i++) {
+      const item    = allItems.nth(i);
+      const visible = await item.isVisible().catch(() => false);
+      if (visible) {
+        const id = await item.getAttribute('id').catch(() => '');
+        if (id === 'msgundo') continue;
+        console.log(`Email encontrado (índice ${i}, id="${id ?? ''}") — abriendo...`);
+        await item.click({ timeout: 10000 });
+        clicked = true;
+        break;
+      }
+    }
+
+    if (!clicked) {
+      throw new Error('Email detectado en inbox pero ningún item era clickeable');
+    }
+
     await newPage.waitForTimeout(3000);
 
     return newPage;
