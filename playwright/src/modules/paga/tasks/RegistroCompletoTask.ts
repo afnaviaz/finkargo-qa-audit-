@@ -36,22 +36,15 @@ export class RegistroCompletoTask {
   }
 
   static async obtenerCodigoDeYopmail(context: BrowserContext, email: string): Promise<string> {
-    console.log(`Obteniendo código desde Yopmail para: ${email}`);
-    let yopmailPage: any = null;
+    console.log(`Obteniendo OTP vía HTTP para: ${email}`);
     try {
-      yopmailPage = await YopmailInteractions.abrirYopmail(context, email);
-      await yopmailPage.waitForTimeout(5000);
-      const codigo = await YopmailInteractions.obtenerCodigoVerificacion(yopmailPage);
+      const codigo = await YopmailInteractions.obtenerCodigoVerificacion(context, email);
       if (!codigo) throw new Error('El código obtenido es nulo o vacío');
       console.log(`✓ Código obtenido: ${codigo}`);
       return codigo;
     } catch (error) {
-      console.error(`✗ Error al obtener código de Yopmail: ${error}`);
+      console.error(`✗ Error al obtener código de Yopmail HTTP: ${error}`);
       throw new Error(`No se pudo obtener el código: ${error}`);
-    } finally {
-      if (yopmailPage) {
-        await YopmailInteractions.cerrarYopmail(yopmailPage).catch(() => {});
-      }
     }
   }
 
