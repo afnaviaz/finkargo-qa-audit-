@@ -17,4 +17,5 @@ node_modules/
 package-lock.json
 
 # Sistema
-.DS_Store
+.DS_Storeplaywright/data/registered-users.json
+scripts/playwright_env_export.json
