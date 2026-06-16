@@ -21,11 +21,18 @@ export class YopmailInteractions {
     await consultarButton.click();
 
     // Espera activa: refresca el inbox hasta que llegue el email (máx 90s)
-    const refreshBtn = newPage.locator('button[title*="Actualizar"], button[onclick*="refresh"], #refresh').first();
-    const emailItem  = newPage.locator('button.lm, div.lm, button[class*="lm"]').first();
+    // Selectores múltiples para el botón de refresh de Yopmail
+    const REFRESH_SELECTORS = [
+      'button[onclick*="refresh"]',
+      'button[onclick*="Refresh"]',
+      '#refresh',
+      'button.md[id*="refresh"]',
+      'button[aria-label*="efresh"]',
+    ];
+    const emailItem = newPage.locator('button.lm, div.lm, button[class*="lm"]').first();
 
     const MAX_WAIT_MS = 90_000;
-    const POLL_MS     = 6_000;
+    const POLL_MS     = 7_000;
     const start       = Date.now();
     let   emailFound  = false;
 
@@ -35,9 +42,31 @@ export class YopmailInteractions {
         emailFound = true;
         break;
       }
+
       const elapsed = Math.round((Date.now() - start) / 1000);
       console.log(`  Inbox vacío — refrescando (${elapsed}s / ${MAX_WAIT_MS / 1000}s max)...`);
-      await refreshBtn.click().catch(() => newPage.reload());
+
+      // Intentar cada selector de refresh sin llamar page.reload() (evita cerrar el contexto)
+      let refreshed = false;
+      for (const sel of REFRESH_SELECTORS) {
+        try {
+          const btn = newPage.locator(sel).first();
+          const visible = await btn.isVisible({ timeout: 1000 }).catch(() => false);
+          if (visible) {
+            await btn.click({ timeout: 3000 });
+            refreshed = true;
+            break;
+          }
+        } catch { /* siguiente selector */ }
+      }
+
+      if (!refreshed) {
+        // Si ningún botón funcionó, navegar de vuelta al inbox vía URL (más seguro que reload)
+        const username = email.split('@')[0];
+        await newPage.goto(`https://yopmail.com/es/?login=${username}`, { timeout: 15000 })
+          .catch(() => console.log('  ⚠ Navegación fallback también falló — esperando...'));
+      }
+
       await newPage.waitForTimeout(POLL_MS);
     }
 
