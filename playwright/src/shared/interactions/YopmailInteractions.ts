@@ -38,7 +38,7 @@ function extraerOtp(html: string): string | null {
 
 async function listarMensajes(username: string): Promise<string[]> {
   const html = await httpGet(
-    `https://yopmail.com/en/mail.php?login=${encodeURIComponent(username)}&domain=yopmail.com&f=&p=1`
+    `https://yopmail.com/es/mail.php?login=${encodeURIComponent(username)}&domain=yopmail.com&f=&p=1`
   );
   if (html.toLowerCase().includes('recaptcha') || html.toLowerCase().includes('captcha')) {
     console.warn('  ⚠ CAPTCHA detectado en respuesta HTTP — Yopmail puede estar bloqueando esta IP');
@@ -49,7 +49,7 @@ async function listarMensajes(username: string): Promise<string[]> {
 
 async function obtenerContenido(username: string, msgId: string): Promise<string> {
   return httpGet(
-    `https://yopmail.com/en/mail.php?login=${encodeURIComponent(username)}&domain=yopmail.com&id=m${msgId}&type=html`
+    `https://yopmail.com/es/mail.php?login=${encodeURIComponent(username)}&domain=yopmail.com&id=m${msgId}&type=html`
   );
 }
 
