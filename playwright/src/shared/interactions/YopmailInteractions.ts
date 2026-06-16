@@ -7,64 +7,71 @@ const FALSOS_POSITIVOS = new Set([
 ]);
 
 export class YopmailInteractions {
+  // Carga el inbox de Yopmail desde cero (navegación + click check)
+  private static async cargarInbox(page: Page, email: string): Promise<void> {
+    await page.goto('https://yopmail.com/es/', { timeout: 20000 });
+    await page.waitForLoadState('domcontentloaded');
+    const emailInput = page.locator('input[name="login"], input#login');
+    await emailInput.waitFor({ state: 'visible', timeout: 8000 });
+    await emailInput.fill(email);
+    const checkBtn = page.locator('button[onclick*="go()"], button[title*="Revisa"], button.md').first();
+    await checkBtn.click({ timeout: 8000 });
+    await page.waitForTimeout(3000);
+  }
+
   static async abrirYopmail(context: BrowserContext, email: string): Promise<Page> {
     const newPage = await context.newPage();
-    await newPage.goto('https://yopmail.com/es/');
-    await newPage.waitForLoadState('domcontentloaded');
+    await YopmailInteractions.cargarInbox(newPage, email);
 
-    const emailInput = newPage.locator('input[name="login"], input#login');
-    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
-    await emailInput.fill(email);
-
-    const consultarButton = newPage.locator('button[title*="Revisa el correo"], button.md[onclick*="go()"]').first();
-    await consultarButton.waitFor({ state: 'visible', timeout: 10000 });
-    await consultarButton.click();
-
-    // Espera activa: refresca el inbox hasta que llegue el email (máx 90s)
-    // Selectores múltiples para el botón de refresh de Yopmail
-    const REFRESH_SELECTORS = [
-      'button[onclick*="refresh"]',
-      'button[onclick*="Refresh"]',
-      '#refresh',
-      'button.md[id*="refresh"]',
-      'button[aria-label*="efresh"]',
-    ];
-    const emailItem = newPage.locator('button.lm, div.lm, button[class*="lm"]').first();
+    // Yopmail usa clases distintas según la versión — probamos todas
+    const EMAIL_ITEM_SELECTOR = [
+      'button.lm',
+      'div.lm',
+      'div.m',
+      '.mail .m',
+      '#mails > div',
+      '#mails button',
+      'div[id^="msg"]',
+      'li.m',
+    ].join(', ');
 
     const MAX_WAIT_MS = 90_000;
-    const POLL_MS     = 7_000;
+    const POLL_MS     = 8_000;
     const start       = Date.now();
     let   emailFound  = false;
+    let   foundSel    = '';
 
     while (Date.now() - start < MAX_WAIT_MS) {
-      const visible = await emailItem.isVisible().catch(() => false);
-      if (visible) {
+      // Buscar cualquier item de email con todos los selectores
+      const items = newPage.locator(EMAIL_ITEM_SELECTOR);
+      const count  = await items.count().catch(() => 0);
+
+      if (count > 0) {
         emailFound = true;
+        foundSel   = EMAIL_ITEM_SELECTOR;
         break;
       }
 
-      const elapsed = Math.round((Date.now() - start) / 1000);
-      console.log(`  Inbox vacío — refrescando (${elapsed}s / ${MAX_WAIT_MS / 1000}s max)...`);
+      // Diagnóstico: loguear qué tiene realmente el inbox
+      const elapsed     = Math.round((Date.now() - start) / 1000);
+      const mailsHtml   = await newPage.locator('#mails').innerHTML({ timeout: 2000 })
+        .then(h => h.substring(0, 200).replace(/\s+/g, ' '))
+        .catch(() => '(#mails no encontrado)');
+      console.log(`  Inbox vacío (${elapsed}s) — #mails: "${mailsHtml}"`);
 
-      // Intentar cada selector de refresh sin llamar page.reload() (evita cerrar el contexto)
-      let refreshed = false;
-      for (const sel of REFRESH_SELECTORS) {
-        try {
-          const btn = newPage.locator(sel).first();
-          const visible = await btn.isVisible({ timeout: 1000 }).catch(() => false);
-          if (visible) {
-            await btn.click({ timeout: 3000 });
-            refreshed = true;
-            break;
-          }
-        } catch { /* siguiente selector */ }
-      }
+      // Refresh: primero intenta el botón nativo de Yopmail, si no re-carga el inbox
+      const refreshed = await newPage
+        .locator('#refresh, button#refresh, button[onclick*="refresh"]')
+        .first()
+        .click({ timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
 
       if (!refreshed) {
-        // Si ningún botón funcionó, navegar de vuelta al inbox vía URL (más seguro que reload)
-        const username = email.split('@')[0];
-        await newPage.goto(`https://yopmail.com/es/?login=${username}`, { timeout: 15000 })
-          .catch(() => console.log('  ⚠ Navegación fallback también falló — esperando...'));
+        await YopmailInteractions.cargarInbox(newPage, email)
+          .catch(() => console.log('  ⚠ Re-carga del inbox falló'));
+      } else {
+        await newPage.waitForTimeout(2000);
       }
 
       await newPage.waitForTimeout(POLL_MS);
@@ -74,8 +81,8 @@ export class YopmailInteractions {
       throw new Error(`Email de Finkargo no llegó a ${email} en ${MAX_WAIT_MS / 1000}s`);
     }
 
-    console.log('Email de activación encontrado — abriendo...');
-    await emailItem.click();
+    console.log(`Email encontrado — abriendo...`);
+    await newPage.locator(EMAIL_ITEM_SELECTOR).first().click();
     await newPage.waitForTimeout(3000);
 
     return newPage;
