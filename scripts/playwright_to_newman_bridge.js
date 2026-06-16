@@ -82,7 +82,8 @@ const environment = {
     // (el request de login las setea con pm.environment.set)
     v('auth_token',    ''),
     v('refresh_token', ''),
-    v('user_id',       ''),
+    // user_id capturado por Playwright durante el registro; si es '', Newman lo obtiene vía Login
+    v('user_id',       user.user_id  || ''),
     v('company_id',    ''),
   ],
   _postman_variable_scope: 'environment',

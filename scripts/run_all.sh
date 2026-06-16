@@ -15,12 +15,13 @@ PROYECTO="${1:-}"
 FOLDER_INPUT="${2:-}"
 PAIS_INPUT="${3:-}"
 AMBIENTE="${4:-}"
+BRIDGE_ENV_FILE="${5:-}"
 
 ERRORS=0
 [[ -z "$PROYECTO"   ]] && { log_err "Param 1 (PROYECTO) obligatorio.";        ERRORS=1; }
 [[ -z "$PAIS_INPUT" ]] && { log_err "Param 3 (PAIS: CO|MX|ALL) obligatorio."; ERRORS=1; }
 [[ -z "$AMBIENTE"   ]] && { log_err "Param 4 (Testing|Staging) obligatorio."; ERRORS=1; }
-[[ $ERRORS -eq 1 ]] && { log_err "Uso: $0 <PROYECTO> [FOLDER] <CO|MX|ALL> <Testing|Staging>"; exit 1; }
+[[ $ERRORS -eq 1 ]] && { log_err "Uso: $0 <PROYECTO> [FOLDER] <CO|MX|ALL> <Testing|Staging> [BRIDGE_ENV_FILE]"; exit 1; }
 
 [[ -z "$FOLDER_INPUT" ]] && FOLDER_INPUT="$PAIS_INPUT"
 
@@ -139,6 +140,30 @@ esac
 log "Environment UID : $ENV_UID"
 
 NEWMAN_ENV_OVERRIDE=()
+
+# Si se pasa un archivo bridge generado por Playwright, inyectar credenciales como env-var overrides
+if [[ -n "$BRIDGE_ENV_FILE" && -f "$BRIDGE_ENV_FILE" ]]; then
+    log "Bridge env detectado: $BRIDGE_ENV_FILE — inyectando credenciales de Playwright"
+    _read_bridge_var() {
+        python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    val = next((v['value'] for v in d.get('values', []) if v['key'] == sys.argv[2] and v.get('value')), '')
+    print(val)
+except:
+    print('')
+" "$BRIDGE_ENV_FILE" "$1" 2>/dev/null
+    }
+    _B_EMAIL=$(_read_bridge_var 'user_email')
+    _B_PASS=$(_read_bridge_var 'user_password')
+    _B_UID=$(_read_bridge_var 'user_id')
+    [[ -n "$_B_EMAIL" ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_email=${_B_EMAIL}")   && log "  user_email  → ${_B_EMAIL}"
+    [[ -n "$_B_PASS"  ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_password=${_B_PASS}") && log "  user_password → ***"
+    [[ -n "$_B_UID"   ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_id=${_B_UID}")        && log "  user_id     → ${_B_UID}"
+else
+    [[ -n "$BRIDGE_ENV_FILE" ]] && log_warn "Bridge env no encontrado: $BRIDGE_ENV_FILE — continuando sin overrides"
+fi
 
 COLLECTION_URL="https://api.getpostman.com/collections/${COLLECTION_UID}?apikey=${POSTMAN_API_KEY}"
 ENV_URL="https://api.getpostman.com/environments/${ENV_UID}?apikey=${POSTMAN_API_KEY}"

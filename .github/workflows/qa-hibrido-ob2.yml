@@ -87,7 +87,7 @@ jobs:
         shell: bash
         run: npm install -g newman newman-reporter-htmlextra
 
-      - name: 📮 Newman — Flows APP (Onboarding)
+      - name: 📮 Newman — OB v2 MX / Flow (Create OB + todos los tests)
         shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
@@ -120,11 +120,11 @@ jobs:
         run: |
           chmod +x scripts/run_all.sh
           ./scripts/run_all.sh \
-            "Flows APP" \
-            "" \
+            "OB v2 - MX" \
+            "Flow" \
             "${{ inputs.pais }}" \
             "${{ inputs.ambiente }}" \
-            "${{ steps.config.outputs.folder }}"
+            "./scripts/playwright_env_export.json"
 
       - name: Subir reporte
         if: always()
