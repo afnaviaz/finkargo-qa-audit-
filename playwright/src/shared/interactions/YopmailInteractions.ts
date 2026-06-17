@@ -64,7 +64,7 @@ export class YopmailInteractions {
   static async obtenerCodigoVerificacion(
     _context: BrowserContext | null,
     email: string,
-    maxWaitMs = 90_000
+    maxWaitMs = 120_000
   ): Promise<string> {
     const username  = email.split('@')[0];
     const POLL_MS   = 7_000;

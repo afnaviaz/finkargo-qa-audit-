@@ -165,6 +165,10 @@ jobs:
           echo "pais=${{ inputs.pais }}"         >> allure-report/environment.properties
           echo "run=${{ github.run_number }}"    >> allure-report/environment.properties
 
+      - name: Deshabilitar GPG signing (headless runner)
+        if: always()
+        run: git config --global commit.gpgsign false
+
       - name: Publicar Allure en GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
