@@ -1,76 +1,67 @@
 import { BrowserContext } from 'playwright-core';
 
-// Yopmail vía HTTP — sin Playwright, sin CAPTCHA.
-// Flujo: init session → cargar wm?login=X (obtiene yp/yj) → GET /es/inbox → leer mensaje
+// Maildrop.cc — API REST pública, sin tokens, sin sesión, sin CAPTCHA.
+// Docs: https://maildrop.cc  (mailbox: {username}@maildrop.cc)
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const MAILDROP_BASE = 'https://maildrop.cc/api/v2/mailbox';
 
 const FALSOS_POSITIVOS = new Set([
   'false', 'true', 'null', 'undefined', 'error', 'email', 'click',
-  'inbox', 'spam', 'yopmail', 'login', 'token', 'value', 'finkargo',
+  'inbox', 'spam', 'login', 'token', 'value', 'finkargo',
 ]);
 
-// ── HTTP helper ───────────────────────────────────────────────────────────────
+interface MaildropMessage {
+  id:      string;
+  from:    string;
+  subject: string;
+  date:    string;
+}
 
-async function httpGet(url: string, cookie: string, referer?: string): Promise<string> {
-  const headers: Record<string, string> = {
-    'User-Agent':      UA,
-    'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.9',
-    'Cache-Control':   'no-cache',
-    'Referer':         referer ?? 'https://yopmail.com/es/',
-  };
-  if (cookie) headers['Cookie'] = cookie;
+interface MaildropMessageDetail {
+  html?: { body: string };
+  text?: { body: string };
+}
 
-  const resp = await fetch(url, { headers });
+async function apiGet<T>(url: string): Promise<T> {
+  const resp = await fetch(url, {
+    headers: {
+      'Accept':     'application/json',
+      'User-Agent': 'Mozilla/5.0 (compatible; finkargo-qa/1.0)',
+    },
+  });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${url}`);
-  return resp.text();
+  return resp.json() as Promise<T>;
 }
 
-// ── Yopmail inbox ─────────────────────────────────────────────────────────────
-// Yopmail es público: cualquiera puede leer cualquier inbox conociendo el username.
-// Solo necesitamos ywm=USERNAME como cookie — no acumulamos cookies de tracking
-// (que causan 414 por headers demasiado grandes).
-
-async function listarMensajes(username: string): Promise<string[]> {
-  const url = `https://yopmail.com/es/inbox?login=${encodeURIComponent(username)}&p=1&d=&ctrl=&yp=&yj=&v=9.3&r_c=&id=&ad=0`;
-  const body = await httpGet(url, `ywm=${username}`, 'https://yopmail.com/es/wm');
-
-  if (body.toLowerCase().includes('recaptcha')) {
-    console.warn('  ⚠ CAPTCHA en respuesta HTTP');
-    return [];
-  }
-
-  console.log(`  HTML inbox (300): ${body.substring(0, 300).replace(/\s+/g, ' ')}`);
-
-  // IDs de mensajes: empiezan con "me_" según DevTools (ej: me_ZwLj...)
-  return Array.from(body.matchAll(/\bid="(me_[a-zA-Z0-9]+)"/g))
-    .map(m => m[1]);
+async function listarMensajes(username: string): Promise<MaildropMessage[]> {
+  const msgs = await apiGet<MaildropMessage[]>(`${MAILDROP_BASE}/${encodeURIComponent(username)}`);
+  return Array.isArray(msgs) ? msgs : [];
 }
 
-async function obtenerContenido(username: string, msgId: string): Promise<string> {
-  // Según DevTools: mail?b=USERNAME&id=me_XXXX  (usa 'b=' no 'login=')
-  const url = `https://yopmail.com/es/mail?b=${encodeURIComponent(username)}&id=${msgId}`;
-  return httpGet(url, `ywm=${username}`, 'https://yopmail.com/es/wm');
+async function obtenerContenido(username: string, id: string): Promise<string> {
+  const msg = await apiGet<MaildropMessageDetail>(
+    `${MAILDROP_BASE}/${encodeURIComponent(username)}/${encodeURIComponent(id)}`
+  );
+  return msg?.html?.body ?? msg?.text?.body ?? '';
 }
-
-// ── OTP extractor ─────────────────────────────────────────────────────────────
 
 function extraerOtp(html: string): string | null {
   const texto = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+
+  // 1. Numérico de 4-6 dígitos (OTP estándar)
   const num = texto.match(/\b(\d{4,6})\b/);
   if (num) return num[1];
+
+  // 2. Alfanumérico de 6-8 chars excluyendo palabras comunes
   for (const m of texto.matchAll(/\b([A-Z0-9]{6,8})\b/gi)) {
     if (!FALSOS_POSITIVOS.has(m[1].toLowerCase())) return m[1];
   }
   return null;
 }
 
-// ── Clase pública ─────────────────────────────────────────────────────────────
-
 export class YopmailInteractions {
   /**
-   * Obtiene el OTP desde Yopmail vía HTTP directo.
+   * Obtiene el OTP via Maildrop.cc API.
    * _context se mantiene por compatibilidad pero no se usa.
    */
   static async obtenerCodigoVerificacion(
@@ -79,36 +70,40 @@ export class YopmailInteractions {
     maxWaitMs = 90_000
   ): Promise<string> {
     const username = email.split('@')[0];
-    const POLL_MS  = 8_000;
+    const POLL_MS  = 7_000;
     const start    = Date.now();
 
-    console.log(`Consultando inbox Yopmail vía HTTP para: ${email}`);
+    console.log(`Esperando OTP en Maildrop para: ${email}`);
 
     while (Date.now() - start < maxWaitMs) {
       try {
-        const msgIds  = await listarMensajes(username);
-        const elapsed = Math.round((Date.now() - start) / 1000);
+        const mensajes = await listarMensajes(username);
+        const elapsed  = Math.round((Date.now() - start) / 1000);
 
-        if (msgIds.length > 0) {
-          console.log(`  ${msgIds.length} mensaje(s) — leyendo: ${msgIds[0]}`);
-          const contenido = await obtenerContenido(username, msgIds[0]);
-          const otp = extraerOtp(contenido);
+        if (mensajes.length > 0) {
+          // Leer el más reciente (último en el array)
+          const ultimo = mensajes[mensajes.length - 1];
+          console.log(`  Email recibido — de: ${ultimo.from} | asunto: ${ultimo.subject}`);
+
+          const cuerpo = await obtenerContenido(username, ultimo.id);
+          const otp    = extraerOtp(cuerpo);
+
           if (otp) {
             console.log(`✓ OTP encontrado: ${otp}`);
             return otp;
           }
-          console.log('  Mensaje sin OTP reconocible — esperando siguiente...');
+          console.log('  Email sin OTP reconocible — esperando más correos...');
         } else {
           console.log(`  Inbox vacío (${elapsed}s) — reintentando en ${POLL_MS / 1000}s...`);
         }
       } catch (err) {
         const elapsed = Math.round((Date.now() - start) / 1000);
-        console.log(`  Error (${elapsed}s): ${err} — reintentando...`);
+        console.log(`  Error Maildrop (${elapsed}s): ${err} — reintentando...`);
       }
 
       await new Promise(r => setTimeout(r, POLL_MS));
     }
 
-    throw new Error(`OTP de Yopmail no llegó en ${maxWaitMs / 1000}s para ${email}`);
+    throw new Error(`OTP no llegó en ${maxWaitMs / 1000}s para ${email}`);
   }
 }

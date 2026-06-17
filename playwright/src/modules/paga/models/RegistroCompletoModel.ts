@@ -39,7 +39,7 @@ export class RegistroCompletoModel {
   static generarDatosAleatorios(): RegistroCompletoModel {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
-    const correo = `autopw${timestamp}${random}@yopmail.com`;
+    const correo = `autopw${timestamp}${random}@maildrop.cc`;
     const nombreEmpresa = `AutoQA${timestamp}`;
     const nit = `${Math.floor(10000000 + Math.random() * 90000000)}`;
 
@@ -60,7 +60,7 @@ export class RegistroCompletoModel {
   static generarDatosAleatoriosMx(): RegistroCompletoModel {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
-    const correo = `autopwmx${timestamp}${random}@yopmail.com`;
+    const correo = `autopwmx${timestamp}${random}@maildrop.cc`;
     const nombreEmpresa = `AutoQAMX${timestamp}`;
     const rfcSufijos = ['HV0', 'AB1', 'CD2', 'EF3', 'GH4'];
     const rfc = `AUTO${String(timestamp).slice(-6)}${rfcSufijos[random % rfcSufijos.length]}`;
