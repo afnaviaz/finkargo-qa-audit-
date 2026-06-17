@@ -34,7 +34,7 @@ on:
       runner:
         type: string
         required: true
-        default: "qa-runner"
+        default: "self-hosted"
       folder:
         type: string
         required: true

@@ -24,7 +24,7 @@ permissions:
 jobs:
   registro-y-ob2:
     name: "🎭 Playwright → 📮 Newman OB2"
-    runs-on: [self-hosted, qa-runner]
+    runs-on: [self-hosted]
 
     steps:
       - name: Checkout repo

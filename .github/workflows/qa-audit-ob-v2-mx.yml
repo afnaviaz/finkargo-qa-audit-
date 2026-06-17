@@ -6,7 +6,7 @@ on:
       runner:
         description: "Runner a usar (etiqueta del runner)"
         required: true
-        default: "qa-runner"
+        default: "self-hosted"
         type: string
       folder:
         description: "Directorio a auditar"
