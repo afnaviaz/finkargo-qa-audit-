@@ -4,6 +4,7 @@ import { BrowserContext } from 'playwright-core';
 // Endpoint: https://api.maildrop.cc/graphql
 
 const MAILDROP_GQL = 'https://api.maildrop.cc/graphql';
+const MAX_AGE_MS   = 5 * 60 * 1000; // solo emails de los últimos 5 minutos
 
 const FALSOS_POSITIVOS = new Set([
   'false', 'true', 'null', 'undefined', 'error', 'email', 'click',
@@ -11,7 +12,8 @@ const FALSOS_POSITIVOS = new Set([
 ]);
 
 interface MaildropMessage {
-  id: string;
+  id:   string;
+  date: string;
 }
 
 async function gqlQuery<T>(query: string): Promise<T> {
@@ -32,7 +34,7 @@ async function gqlQuery<T>(query: string): Promise<T> {
 
 async function listarMensajes(username: string): Promise<MaildropMessage[]> {
   const data = await gqlQuery<{ inbox: MaildropMessage[] }>(
-    `{ inbox(mailbox: "${username}") { id } }`
+    `{ inbox(mailbox: "${username}") { id date } }`
   );
   return Array.isArray(data.inbox) ? data.inbox : [];
 }
@@ -59,30 +61,32 @@ function extraerOtp(html: string): string | null {
 }
 
 export class YopmailInteractions {
-  /**
-   * Obtiene el OTP via Maildrop.cc API.
-   * _context se mantiene por compatibilidad pero no se usa.
-   */
   static async obtenerCodigoVerificacion(
     _context: BrowserContext | null,
     email: string,
     maxWaitMs = 90_000
   ): Promise<string> {
-    const username = email.split('@')[0];
-    const POLL_MS  = 7_000;
-    const start    = Date.now();
+    const username  = email.split('@')[0];
+    const POLL_MS   = 7_000;
+    const start     = Date.now();
+    const freshFrom = start - MAX_AGE_MS; // ignora emails anteriores a este timestamp
 
     console.log(`Esperando OTP en Maildrop para: ${email}`);
+    console.log(`  Solo acepta emails posteriores a: ${new Date(freshFrom).toISOString()}`);
 
     while (Date.now() - start < maxWaitMs) {
       try {
         const mensajes = await listarMensajes(username);
         const elapsed  = Math.round((Date.now() - start) / 1000);
 
-        if (mensajes.length > 0) {
-          // Leer el más reciente (último en el array)
-          const ultimo = mensajes[mensajes.length - 1];
-          console.log(`  Email recibido — id: ${ultimo.id}`);
+        // Filtra solo emails recientes y ordena del más nuevo al más viejo
+        const recientes = mensajes
+          .filter(m => new Date(m.date).getTime() >= freshFrom)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        if (recientes.length > 0) {
+          const ultimo = recientes[0];
+          console.log(`  Email reciente — id: ${ultimo.id} | fecha: ${ultimo.date}`);
 
           const cuerpo = await obtenerContenido(username, ultimo.id);
           const otp    = extraerOtp(cuerpo);
@@ -93,7 +97,8 @@ export class YopmailInteractions {
           }
           console.log('  Email sin OTP reconocible — esperando más correos...');
         } else {
-          console.log(`  Inbox vacío (${elapsed}s) — reintentando en ${POLL_MS / 1000}s...`);
+          const total = mensajes.length;
+          console.log(`  Sin emails recientes (${elapsed}s) — ${total} en inbox pero fuera de ventana — reintentando en ${POLL_MS / 1000}s...`);
         }
       } catch (err) {
         const elapsed = Math.round((Date.now() - start) / 1000);

@@ -40,9 +40,11 @@ export class RegistroCompletoModel {
 
   static generarDatosAleatorios(): RegistroCompletoModel {
     const PREFIX = 'user-qa-aut-co';
-    const n = UserDataStore.getNextUserNumber(PREFIX);
-    const correo = `${PREFIX}-${String(n).padStart(2, '0')}@maildrop.cc`;
-    const nombreEmpresa = `AutoQA-CO-${String(n).padStart(2, '0')}`;
+    // En CI usa GITHUB_RUN_NUMBER (único por ejecución); localmente usa el contador persistente
+    const runN = process.env.GITHUB_RUN_NUMBER;
+    const n = runN ? parseInt(runN, 10) : UserDataStore.getNextUserNumber(PREFIX);
+    const correo = `${PREFIX}-${String(n).padStart(3, '0')}@maildrop.cc`;
+    const nombreEmpresa = `AutoQA-CO-${String(n).padStart(3, '0')}`;
     const nit = `${Math.floor(10000000 + Math.random() * 90000000)}`;
 
     return new RegistroCompletoModel(
@@ -61,9 +63,10 @@ export class RegistroCompletoModel {
 
   static generarDatosAleatoriosMx(): RegistroCompletoModel {
     const PREFIX = 'user-qa-aut-mx';
-    const n = UserDataStore.getNextUserNumber(PREFIX);
-    const correo = `${PREFIX}-${String(n).padStart(2, '0')}@maildrop.cc`;
-    const nombreEmpresa = `AutoQA-MX-${String(n).padStart(2, '0')}`;
+    const runN = process.env.GITHUB_RUN_NUMBER;
+    const n = runN ? parseInt(runN, 10) : UserDataStore.getNextUserNumber(PREFIX);
+    const correo = `${PREFIX}-${String(n).padStart(3, '0')}@maildrop.cc`;
+    const nombreEmpresa = `AutoQA-MX-${String(n).padStart(3, '0')}`;
     const rfcSufijos = ['HV0', 'AB1', 'CD2', 'EF3', 'GH4'];
     const rfc = `AUTO${String(n).padStart(4, '0')}${rfcSufijos[n % rfcSufijos.length]}`;
 
