@@ -33,7 +33,6 @@ async function httpGet(url: string, cookie: string, referer?: string): Promise<s
 // (que causan 414 por headers demasiado grandes).
 
 async function listarMensajes(username: string): Promise<string[]> {
-  // yp y yj son tokens de analytics — probar sin ellos primero
   const url = `https://yopmail.com/es/inbox?login=${encodeURIComponent(username)}&p=1&d=&ctrl=&yp=&yj=&v=9.3&r_c=&id=&ad=0`;
   const body = await httpGet(url, `ywm=${username}`, 'https://yopmail.com/es/wm');
 
@@ -44,13 +43,14 @@ async function listarMensajes(username: string): Promise<string[]> {
 
   console.log(`  HTML inbox (300): ${body.substring(0, 300).replace(/\s+/g, ' ')}`);
 
-  return Array.from(body.matchAll(/\bid="(m[a-zA-Z0-9]+)"/g))
-    .map(m => m[1])
-    .filter(id => id !== 'mails' && id !== 'msgundo');
+  // IDs de mensajes: empiezan con "me_" según DevTools (ej: me_ZwLj...)
+  return Array.from(body.matchAll(/\bid="(me_[a-zA-Z0-9]+)"/g))
+    .map(m => m[1]);
 }
 
 async function obtenerContenido(username: string, msgId: string): Promise<string> {
-  const url = `https://yopmail.com/es/mail?login=${encodeURIComponent(username)}&id=${msgId}&yp=&yj=&v=9.3`;
+  // Según DevTools: mail?b=USERNAME&id=me_XXXX  (usa 'b=' no 'login=')
+  const url = `https://yopmail.com/es/mail?b=${encodeURIComponent(username)}&id=${msgId}`;
   return httpGet(url, `ywm=${username}`, 'https://yopmail.com/es/wm');
 }
 
