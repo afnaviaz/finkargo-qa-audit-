@@ -1,1 +1,1 @@
-{"children":[],"name":"timeline","uid":"ab17fc5a4eb3bca4b216b548c7f9fcbc"}
+{"name":"timeline","children":[{"name":"ip-192-168-1-9.us-east-2.compute.internal","children":[{"name":"pid-38105-worker-main","children":[{"name":"Registro exitoso con verificacion OTP por email","uid":"afc624481d756a4","status":"passed","time":{"start":1781725382419,"stop":1781725422446,"duration":40027}}],"uid":"94d5b794ea70d878ebad17c548ed00bb"}],"uid":"e106eb05ecfdc1baed60e725603c00fe"}],"uid":"ab17fc5a4eb3bca4b216b548c7f9fcbc"}
