@@ -58,6 +58,11 @@ if (user.auth_token) {
 } else {
   console.warn('  auth_token: NO capturado — Newman necesitará Login en la colección');
 }
+if (user.user_id) {
+  console.log(`  user_id:    ${user.user_id} ✓`);
+} else {
+  console.warn('  user_id: NO capturado — Create OB puede fallar');
+}
 
 // ── Construir environment Newman ─────────────────────────────────────────────
 const v = (key, value) => ({
@@ -87,10 +92,9 @@ const environment = {
     v('auth_token',    user.auth_token || ''),
     v('refresh_token', ''),
 
-    // user_id y company_id: Newman los extrae del primer endpoint que los retorne
-    // (via pm.environment.set en los test scripts de la colección)
-    v('user_id',    ''),
-    v('company_id', ''),
+    // user_id capturado por Playwright durante el registro
+    v('user_id',    user.user_id   || ''),
+    v('company_id', user.company_id || ''),
   ],
   _postman_variable_scope: 'environment',
   _postman_exported_at:    new Date().toISOString(),

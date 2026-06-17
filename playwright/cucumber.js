@@ -7,7 +7,8 @@ module.exports = {
       'src/tests/world.ts'
     ],
     requireModule: ['ts-node/register'],
-    format: ['progress'],
+    format: ['progress', 'allure-cucumberjs/reporter'],
+    formatOptions: { resultsDir: 'allure-results' },
     dryRun: false
   }
 };

@@ -57,20 +57,33 @@ When('verifico mi cuenta con el código recibido', { timeout: 30000 }, async fun
 
 Then('debería ver que el registro fue exitoso', { timeout: 90000 }, async function (this: CustomWorld) {
   let capturedToken: string | null = null;
+  let capturedUserId: string | null = null;
 
-  // Estrategia 1: interceptar respuesta de red — el JWT llega antes de la redirección
+  // Estrategia 1: interceptar respuestas de red
   const responseHandler = async (response: any) => {
-    if (capturedToken) return;
     if (response.status() !== 200) return;
     try {
       const body = await response.json().catch(() => null);
       if (!body) return;
-      const token = body?.access_token ?? body?.token ?? body?.jwt
-                 ?? body?.data?.access_token ?? body?.data?.token
-                 ?? body?.auth?.token ?? null;
-      if (token && typeof token === 'string' && token.startsWith('ey')) {
-        capturedToken = token;
-        console.log(`✓ JWT capturado vía red: ${response.url()}`);
+
+      if (!capturedToken) {
+        const token = body?.access_token ?? body?.token ?? body?.jwt
+                   ?? body?.data?.access_token ?? body?.data?.token
+                   ?? body?.auth?.token ?? null;
+        if (token && typeof token === 'string' && token.startsWith('ey')) {
+          capturedToken = token;
+          console.log(`✓ JWT capturado vía red: ${response.url()}`);
+        }
+      }
+
+      if (!capturedUserId) {
+        const uid = body?.user_id ?? body?.userId ?? body?.id
+                 ?? body?.data?.user_id ?? body?.data?.userId ?? body?.data?.id
+                 ?? body?.user?.id ?? body?.user?.user_id ?? null;
+        if (uid && typeof uid === 'string') {
+          capturedUserId = uid;
+          console.log(`✓ user_id capturado vía red: ${uid}`);
+        }
       }
     } catch {}
   };
@@ -79,23 +92,43 @@ Then('debería ver que el registro fue exitoso', { timeout: 90000 }, async funct
   await RegistroCompletoTask.esperarYValidarRegistroExitoso(this.page);
   this.page.off('response', responseHandler);
 
-  // Estrategia 2: leer localStorage / sessionStorage (SPA guarda el token aquí tras la redirección)
-  if (!capturedToken) {
-    capturedToken = await this.page.evaluate(() => {
-      const keys = ['access_token', 'token', 'jwt', 'authToken', 'auth_token', 'id_token'];
-      for (const k of keys) {
-        const v = localStorage.getItem(k) ?? sessionStorage.getItem(k) ?? null;
-        if (v && v.startsWith('ey')) return v;
+  const currentUrl = this.page.url();
+
+  // Estrategia 2: extraer user_id / token desde la URL de activación
+  // Ej: /auth/activate?token=317fc5dc-...&email=...
+  if (!capturedUserId) {
+    try {
+      const urlParams = new URL(currentUrl).searchParams;
+      const tokenParam = urlParams.get('token');
+      if (tokenParam && /^[0-9a-f-]{36}$/.test(tokenParam)) {
+        capturedUserId = tokenParam;
+        console.log(`✓ user_id extraído de URL: ${capturedUserId}`);
       }
-      return null;
-    }).catch(() => null);
-    if (capturedToken) console.log('✓ JWT capturado vía localStorage');
+    } catch {}
   }
 
-  const currentUrl = this.page.url();
-  console.log(`✓ Registro exitoso. URL final: ${currentUrl}`);
-  if (capturedToken) console.log(`  auth_token: ${capturedToken.substring(0, 30)}...`);
-  else              console.log('  auth_token: no capturado — ajustar key de localStorage o patrón de respuesta');
+  // Estrategia 3: localStorage / sessionStorage
+  const stored = await this.page.evaluate(() => {
+    const tokenKeys  = ['access_token', 'token', 'jwt', 'authToken', 'auth_token', 'id_token'];
+    const userIdKeys = ['user_id', 'userId', 'uid', 'sub'];
+    let t: string | null = null, u: string | null = null;
+    for (const k of tokenKeys) {
+      const v = localStorage.getItem(k) ?? sessionStorage.getItem(k) ?? null;
+      if (v && v.startsWith('ey')) { t = v; break; }
+    }
+    for (const k of userIdKeys) {
+      const v = localStorage.getItem(k) ?? sessionStorage.getItem(k) ?? null;
+      if (v) { u = v; break; }
+    }
+    return { token: t, userId: u };
+  }).catch(() => ({ token: null, userId: null }));
+
+  if (!capturedToken  && stored.token)  { capturedToken  = stored.token;  console.log('✓ JWT capturado vía localStorage'); }
+  if (!capturedUserId && stored.userId) { capturedUserId = stored.userId; console.log(`✓ user_id capturado vía localStorage: ${stored.userId}`); }
+
+  console.log(`✓ URL final: ${currentUrl}`);
+  console.log(`  auth_token: ${capturedToken ? capturedToken.substring(0, 30) + '...' : 'no capturado'}`);
+  console.log(`  user_id:    ${capturedUserId ?? 'no capturado'}`);
 
   if (this.datosRegistro) {
     UserDataStore.saveUser({
@@ -105,7 +138,8 @@ Then('debería ver que el registro fue exitoso', { timeout: 90000 }, async funct
       apellido:   this.datosRegistro.apellido,
       empresa:    this.datosRegistro.nombreEmpresa,
       nit:        this.datosRegistro.nit,
-      auth_token: capturedToken ?? undefined,
+      auth_token: capturedToken  ?? undefined,
+      user_id:    capturedUserId ?? undefined,
       timestamp:  Date.now(),
       scenario:   'registro_ob2'
     });

@@ -16,6 +16,11 @@ on:
         options: [CO, MX]
         default: CO
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   registro-y-ob2:
     name: "🎭 Playwright → 📮 Newman OB2"
@@ -126,7 +131,7 @@ jobs:
             "${{ inputs.ambiente }}" \
             "./scripts/playwright_env_export.json"
 
-      - name: Subir reporte
+      - name: Subir reporte Newman
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -136,3 +141,35 @@ jobs:
             scripts/*.json
             scripts/*.txt
           retention-days: 14
+
+      - name: Instalar Allure CLI
+        if: always()
+        run: npm install -g allure-commandline --save-dev
+
+      - name: Restaurar historial Allure (para gráfica de tendencias)
+        if: always()
+        continue-on-error: true
+        run: |
+          git fetch origin gh-pages --depth=1 2>/dev/null || true
+          if git show-ref --verify refs/remotes/origin/gh-pages 2>/dev/null; then
+            mkdir -p playwright/allure-results/history
+            git show origin/gh-pages:history 2>/dev/null | tar x -C playwright/allure-results/history || true
+          fi
+
+      - name: Generar reporte Allure HTML
+        if: always()
+        working-directory: playwright
+        run: |
+          allure generate allure-results --clean -o allure-report
+          echo "ambiente=${{ inputs.ambiente }}" >> allure-report/environment.properties
+          echo "pais=${{ inputs.pais }}"         >> allure-report/environment.properties
+          echo "run=${{ github.run_number }}"    >> allure-report/environment.properties
+
+      - name: Publicar Allure en GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: playwright/allure-report
+          destination_dir: ob2/${{ inputs.ambiente }}/${{ inputs.pais }}
+          keep_files: true

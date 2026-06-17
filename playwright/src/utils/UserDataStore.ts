@@ -9,6 +9,7 @@ export interface StoredUserData {
   empresa?: string;
   nit?: string;
   auth_token?: string;
+  user_id?: string;
   timestamp: number;
   scenario?: string;
 }

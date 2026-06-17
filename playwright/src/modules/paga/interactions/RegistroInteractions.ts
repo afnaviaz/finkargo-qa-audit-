@@ -159,9 +159,18 @@ export class RegistroInteractions {
 
   static async fillCodigoVerificacion(page: Page, codigo: string) {
     console.log(`Ingresando código de verificación: ${codigo}`);
-    await page.waitForTimeout(1000);
 
-    const inputs = await page.locator('input[type="text"], input[type="number"]').all();
+    // Espera activa: aguarda hasta que aparezca al menos 1 input de OTP
+    const otpSelector = 'input[type="text"], input[type="number"], input[type="tel"], input[maxlength="1"]';
+    try {
+      await page.waitForSelector(otpSelector, { state: 'visible', timeout: 15000 });
+    } catch {
+      console.log('⚠ Timeout esperando inputs OTP — tomando screenshot para diagnóstico');
+      await page.screenshot({ path: 'otp-debug.png' }).catch(() => {});
+      console.log(`  URL actual: ${page.url()}`);
+    }
+
+    const inputs = await page.locator(otpSelector).all();
     const visibleInputs = [];
     for (const input of inputs) {
       const isVisible = await input.isVisible().catch(() => false);
@@ -190,6 +199,8 @@ export class RegistroInteractions {
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       });
+    } else {
+      throw new Error(`No se encontraron inputs OTP en la página. URL: ${page.url()}`);
     }
 
     console.log('✓ Código ingresado');

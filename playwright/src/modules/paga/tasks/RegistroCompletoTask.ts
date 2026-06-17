@@ -59,24 +59,23 @@ export class RegistroCompletoTask {
     console.log('Esperando autenticación post-registro...');
     await page.waitForTimeout(2000);
 
+    const AUTH_PAGES = ['/auth/signup', '/auth/login', '/auth/register'];
+
     try {
       await page.waitForURL((url) => {
-        const fuera = !url.pathname.includes('/auth/register/verify');
-        console.log(`  Evaluando URL: ${url.pathname} — fuera de verify: ${fuera}`);
-        return fuera;
+        const enAuthFlow = AUTH_PAGES.some(p => url.pathname.startsWith(p));
+        console.log(`  Evaluando URL: ${url.pathname} — en flujo auth: ${enAuthFlow}`);
+        return !enAuthFlow;
       }, { timeout: 30000 });
 
       await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
       const finalUrl = page.url();
       console.log(`✓ Usuario autenticado. URL final: ${finalUrl}`);
-
-      if (finalUrl.includes('/auth/register')) {
-        throw new Error(`Aún en flujo de registro: ${finalUrl}`);
-      }
     } catch (error) {
-      console.error(`✗ Error esperando autenticación: ${error}`);
-      console.log(`  URL actual: ${page.url()}`);
-      throw error;
+      const finalUrl = page.url();
+      await page.screenshot({ path: 'registro-fallido.png' }).catch(() => {});
+      console.error(`✗ Registro no completado. URL actual: ${finalUrl}`);
+      throw new Error(`El registro no avanzó más allá del flujo de auth. URL: ${finalUrl}`);
     }
   }
 
