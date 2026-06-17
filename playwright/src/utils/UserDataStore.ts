@@ -51,6 +51,21 @@ private static readonly DATA_FILE = path.join(__dirname, '../../data/registered-
     }
   }
 
+  static getNextUserNumber(prefix: string): number {
+    try {
+      if (!fs.existsSync(this.DATA_FILE)) return 1;
+      const users: StoredUserData[] = JSON.parse(fs.readFileSync(this.DATA_FILE, 'utf-8'));
+      const regex = new RegExp(`^${prefix}-(\\d+)@maildrop\\.cc$`);
+      const numbers = users
+        .map(u => regex.exec(u.email))
+        .filter(Boolean)
+        .map(m => parseInt(m![1], 10));
+      return numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+    } catch {
+      return 1;
+    }
+  }
+
   static clearAll(): void {
     if (fs.existsSync(this.DATA_FILE)) {
       fs.unlinkSync(this.DATA_FILE);
