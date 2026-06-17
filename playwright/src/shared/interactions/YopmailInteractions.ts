@@ -1,9 +1,9 @@
 import { BrowserContext } from 'playwright-core';
 
-// Maildrop.cc — API REST pública, sin tokens, sin sesión, sin CAPTCHA.
-// Docs: https://maildrop.cc  (mailbox: {username}@maildrop.cc)
+// Maildrop.cc — GraphQL API pública, sin tokens, sin sesión, sin CAPTCHA.
+// Endpoint: https://api.maildrop.cc/graphql
 
-const MAILDROP_BASE = 'https://maildrop.cc/api/v2/mailbox';
+const MAILDROP_GQL = 'https://api.maildrop.cc/graphql';
 
 const FALSOS_POSITIVOS = new Set([
   'false', 'true', 'null', 'undefined', 'error', 'email', 'click',
@@ -11,38 +11,37 @@ const FALSOS_POSITIVOS = new Set([
 ]);
 
 interface MaildropMessage {
-  id:      string;
-  from:    string;
-  subject: string;
-  date:    string;
+  id: string;
 }
 
-interface MaildropMessageDetail {
-  html?: { body: string };
-  text?: { body: string };
-}
-
-async function apiGet<T>(url: string): Promise<T> {
-  const resp = await fetch(url, {
+async function gqlQuery<T>(query: string): Promise<T> {
+  const resp = await fetch(MAILDROP_GQL, {
+    method: 'POST',
     headers: {
-      'Accept':     'application/json',
-      'User-Agent': 'Mozilla/5.0 (compatible; finkargo-qa/1.0)',
+      'Content-Type': 'application/json',
+      'Accept':       'application/json',
+      'User-Agent':   'Mozilla/5.0 (compatible; finkargo-qa/1.0)',
     },
+    body: JSON.stringify({ query }),
   });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${url}`);
-  return resp.json() as Promise<T>;
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${MAILDROP_GQL}`);
+  const json = await resp.json() as { data?: T; errors?: { message: string }[] };
+  if (json.errors?.length) throw new Error(json.errors[0].message);
+  return json.data as T;
 }
 
 async function listarMensajes(username: string): Promise<MaildropMessage[]> {
-  const msgs = await apiGet<MaildropMessage[]>(`${MAILDROP_BASE}/${encodeURIComponent(username)}`);
-  return Array.isArray(msgs) ? msgs : [];
+  const data = await gqlQuery<{ inbox: MaildropMessage[] }>(
+    `{ inbox(mailbox: "${username}") { id } }`
+  );
+  return Array.isArray(data.inbox) ? data.inbox : [];
 }
 
 async function obtenerContenido(username: string, id: string): Promise<string> {
-  const msg = await apiGet<MaildropMessageDetail>(
-    `${MAILDROP_BASE}/${encodeURIComponent(username)}/${encodeURIComponent(id)}`
+  const data = await gqlQuery<{ message: { html?: string } }>(
+    `{ message(mailbox: "${username}", id: "${id}") { html } }`
   );
-  return msg?.html?.body ?? msg?.text?.body ?? '';
+  return data.message?.html ?? '';
 }
 
 function extraerOtp(html: string): string | null {
@@ -83,7 +82,7 @@ export class YopmailInteractions {
         if (mensajes.length > 0) {
           // Leer el más reciente (último en el array)
           const ultimo = mensajes[mensajes.length - 1];
-          console.log(`  Email recibido — de: ${ultimo.from} | asunto: ${ultimo.subject}`);
+          console.log(`  Email recibido — id: ${ultimo.id}`);
 
           const cuerpo = await obtenerContenido(username, ultimo.id);
           const otp    = extraerOtp(cuerpo);
