@@ -1,3 +1,5 @@
+import { UserDataStore } from '../../../utils/UserDataStore';
+
 export class RegistroCompletoModel {
   nombre: string;
   apellido: string;
@@ -37,7 +39,6 @@ export class RegistroCompletoModel {
   }
 
   static generarDatosAleatorios(): RegistroCompletoModel {
-    const { UserDataStore } = require('../../utils/UserDataStore');
     const PREFIX = 'user-qa-aut-co';
     const n = UserDataStore.getNextUserNumber(PREFIX);
     const correo = `${PREFIX}-${String(n).padStart(2, '0')}@maildrop.cc`;
@@ -59,7 +60,6 @@ export class RegistroCompletoModel {
   }
 
   static generarDatosAleatoriosMx(): RegistroCompletoModel {
-    const { UserDataStore } = require('../../utils/UserDataStore');
     const PREFIX = 'user-qa-aut-mx';
     const n = UserDataStore.getNextUserNumber(PREFIX);
     const correo = `${PREFIX}-${String(n).padStart(2, '0')}@maildrop.cc`;

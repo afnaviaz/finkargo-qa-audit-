@@ -41,7 +41,7 @@ When('solicito el código de verificación', { timeout: 30000 }, async function 
   console.log('✓ En página de activación');
 });
 
-When('obtengo el código desde Yopmail', { timeout: 120000 }, async function (this: CustomWorld) {
+When('obtengo el código desde Maildrop', { timeout: 120000 }, async function (this: CustomWorld) {
   if (!this.datosRegistro) throw new Error('No se han generado datos de registro');
   console.log(`Esperando email en: ${this.datosRegistro.correo}`);
   const codigo = await RegistroCompletoTask.obtenerCodigoDeYopmail(this.context, this.datosRegistro.correo);
