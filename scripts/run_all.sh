@@ -158,10 +158,15 @@ except:
     _B_EMAIL=$(_read_bridge_var 'user_email')
     _B_PASS=$(_read_bridge_var 'user_password')
     _B_TOKEN=$(_read_bridge_var 'auth_token')
-    [[ -n "$_B_EMAIL"  ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_email=${_B_EMAIL}")      && log "  user_email  → ${_B_EMAIL}"
-    [[ -n "$_B_PASS"   ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_password=${_B_PASS}")    && log "  user_password → ***"
-    [[ -n "$_B_TOKEN"  ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "auth_token=${_B_TOKEN}")      && log "  auth_token  → ${_B_TOKEN:0:20}..."
-    [[ -z "$_B_TOKEN"  ]] && log_warn "  auth_token vacío — la colección debe hacer Login antes de Create OB"
+    _B_USER_ID=$(_read_bridge_var 'user_id')
+    _B_COMPANY_ID=$(_read_bridge_var 'company_id')
+    [[ -n "$_B_EMAIL"      ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_email=${_B_EMAIL}")           && log "  user_email    → ${_B_EMAIL}"
+    [[ -n "$_B_PASS"       ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_password=${_B_PASS}")         && log "  user_password → ***"
+    [[ -n "$_B_TOKEN"      ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "auth_token=${_B_TOKEN}")           && log "  auth_token    → ${_B_TOKEN:0:20}..."
+    [[ -n "$_B_USER_ID"    ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "user_id=${_B_USER_ID}")            && log "  user_id       → ${_B_USER_ID}"
+    [[ -n "$_B_COMPANY_ID" ]] && NEWMAN_ENV_OVERRIDE+=("--env-var" "company_id=${_B_COMPANY_ID}")      && log "  company_id    → ${_B_COMPANY_ID}"
+    [[ -z "$_B_TOKEN"      ]] && log_warn "  auth_token vacío — la colección debe hacer Login antes de Create OB"
+    [[ -z "$_B_USER_ID"    ]] && log_warn "  user_id vacío — Create OB puede fallar sin este header"
 else
     [[ -n "$BRIDGE_ENV_FILE" ]] && log_warn "Bridge env no encontrado: $BRIDGE_ENV_FILE — continuando sin overrides"
 fi
