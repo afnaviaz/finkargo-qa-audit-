@@ -299,7 +299,10 @@ if [[ "$SCENARIO" == "cobre_epayments_happy" ]]; then
 fi
 
 # Iteraciones para escenarios multi-step (reemplaza pm.setNextRequest, no soportado en Newman con --folder)
-if [[ "$SCENARIO" == "expired" ]]; then
+if [[ "$SCENARIO" == "cobre_epayments_happy" ]]; then
+    NEWMAN_BASE_ARGS+=("--iteration-count" "3")
+    log "Cobre Epayments: 3 iteraciones (3 quotes + 3 payments con identity_number aleatorio)"
+elif [[ "$SCENARIO" == "expired" ]]; then
     NEWMAN_BASE_ARGS+=("--iteration-count" "10")
     log "Expired flow: 10 iteraciones (EP-01→EP-02, VL-01→VL-03, NEG-01→NEG-05)"
 elif [[ "$SCENARIO" == "stripe_oxxo" ]]; then
