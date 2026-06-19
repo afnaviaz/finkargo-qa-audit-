@@ -60,7 +60,7 @@ permissions:
 jobs:
   run-integrations-pipeline:
     name: "Integrations: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
-    runs-on: [self-hosted, qa-runner]
+    runs-on: [self-hosted]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -76,16 +76,9 @@ jobs:
         run: pip install requests psycopg2-binary
 
       - name: Create python3 alias for Git Bash
-        shell: powershell
+        shell: bash
         run: |
-          $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
-          if ($pythonExe) {
-            $dir = Split-Path $pythonExe
-            Copy-Item $pythonExe "$dir\python3.exe" -Force
-            Write-Host "python3.exe creado en: $dir"
-          } else {
-            Write-Error "Python no encontrado en PATH"
-          }
+          python3 --version || ln -sf $(which python) /usr/local/bin/python3
 
       - name: Install Newman
         run: npm install -g newman newman-reporter-htmlextra
@@ -97,24 +90,19 @@ jobs:
         run: npx playwright install chromium
 
       - name: Restore Stripe session
-        shell: powershell
+        shell: bash
         env:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
-          if ($env:STRIPE_SESSION) {
-            $b64 = $env:STRIPE_SESSION.Trim()
-            Write-Host "b64 length: $($b64.Length) | mod4: $($b64.Length % 4)"
-            $pad = (4 - ($b64.Length % 4)) % 4
-            $b64 += '=' * $pad
-            $bytes = [Convert]::FromBase64String($b64)
-            [IO.File]::WriteAllBytes("${{ github.workspace }}\scripts\playwright\.stripe-session.json", $bytes)
-            Write-Host "✅ Stripe session restaurada ($($bytes.Length) bytes)"
-          } else {
-            Write-Host "⚠️ STRIPE_SESSION no configurado, saltando restauración"
-          }
+          if [ -n "$STRIPE_SESSION" ]; then
+            echo "$STRIPE_SESSION" | base64 -d > "${{ github.workspace }}/scripts/playwright/.stripe-session.json"
+            echo "Stripe session restaurada"
+          else
+            echo "STRIPE_SESSION no configurado, saltando restauracion"
+          fi
 
       - name: Execute QA Integrations
-        shell: powershell
+        shell: bash
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.TOKEN_1 }}
@@ -147,16 +135,15 @@ jobs:
           DB_USER_STAGING_MX: ${{ secrets.DB_USER_STAGING_MX }}
           DB_PASSWORD_STAGING_MX: ${{ secrets.DB_PASSWORD_STAGING_MX }}
         run: |
-          $bash = "C:\Program Files\Git\bin\bash.exe"
-          & $bash -c "cd '${{ github.workspace }}' && ./scripts/run_all.sh 'INTEGRATIONS' '${{ github.event.inputs.folder }}' '${{ github.event.inputs.pais }}' '${{ github.event.inputs.ambiente }}'"
+          cd "${{ github.workspace }}" && ./scripts/run_all.sh 'INTEGRATIONS' '${{ github.event.inputs.folder }}' '${{ github.event.inputs.pais }}' '${{ github.event.inputs.ambiente }}'
 
       - name: Set artifact name
         if: always()
         id: artifact-name
-        shell: powershell
+        shell: bash
         run: |
-          $safe = "${{ github.event.inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
-          echo "value=integrations-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
+          safe=$(echo "${{ github.event.inputs.folder }}" | sed 's/ \/ /-/g' | sed 's/[^a-zA-Z0-9._-]/-/g')
+          echo "value=integrations-${safe}-${{ github.run_id }}" >> $GITHUB_OUTPUT
 
       - name: Upload Artifacts
         if: always()
