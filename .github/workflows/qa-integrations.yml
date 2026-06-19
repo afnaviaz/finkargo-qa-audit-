@@ -90,6 +90,7 @@ jobs:
         run: npx playwright install chromium
 
       - name: Restore Stripe session
+        if: contains(github.event.inputs.folder, 'STRIPE')
         shell: bash
         env:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
