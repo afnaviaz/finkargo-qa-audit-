@@ -95,7 +95,7 @@ jobs:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
           if [ -n "$STRIPE_SESSION" ]; then
-            echo "$STRIPE_SESSION" | base64 -d > "${{ github.workspace }}/scripts/playwright/.stripe-session.json"
+            echo "$STRIPE_SESSION" | tr -d '\n\r ' | base64 -d > "${{ github.workspace }}/scripts/playwright/.stripe-session.json"
             echo "Stripe session restaurada"
           else
             echo "STRIPE_SESSION no configurado, saltando restauracion"
