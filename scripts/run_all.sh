@@ -108,6 +108,9 @@ elif [[ "$NEWMAN_FOLDER" == "Happy path cobre" ]]; then
 elif [[ "$NEWMAN_FOLDER" == "Happy path cobre fondos insuficientes" ]]; then
     SCENARIO="cobre_fondos_insuficientes"
     log "Escenario: COBRE FONDOS INSUFICIENTES — Quote + Transaction + Debit (3 pasos)"
+elif [[ "$NEWMAN_FOLDER" == "Happy path cobre epayments" || "$NEWMAN_FOLDER" == "COBRE EPAYMENTS" ]]; then
+    SCENARIO="cobre_epayments_happy"
+    log "Escenario: COBRE EPAYMENTS — Exchange Quote + Create Payment (api-epayments2)"
 elif [[ "$NEWMAN_FOLDER" == "Create Payment Card one time" ]]; then
     SCENARIO="stripe_card"
     log "Escenario: STRIPE CARD ONE TIME — Playwright llenará el checkout"
@@ -282,6 +285,17 @@ if [[ "$SCENARIO" == "stripe_oxxo" || "$SCENARIO" == "stripe_card" || "$SCENARIO
     fi
     log "stripe_type            : $(echo "${NEWMAN_BASE_ARGS[@]}" | grep -o 'stripe_type=[^ ]*' | cut -d= -f2)"
     log "stripe_payment_method  : $(echo "${NEWMAN_BASE_ARGS[@]}" | grep -o 'stripe_payment_method=[^ ]*' | cut -d= -f2)"
+fi
+
+# Inyectar URL para flujos COBRE EPAYMENTS
+if [[ "$SCENARIO" == "cobre_epayments_happy" ]]; then
+    if [[ "$AMBIENTE" == "Staging" ]]; then
+        API_EPAYMENTS2="https://api-epayments-staging.back.finkargo.com.mx"
+    else
+        API_EPAYMENTS2="https://api-epayments-testing.back.finkargo.com.mx"
+    fi
+    NEWMAN_BASE_ARGS+=("--env-var" "api-epayments2=${API_EPAYMENTS2}")
+    log "api-epayments2   : ${API_EPAYMENTS2}"
 fi
 
 # Iteraciones para escenarios multi-step (reemplaza pm.setNextRequest, no soportado en Newman con --folder)
