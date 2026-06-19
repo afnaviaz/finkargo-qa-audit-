@@ -76,7 +76,7 @@ jobs:
         run: pip install requests psycopg2-binary
 
       - name: Create python3 alias for Git Bash
-        shell: powershell
+        shell: pwsh
         run: |
           $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
           if ($pythonExe) {
@@ -97,7 +97,7 @@ jobs:
         run: npx playwright install chromium
 
       - name: Restore Stripe session
-        shell: powershell
+        shell: pwsh
         env:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
@@ -114,7 +114,7 @@ jobs:
           }
 
       - name: Execute QA Integrations
-        shell: powershell
+        shell: pwsh
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           CONF_TOKEN: ${{ secrets.TOKEN_1 }}
@@ -153,7 +153,7 @@ jobs:
       - name: Set artifact name
         if: always()
         id: artifact-name
-        shell: powershell
+        shell: pwsh
         run: |
           $safe = "${{ github.event.inputs.folder }}" -replace ' / ', '-' -replace '[^a-zA-Z0-9._\-]', '-'
           echo "value=integrations-${safe}-${{ github.run_id }}" >> $env:GITHUB_OUTPUT
