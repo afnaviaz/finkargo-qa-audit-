@@ -96,12 +96,7 @@ jobs:
           STRIPE_SESSION: ${{ secrets.STRIPE_SESSION }}
         run: |
           if [ -n "$STRIPE_SESSION" ]; then
-            python3 -c "
-import sys, base64
-data = sys.stdin.read().strip()
-data += '=' * (4 - len(data) % 4) % 4
-open('${{ github.workspace }}/scripts/playwright/.stripe-session.json', 'wb').write(base64.b64decode(data))
-" <<< "$STRIPE_SESSION"
+            python3 -c "import sys,base64,os; d=os.environ['STRIPE_SESSION'].strip(); d+='='*(4-len(d)%4)%4; open(os.environ['GITHUB_WORKSPACE']+'/scripts/playwright/.stripe-session.json','wb').write(base64.b64decode(d))"
             echo "Stripe session restaurada"
           else
             echo "STRIPE_SESSION no configurado, saltando restauracion"
