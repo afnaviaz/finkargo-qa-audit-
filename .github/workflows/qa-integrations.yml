@@ -60,7 +60,7 @@ permissions:
 jobs:
   run-integrations-pipeline:
     name: "Integrations: ${{ github.event.inputs.folder }} - ${{ github.event.inputs.pais }}"
-    runs-on: [self-hosted, qa-runner]
+    runs-on: [self-hosted]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
